@@ -48,7 +48,7 @@ Then work through `docs/phase-1-readiness-checklist.md`. Don't proceed to Step 1
 
 **Paste this into Claude Code:**
 
-````
+```
 You are a senior full-stack engineer starting work on Alpha Wolf Wrap Studio. This session is read-only — do not write or modify any code.
 
 ## Skills to activate
@@ -88,7 +88,7 @@ Constraints:
 - Do not propose any work outside Phase 1.
 - Do not propose any dependency, library, or service not listed in ADR-0001. If something looks missing, list it as a blocking question.
 - Do not write code, scaffold files, or run shell commands in this session.
-````
+```
 
 **Review Claude Code's output.** Answer the blocking questions. Then move to Step 2.
 
@@ -100,7 +100,7 @@ Constraints:
 
 **Paste this into Claude Code:**
 
-````
+```
 Implement the monorepo skeleton for Alpha Wolf Wrap Studio. One PR. No feature code in this PR — structure and tooling only.
 
 ## Skills to activate
@@ -161,7 +161,7 @@ Create the following directory layout. Each package gets a minimal package.json,
 - If you hit an ambiguity, stop and ask. Do not guess.
 
 Title the PR: `[infra] Monorepo skeleton + CI`
-````
+```
 
 **After the session:** Review the PR. If AC pass, merge to main. Then Step 3.
 
@@ -173,7 +173,7 @@ Title the PR: `[infra] Monorepo skeleton + CI`
 
 **Paste this into Claude Code:**
 
-````
+```
 Implement Phase 1 auth. Three stories, one PR (they share infrastructure so coupling is correct here):
 - GH-001 Customer signup + email OTP
 - GH-002 Shop signup + org creation
@@ -182,7 +182,8 @@ Implement Phase 1 auth. Three stories, one PR (they share infrastructure so coup
 ## Skills to activate
 Load and apply these skills from /.claude/skills/ for this task:
 - api-security-best-practices (auth flows, sessions, CSRF, rate limiting, OWASP Top 10)
-- senior-data-engineer (Prisma schema, Supabase RLS, pgcrypto column encryption)
+- supabase/agent-skills (schema introspection, migration generation, RLS policy authoring, type generation — use this for all Supabase work in this PR)
+- senior-data-engineer (Prisma schema design, pgcrypto column encryption, query patterns)
 - react-best-practices (signup UI components, form state, accessibility)
 - ui-design-system (signup screen tokens, button hierarchy)
 - webapp-testing (Vitest unit + Playwright E2E for the full OTP flow)
@@ -230,7 +231,7 @@ Load and apply these skills from /.claude/skills/ for this task:
 - Account type (customer vs shop_user) is permanent — enforce at the DB constraint level.
 
 Title the PR: `[GH-001/002/020] Auth scaffold with email OTP`
-````
+```
 
 ---
 
@@ -240,7 +241,7 @@ Title the PR: `[GH-001/002/020] Auth scaffold with email OTP`
 
 **Paste this into Claude Code:**
 
-````
+```
 Implement the vehicle template system. One PR covering:
 - GH-003 Vehicle browse + select (cascade + search + facets)
 - GH-004 Admin template CRUD
@@ -290,7 +291,7 @@ ADR-0005 documenting any deviation from the spec's schema if you find one needed
 - Do not deploy a partial SVG validator. All rules in §3.4 or none.
 
 Title the PR: `[GH-003/004/017] Vehicle template system`
-````
+```
 
 ---
 
@@ -300,7 +301,7 @@ Title the PR: `[GH-003/004/017] Vehicle template system`
 
 **Paste this into Claude Code:**
 
-````
+```
 Implement asset upload and the base canvas editor.
 - GH-005 Asset upload + vector parsing pipeline
 - GH-008 Canvas editor with per-panel masking (base only, manual tools — AI integration is Phase 2)
@@ -355,7 +356,7 @@ Load and apply these skills from /.claude/skills/ for this task:
 - Do not introduce Fabric.js or Pixi. Konva only (per ADR-0001 alternatives).
 
 Title the PR: `[GH-005/008] Asset upload + base canvas editor`
-````
+```
 
 ---
 
@@ -365,7 +366,7 @@ Title the PR: `[GH-005/008] Asset upload + base canvas editor`
 
 **Paste this into Claude Code:**
 
-````
+```
 Wrap Phase 1. Three tasks, one PR.
 
 ## Skills to activate
@@ -403,17 +404,17 @@ Load and apply these skills from /.claude/skills/ for this task:
 - If the smoke test fails, fix the bug in this PR. Do not defer.
 
 Title the PR: `[infra] Phase 1 staging deploy + demo`
-````
+```
 
 ---
 
 ## What to do if Claude Code drifts
 
-| Symptom | Say this |
-|---|---|
-| Starts coding before reading | "Stop. Complete the Read first step from the prompt before any code." |
-| Pulls in Phase 2 work | "Park that. Create the Phase 2 issue if missing, then return to scope." |
-| Adds a dependency not in ADR-0001 | "Open an ADR-0002+ first; do not add the dependency until I approve." |
-| Forgets to update activities.md | "PR blocker. Add the activities.md entry now, then mark ready for review." |
+| Symptom                            | Say this                                                                                          |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------- |
+| Starts coding before reading       | "Stop. Complete the Read first step from the prompt before any code."                             |
+| Pulls in Phase 2 work              | "Park that. Create the Phase 2 issue if missing, then return to scope."                           |
+| Adds a dependency not in ADR-0001  | "Open an ADR-0002+ first; do not add the dependency until I approve."                             |
+| Forgets to update activities.md    | "PR blocker. Add the activities.md entry now, then mark ready for review."                        |
 | Asks too many clarifying questions | "Make the call yourself, document it in an ADR if it's architecturally significant, and proceed." |
-| Output drifts mid-session | Start a fresh session. Long sessions decay. Each step here is one session.
+| Output drifts mid-session          | Start a fresh session. Long sessions decay. Each step here is one session.                        |
