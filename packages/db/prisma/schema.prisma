@@ -1,0 +1,14 @@
+// Alpha Wolf Wrap Studio — Prisma schema
+// Empty for now. Models land in feature PRs (auth, projects, vehicles, designs, exports).
+// Row-level security policies are managed via raw SQL migrations alongside generated migrations.
+// See ADR-0002 for the `app.current_user_id` session-variable pattern.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
