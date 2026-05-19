@@ -6,6 +6,13 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-05-18 — Archer + Claude (kickoff infrastructure)
+
+- **ADRs**: Created ADR template at `/docs/adr/template.md`, ADR-0000 (record decisions using MADR), ADR-0001 (lock v1 stack to Next.js 15 + Node + Postgres + Python AI services).
+- **Readiness checklist**: Created `/docs/phase-1-readiness-checklist.md` covering accounts, secrets, domain, repo hygiene, team cadence, vehicle DB pre-work, and legal stubs.
+- **Status**: All planning artifacts now in repo. Phase 1 kickoff blocked only on running the readiness checklist.
+- **Followups**: After readiness checklist passes, paste `/docs/claude-code-kickoff.md` prompt into Claude Code in the repo. First Claude Code session should produce ADR-0002 locking the monorepo skeleton + Auth.js setup.
+
 ## 2026-05-18 — Archer + Claude (PRD draft)
 
 - **Decision**: Adopted Core MVP scope for v1 (Auth + vehicle selector + AI generation + print paneling + detailed export). Defer customer portal, installer mode, material estimator to v1.1/v2.
