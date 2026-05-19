@@ -117,8 +117,9 @@ Create the following directory layout. Each package gets a minimal package.json,
 
 /apps/web                Next.js 15 App Router + React 19 + Tailwind v4 + shadcn/ui
 /apps/api                Node + Express + TypeScript strict
-/services/ai             Python 3.12 + FastAPI (stub: /health endpoint only)
-/services/paneling       Python 3.12 + FastAPI (stub: /health endpoint only)
+/services/parse          Node + Express worker + TypeScript strict (stub: /health only; full stack lands in Step 5)
+/services/ai             Python 3.12 + FastAPI (stub: /health only)
+/services/paneling       Python 3.12 + FastAPI (stub: /health only)
 /packages/db             Prisma schema + migrations + seeds (empty schema for now)
 /packages/ui             Shared shadcn components
 /packages/canvas         Konva editor primitives (empty)
@@ -133,6 +134,7 @@ Create the following directory layout. Each package gets a minimal package.json,
 - Husky + lint-staged pre-commit: prettier, eslint, tsc
 - Conventional commits enforced via commitlint
 - GitHub Actions: lint + test + typecheck on every PR. Block merge on failure.
+- BullMQ + Upstash Redis wired (connection from env, empty queues). Exercised in Step 5 by services/parse.
 
 ## Repo plumbing
 - /.github/pull_request_template.md requiring: linked issue, AC checklist copied from the PRD story, ADR link if applicable, screenshot if UI changes.
@@ -140,14 +142,16 @@ Create the following directory layout. Each package gets a minimal package.json,
 - /.env.example listing every env var named in /docs/phase-1-readiness-checklist.md "Secrets" section, with no values.
 - /.gitignore covering Node, Python, Next.js, Turbo, .env*, .venv, __pycache__.
 
-## ADR
-Write ADR-0002 covering the monorepo layout, pnpm + Turborepo decision, and CI structure. Follow the template at /docs/adr/template.md. Update activities.md.
+## ADRs (both land in this PR)
+- **ADR-0002** covers four decisions: (1) monorepo layout + pnpm + Turborepo, (2) CI structure, (3) Auth.js + RLS-via-`current_setting('app.current_user_id')` pattern (set the PG session var via Prisma `$extends` middleware on every request; RLS policies read it), (4) Express + BullMQ + Upstash Redis as the API/queue stack.
+- **ADR-0003** covers services/parse = Node worker (Sharp + svgo + Inkscape CLI + pdf2svg CLI + rembg via Replicate API), scope-limited to vector/raster parsing. Amends ADR-0001's Python-only stance on backend services.
+- Use /docs/adr/template.md for both. Update /activities.md with a single new top entry summarizing both.
 
 ## Done definition
 - pnpm install at repo root succeeds clean.
 - pnpm turbo run lint test typecheck passes (with empty packages — tests can be skipped placeholders).
 - The PR is open against main, draft → ready, CI green.
-- ADR-0002 committed in the same PR.
+- ADR-0002 AND ADR-0003 committed in the same PR.
 - /activities.md updated with a new top entry summarizing the decision.
 
 ## Hard constraints
@@ -207,7 +211,8 @@ Load and apply these skills from /.claude/skills/ for this task:
 - Integration tests hit a real Supabase instance (local or testcontainers). No DB mocks.
 
 ## ADRs
-- ADR-0003 if any non-obvious decision came up in Auth.js configuration (e.g., session adapter choice, OTP storage strategy).
+- ADR-0004 if any non-obvious decision came up in Auth.js configuration (e.g., session adapter choice, OTP storage strategy). (ADR-0003 was claimed in Step 2 for services/parse.)
+- The Auth.js + RLS pattern itself is already locked in ADR-0002 from Step 2 — do not re-derive it.
 - Skip ADR if the implementation was straightforward.
 
 ## Done definition
@@ -270,7 +275,7 @@ Load and apply these skills from /.claude/skills/ for this task:
 - Playwright E2E: browse-and-select flow for a customer, admin create flow with valid + invalid SVG.
 
 ## ADR
-ADR-0004 documenting any deviation from the spec's schema if you find one needed. Otherwise no ADR.
+ADR-0005 documenting any deviation from the spec's schema if you find one needed. Otherwise no ADR.
 
 ## Done definition
 - All AC checkboxes pass on the three stories.
@@ -308,7 +313,7 @@ Load and apply these skills from /.claude/skills/ for this task:
 - react-best-practices (Konva-in-React integration, state shape, debounced persistence)
 - ui-design-system (tool palette consistency)
 - web-performance-optimization (60fps with 200 layers benchmark, layer batching)
-- python-patterns (vector parsing worker: Inkscape CLI subprocess, svgo, rembg)
+- workflow-automation (BullMQ job orchestration for the parse worker)
 - senior-data-engineer (project/version/asset schema, canvas_state persistence)
 - webapp-testing (parse-output schema tests, editor E2E)
 - code-reviewer (final review)
@@ -319,9 +324,9 @@ Load and apply these skills from /.claude/skills/ for this task:
 - /packages/canvas (currently empty; you own its design)
 
 ## Scope
-- /services/parse (a new Node worker) handles AI/EPS/PDF → SVG via Inkscape CLI + svgo. Triggered via job queue.
+- /services/parse (already scaffolded in Step 2). Fill in the parse stack: Sharp (raster + HEIC), svgo (SVG cleanup), Inkscape CLI subprocess (AI/EPS → SVG), pdf2svg CLI (PDF → SVG), rembg via Replicate API (background removal; self-host deferred to v2). Triggered via BullMQ job; runs as its own deployable, never inline in apps/api.
 - Resumable chunked upload to Supabase Storage. Max 50MB. Client + server enforcement.
-- rembg integration for "remove background" toggle (call via Replicate or self-host — pick and write an ADR if non-obvious).
+- rembg routed through Replicate per ADR-0003; if Replicate routing or fallback strategy needs nuance, write ADR-0007.
 - Project model in Prisma: projects, project_versions, project_assets.
 - Editor at /editor/[projectId] using Konva. Renders the selected vehicle's 4 views. Each `<g class="panel">` from the vehicle SVG becomes its own Konva.Group. Each panel's wrap-safe path becomes a Konva.Group clip.
 - Tools (Phase 1 manual set only): text, shape (rect/ellipse/line), image (raster + vector), color fill, gradient, opacity, finish swatch (visual indicator only, no print semantics yet).
@@ -334,8 +339,8 @@ Load and apply these skills from /.claude/skills/ for this task:
 - Playwright E2E: upload a logo, drop it on a panel, undo, redo, save, reload, see the same state.
 
 ## ADRs
-- ADR-0005 locking the canvas-editor data model (Konva scene → DB persistence shape). Required.
-- ADR-0006 if you chose a non-obvious approach for rembg or vector parsing.
+- ADR-0006 locking the canvas-editor data model (Konva scene → DB persistence shape). Required.
+- ADR-0007 optional — only if Replicate routing or fallback strategy warrants it. The parse-stack itself is already locked in ADR-0003.
 
 ## Done definition
 - All AC checkboxes on GH-005 and GH-008 pass.
