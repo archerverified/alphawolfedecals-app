@@ -39,3 +39,8 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
   - Need legal review of ToS for customer-uploaded brand assets before public launch (open question in PRD §12).
   - Decide AI cost transparency to customers — recommend absorb in v1.
 - **Artifacts produced**: `prd.md` v1.0, `activities.md` (this file), `journey-and-architecture.html`.
+
+## 2026-05-19 — Archer (Resend setup, dev mode)
+
+- **Decision**: Using Resend's `onboarding@resend.dev` sender for Phase 1 dev. Only sends to archer@1stimpression.co.
+- **Followup**: Before Phase 4 launch — verify alphawolfwrap.com in Resend, switch `RESEND_FROM_EMAIL` to `no-reply@alphawolfwrap.com`, update SPF/DKIM/DMARC. Track in GH-016.
