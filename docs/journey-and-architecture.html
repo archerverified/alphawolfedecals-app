@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Alpha Wolf Wrap Studio — Customer Journey + System Architecture</title>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+<style>
+  :root {
+    --wolf-red: #E41E26;
+    --wolf-black: #0A0A0A;
+    --wolf-ink: #1A1A1A;
+    --wolf-surface: #141414;
+    --wolf-surface-2: #1E1E1E;
+    --wolf-line: #2A2A2A;
+    --wolf-text: #F5F5F5;
+    --wolf-text-dim: #A8A8A8;
+    --wolf-lime: #C8FF3C;
+    --wolf-accent: #FF4D55;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; background: var(--wolf-black); color: var(--wolf-text); font-family: 'Inter', system-ui, -apple-system, sans-serif; }
+  .wrap { max-width: 1400px; margin: 0 auto; padding: 48px 32px 80px; }
+  header { border-bottom: 1px solid var(--wolf-line); padding-bottom: 32px; margin-bottom: 48px; }
+  .brand { display: inline-flex; align-items: center; gap: 12px; padding: 6px 14px; background: var(--wolf-red); color: white; border-radius: 999px; font-weight: 700; letter-spacing: 0.04em; font-size: 12px; text-transform: uppercase; }
+  h1 { font-size: 44px; line-height: 1.1; margin: 16px 0 8px; letter-spacing: -0.02em; }
+  h2 { font-size: 28px; margin: 64px 0 24px; letter-spacing: -0.01em; padding-bottom: 12px; border-bottom: 1px solid var(--wolf-line); }
+  h3 { font-size: 18px; margin: 32px 0 16px; color: var(--wolf-text); }
+  .sub { color: var(--wolf-text-dim); font-size: 16px; line-height: 1.6; max-width: 800px; }
+  .meta { display: flex; gap: 24px; margin-top: 24px; flex-wrap: wrap; }
+  .meta span { color: var(--wolf-text-dim); font-size: 13px; }
+  .meta strong { color: var(--wolf-text); font-weight: 500; }
+  .card { background: var(--wolf-surface); border: 1px solid var(--wolf-line); border-radius: 16px; padding: 32px; margin: 24px 0; }
+  .mermaid { background: transparent; }
+  .legend { display: flex; gap: 24px; flex-wrap: wrap; margin: 16px 0 24px; font-size: 13px; color: var(--wolf-text-dim); }
+  .legend-item { display: flex; align-items: center; gap: 8px; }
+  .legend-dot { width: 12px; height: 12px; border-radius: 3px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
+  @media (max-width: 980px) { .grid-2 { grid-template-columns: 1fr; } }
+  .stat { padding: 20px; background: var(--wolf-surface-2); border: 1px solid var(--wolf-line); border-radius: 12px; }
+  .stat-num { font-size: 32px; font-weight: 700; color: var(--wolf-lime); letter-spacing: -0.02em; }
+  .stat-label { color: var(--wolf-text-dim); font-size: 13px; margin-top: 4px; }
+  .phase-bar { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; margin: 16px 0 32px; }
+  .phase { background: var(--wolf-surface-2); border: 1px solid var(--wolf-line); border-radius: 8px; padding: 16px 12px; }
+  .phase-num { font-size: 11px; color: var(--wolf-text-dim); font-weight: 600; letter-spacing: 0.1em; text-transform: uppercase; }
+  .phase-name { font-size: 14px; font-weight: 600; margin: 8px 0 4px; color: var(--wolf-text); }
+  .phase-weeks { font-size: 12px; color: var(--wolf-lime); }
+  .phase.p1 { border-color: var(--wolf-red); }
+  .phase.p2 { border-color: var(--wolf-red); }
+  .phase.p3 { border-color: var(--wolf-red); }
+  .phase.p4 { border-color: var(--wolf-red); }
+  .phase.p5 { border-color: var(--wolf-line); opacity: 0.7; }
+  .phase.p6 { border-color: var(--wolf-line); opacity: 0.7; }
+  @media (max-width: 900px) { .phase-bar { grid-template-columns: repeat(2, 1fr); } }
+  footer { margin-top: 80px; padding-top: 32px; border-top: 1px solid var(--wolf-line); color: var(--wolf-text-dim); font-size: 13px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <span class="brand">Alpha Wolf Wrap Studio</span>
+    <h1>Customer Journey + System Architecture</h1>
+    <p class="sub">Visual companion to <code>prd.md</code> v1.0. Maps the two-sided journey (customer-initiated and shop-initiated), the system topology, the data model, and the 6-phase delivery sequence.</p>
+    <div class="meta">
+      <span><strong>Version</strong> 1.0</span>
+      <span><strong>Last updated</strong> 2026-05-18</span>
+      <span><strong>Owner</strong> Archer (Alpha Wolf Decals)</span>
+      <span><strong>Status</strong> PRD complete · ready for Phase 1 kickoff</span>
+    </div>
+  </header>
+
+  <h2>Customer journey — two paths, one platform</h2>
+  <p class="sub">Both the customer-initiated and shop-initiated flows converge on the same project model. Once a project exists, it can move freely between sides via the token-based handoff (story GH-012).</p>
+  <div class="legend">
+    <div class="legend-item"><span class="legend-dot" style="background:var(--wolf-red)"></span>Customer-led path</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--wolf-lime)"></span>Shop-led path</div>
+    <div class="legend-item"><span class="legend-dot" style="background:var(--wolf-text-dim)"></span>Shared infrastructure</div>
+  </div>
+  <div class="card">
+    <div class="mermaid">
+flowchart LR
+    classDef cust fill:#E41E26,stroke:#E41E26,color:#fff,font-weight:600
+    classDef shop fill:#C8FF3C,stroke:#C8FF3C,color:#0A0A0A,font-weight:600
+    classDef shared fill:#1E1E1E,stroke:#2A2A2A,color:#F5F5F5
+    classDef magic fill:#FF4D55,stroke:#FF4D55,color:#fff,font-weight:700
+
+    A[Discover<br/>alpha-wolf-decals.vercel.app]:::cust --> B[Sign up<br/>+ email OTP]:::cust
+    B --> C[Pick vehicle<br/>Year/Make/Model]:::cust
+    C --> D[Upload logo<br/>+ brand assets]:::cust
+    D --> E[Pick style<br/>+ prompt]:::cust
+    E --> F((4 AI mockups<br/>~60-90s)):::magic
+    F --> G[Tweak in<br/>natural language]:::cust
+    G --> H[Approve<br/>final design]:::cust
+    H --> I[Send to shop<br/>via project token]:::cust
+
+    S1[Shop landing<br/>app.alphawolfwrap.com]:::shop --> S2[Create shop account<br/>+ team invites]:::shop
+    S2 --> S3[Printer/media setup<br/>wizard]:::shop
+    S3 --> S4[Receive project<br/>from customer]:::shop
+    S4 --> S5[Refine in<br/>canvas editor]:::shop
+    S5 --> S6[Validate<br/>pre-flight]:::shop
+    S6 --> S7[Export Production<br/>Package PDF]:::shop
+    S7 --> S8[Print &amp;<br/>install]:::shop
+
+    I --> S4
+    S5 -.comment thread.-> H
+
+    DB[(Vehicle template DB<br/>SVG + dims + safe zones)]:::shared
+    AI[Claude orchestrator<br/>+ Flux/Higgsfield]:::shared
+    EXP[Print paneling engine<br/>+ metadata composer]:::shared
+
+    C --> DB
+    E --> AI
+    G --> AI
+    S5 --> AI
+    S7 --> EXP
+    </div>
+  </div>
+
+  <h2>System architecture — Core MVP</h2>
+  <p class="sub">Stateless Next.js front-end + Node/Express API + Python AI service + Postgres. Image generation runs through OpenRouter for model flexibility; print paneling runs as a dedicated Python service because the geometry + PDF work doesn't belong on the API path.</p>
+  <div class="card">
+    <div class="mermaid">
+flowchart TB
+    classDef client fill:#1E1E1E,stroke:#E41E26,color:#F5F5F5,font-weight:600
+    classDef edge fill:#1E1E1E,stroke:#A8A8A8,color:#F5F5F5
+    classDef svc fill:#0A0A0A,stroke:#E41E26,color:#F5F5F5,font-weight:600
+    classDef ai fill:#0A0A0A,stroke:#FF4D55,color:#F5F5F5,font-weight:600
+    classDef store fill:#0A0A0A,stroke:#C8FF3C,color:#F5F5F5,font-weight:600
+    classDef vendor fill:#141414,stroke:#A8A8A8,color:#A8A8A8
+
+    subgraph CLIENT[Client]
+        WEB[Next.js 15 App<br/>React 19 + Tailwind + shadcn<br/>Konva canvas editor]:::client
+        RN[React Native<br/>Phase 6 only]:::client
+    end
+
+    subgraph EDGE[Edge]
+        CF[Cloudflare<br/>CDN + WAF + rate limit]:::edge
+    end
+
+    subgraph CORE[Core API]
+        API[Node/Express API<br/>auth · projects · assets · exports]:::svc
+        Q[BullMQ queue<br/>Redis]:::svc
+    end
+
+    subgraph PY[Python Services]
+        AISVC[AI Orchestration Service<br/>FastAPI · Claude prompts · model routing]:::ai
+        PANEL[Print Paneling Engine<br/>FastAPI · geometry · PDF composer]:::ai
+    end
+
+    subgraph DATA[Data Layer]
+        PG[(Postgres<br/>Supabase or Neon<br/>RLS enabled)]:::store
+        S3[(S3 / R2<br/>assets + exports)]:::store
+    end
+
+    subgraph VENDORS[External Services]
+        ANTH[Anthropic API<br/>Claude Sonnet 4.6]:::vendor
+        OR[OpenRouter<br/>Flux · Higgsfield · SDXL]:::vendor
+        REP[Replicate<br/>fallback + rembg]:::vendor
+        RES[Resend<br/>transactional email]:::vendor
+        POSTHOG[PostHog · Sentry<br/>analytics + errors]:::vendor
+    end
+
+    WEB --> CF
+    RN -.Phase 6.-> CF
+    CF --> API
+    API --> PG
+    API --> S3
+    API --> Q
+    Q --> AISVC
+    Q --> PANEL
+    AISVC --> ANTH
+    AISVC --> OR
+    AISVC --> REP
+    AISVC --> PG
+    AISVC --> S3
+    PANEL --> S3
+    PANEL --> PG
+    API --> RES
+    WEB --> POSTHOG
+    </div>
+  </div>
+
+  <h2>Data model — core entities</h2>
+  <div class="card">
+    <div class="mermaid">
+erDiagram
+    USER ||--o{ MEMBERSHIP : has
+    SHOP ||--o{ MEMBERSHIP : has
+    SHOP ||--o{ PRINTER_PROFILE : owns
+    USER ||--o{ PROJECT : owns
+    SHOP ||--o{ PROJECT : owns
+    PROJECT ||--|{ PROJECT_VERSION : has
+    PROJECT ||--o{ PROJECT_ASSET : has
+    PROJECT ||--o{ PROJECT_ACTIVITY : has
+    PROJECT ||--o{ EXPORT : has
+    PROJECT_VERSION ||--o{ GENERATION : produced_by
+    VEHICLE ||--o{ VEHICLE_PANEL : has
+    VEHICLE ||--o{ PROJECT : referenced_by
+
+    USER {
+        uuid id PK
+        string email
+        string first_name
+        string last_name
+        enum account_type "customer | shop_user | admin"
+        timestamp created_at
+    }
+    SHOP {
+        uuid id PK
+        string name
+        string phone
+        string website
+        string subscription_status "deferred to v2"
+        string plan_tier "deferred to v2"
+    }
+    MEMBERSHIP {
+        uuid id PK
+        uuid user_id FK
+        uuid shop_id FK
+        enum role "admin | designer | viewer"
+    }
+    VEHICLE {
+        uuid id PK
+        int year
+        string make
+        string model
+        string trim
+        json dimensions "L W H in mm"
+        json facets "cab bed wheelbase roof"
+        int version
+    }
+    VEHICLE_PANEL {
+        uuid id PK
+        uuid vehicle_id FK
+        string name "e.g. Driver Quarter"
+        text svg_path
+        json wrap_safe_zone
+    }
+    PROJECT {
+        uuid id PK
+        uuid owner_user_id FK
+        uuid owner_shop_id FK "nullable"
+        uuid vehicle_id FK
+        string status "draft review approved production installed"
+        string transfer_token "for handoff"
+    }
+    PROJECT_VERSION {
+        uuid id PK
+        uuid project_id FK
+        int version
+        json canvas_state
+        string approval_state
+    }
+    GENERATION {
+        uuid id PK
+        uuid project_version_id FK
+        text prompt
+        string model
+        decimal cost_usd
+        json output_asset_ids
+    }
+    EXPORT {
+        uuid id PK
+        uuid project_version_id FK
+        enum mode "visual | production"
+        string pdf_url
+        json metadata_snapshot
+    }
+    PROJECT_ACTIVITY {
+        uuid id PK
+        uuid project_id FK
+        uuid actor_id FK
+        string event_type
+        json payload
+        timestamp at
+    }
+    PRINTER_PROFILE {
+        uuid id PK
+        uuid shop_id FK
+        string printer_model
+        decimal media_width_in
+        decimal laminate_width_in
+        decimal overlap_in
+        enum panel_direction
+    }
+    </div>
+  </div>
+
+  <h2>Delivery phases — 14 to 18 weeks to public launch</h2>
+  <div class="phase-bar">
+    <div class="phase p1"><div class="phase-num">Phase 1</div><div class="phase-name">Foundation</div><div class="phase-weeks">Weeks 1–4</div></div>
+    <div class="phase p2"><div class="phase-num">Phase 2</div><div class="phase-name">AI generation</div><div class="phase-weeks">Weeks 5–9</div></div>
+    <div class="phase p3"><div class="phase-num">Phase 3</div><div class="phase-name">Paneling + Export</div><div class="phase-weeks">Weeks 10–13</div></div>
+    <div class="phase p4"><div class="phase-num">Phase 4</div><div class="phase-name">Two-sided launch</div><div class="phase-weeks">Weeks 14–18</div></div>
+    <div class="phase p5"><div class="phase-num">Phase 5</div><div class="phase-name">v1.1 features</div><div class="phase-weeks">Weeks 19–24</div></div>
+    <div class="phase p6"><div class="phase-num">Phase 6</div><div class="phase-name">Mobile (RN)</div><div class="phase-weeks">Weeks 25–32</div></div>
+  </div>
+
+  <h2>What success looks like</h2>
+  <div class="grid-2">
+    <div class="stat"><div class="stat-num">&lt; 4 min</div><div class="stat-label">Time-to-first-mockup (customer p50)</div></div>
+    <div class="stat"><div class="stat-num">25%</div><div class="stat-label">Customer-to-shop handoff conversion (target)</div></div>
+    <div class="stat"><div class="stat-num">-60%</div><div class="stat-label">Shop cycle time reduction vs baseline</div></div>
+    <div class="stat"><div class="stat-num">&lt; $0.40</div><div class="stat-label">Cost per AI generation (p50, hybrid routing)</div></div>
+    <div class="stat"><div class="stat-num">50 vehicles</div><div class="stat-label">Top-wrapped North America templates in v1</div></div>
+    <div class="stat"><div class="stat-num">99.5%</div><div class="stat-label">Uptime SLA v1 (single region)</div></div>
+  </div>
+
+  <h2>Tooling map (per Archer's request)</h2>
+  <div class="card">
+    <h3>Memory + planning</h3>
+    <p class="sub"><strong>Obsidian vault</strong> at <code>/docs/vault/</code> — primary memory system. Daily notes for standups, dedicated notes per architectural decision, embedded Excalidraw for diagrams. Linked from project root.</p>
+    <p class="sub"><strong>activities.md</strong> at repo root — append-only event log for the build. Every decision, every story shipped, every direction change. Companion to but distinct from in-app per-project activity logs (story GH-013).</p>
+    <h3>Visual + research</h3>
+    <p class="sub"><strong>Excalidraw</strong> embedded in Obsidian for journeys, topology, sprint planning. Each diagram exported as both <code>.excalidraw</code> and <code>.svg</code>.</p>
+    <p class="sub"><strong>Firecrawl</strong> for vehicle DB bootstrap — scrapes manufacturer spec pages and reference outlines under license.</p>
+    <p class="sub"><strong>Claude in Chrome</strong> for templates.provehicleoutlines.com integration research and template-accuracy QA comparisons.</p>
+  </div>
+
+  <footer>
+    <strong>Alpha Wolf Wrap Studio</strong> · PRD v1.0 · 2026-05-18 · See <code>prd.md</code> for full specification and <code>activities.md</code> for project log.
+  </footer>
+</div>
+<script>
+  mermaid.initialize({
+    startOnLoad: true,
+    theme: 'dark',
+    themeVariables: {
+      darkMode: true,
+      background: '#141414',
+      primaryColor: '#1E1E1E',
+      primaryTextColor: '#F5F5F5',
+      primaryBorderColor: '#E41E26',
+      lineColor: '#A8A8A8',
+      secondaryColor: '#0A0A0A',
+      tertiaryColor: '#141414',
+      fontFamily: 'Inter, system-ui, sans-serif'
+    },
+    flowchart: { curve: 'basis', padding: 20 },
+    er: { layoutDirection: 'TB' }
+  });
+</script>
+</body>
+</html>
