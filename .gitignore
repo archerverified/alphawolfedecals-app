@@ -1,1 +1,3 @@
 .agents/ # if .agents is local-only
+node_modules
+.agents/
