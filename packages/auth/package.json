@@ -3,6 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
+  "sideEffects": false,
   "main": "./src/index.ts",
   "types": "./src/index.ts",
   "exports": {
@@ -18,7 +19,7 @@
   },
   "dependencies": {
     "@alphawolf/db": "workspace:*",
-    "argon2": "^0.41.1",
+    "@node-rs/argon2": "^2.0.2",
     "next-auth": "5.0.0-beta.25",
     "resend": "^4.0.1",
     "zod": "^3.23.8"

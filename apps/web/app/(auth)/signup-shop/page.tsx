@@ -24,9 +24,7 @@ export default async function ShopSignupPage() {
         >
           I'm a customer →
         </Link>
-        <Link href="/signin" className="underline-offset-2 hover:underline">
-          Sign in
-        </Link>
+        {/* Sign-in flow lands in a follow-on PR. See activities.md. */}
       </div>
     </>
   );

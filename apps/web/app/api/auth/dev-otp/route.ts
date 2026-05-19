@@ -8,7 +8,7 @@
 // Hard-gated on NODE_ENV !== 'production'. Returns 404 in prod regardless of
 // query string.
 
-import { _getDevOtp } from '@alphawolf/auth';
+import { _getDevOtp } from '@alphawolf/auth/server';
 import { NextResponse } from 'next/server';
 
 export async function GET(request: Request): Promise<Response> {

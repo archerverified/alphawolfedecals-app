@@ -48,12 +48,42 @@ export function getPrisma(): PrismaClient {
   return basePrisma;
 }
 
+// Postgres string-literal escaping. Doubles any single quotes (the standard
+// way to embed a single quote inside a SQL string) and switches to E'' syntax
+// if backslashes are present (so they're treated as escape sequences instead
+// of the default Postgres standard_conforming_strings off-mode confusion).
+//
+// Inputs to applySessionConfig are server-controlled (env var or authenticated
+// session userId — never raw user input), so this is defence-in-depth rather
+// than the primary injection guard. Use this helper only for values you
+// already trust by provenance.
+function pgQuoteLiteral(value: string): string {
+  const hasBackslash = value.includes('\\');
+  const escaped = value.replace(/'/g, "''").replace(/\\/g, '\\\\');
+  return hasBackslash ? `E'${escaped}'` : `'${escaped}'`;
+}
+
 async function applySessionConfig(tx: TxClient, userId: string | null): Promise<void> {
   const piiKey = readEnv('PII_ENCRYPTION_KEY');
-  // set_config(name, value, is_local=true) scopes to the current txn so the
-  // value cannot leak across pool reuse.
-  await tx.$executeRaw`SELECT set_config('app.pii_key', ${piiKey}, true)`;
-  await tx.$executeRaw`SELECT set_config('app.current_user_id', ${userId ?? ''}, true)`;
+  // We use $executeRawUnsafe with manually-escaped literals (NOT tagged
+  // template strings with parameter binding) because:
+  //
+  //   * Prisma's `$executeRaw` tagged-template form always creates a prepared
+  //     statement named s0, s1, etc.
+  //   * The Supabase transaction pooler (pgBouncer in transaction mode, port
+  //     6543) releases connections back to the pool after each transaction,
+  //     so prepared statements from one request collide with the next:
+  //         "ERROR: prepared statement \"s0\" already exists"
+  //   * Prisma's `?pgbouncer=true` connection-string flag is documented to
+  //     disable prepared statements, but it doesn't reach $executeRaw in
+  //     Prisma 5.x (open upstream bug).
+  //
+  // set_config(name, value, is_local=true) scopes the value to the current
+  // transaction so it cannot leak across pool reuse.
+  await tx.$executeRawUnsafe(`SELECT set_config('app.pii_key', ${pgQuoteLiteral(piiKey)}, true)`);
+  await tx.$executeRawUnsafe(
+    `SELECT set_config('app.current_user_id', ${pgQuoteLiteral(userId ?? '')}, true)`,
+  );
 }
 
 const TX_OPTIONS: {

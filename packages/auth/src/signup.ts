@@ -39,13 +39,15 @@ export const customerSignupSchema = baseSchema;
 export const shopSignupSchema = baseSchema.extend({
   companyName: z.string().trim().min(2).max(120),
   phone: z.string().trim().min(7).max(40),
-  website: z
-    .string()
-    .trim()
-    .url()
-    .max(2048)
-    .optional()
-    .or(z.literal('').transform(() => undefined)),
+  // Accepts bare domains (1stimpression.co) by auto-prepending https://.
+  // Real users don't type protocols; rejecting them is a UX bug.
+  // Empty string normalizes to undefined so the optional() path holds.
+  website: z.preprocess((v) => {
+    if (typeof v !== 'string') return v;
+    const trimmed = v.trim();
+    if (!trimmed) return undefined;
+    return /^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`;
+  }, z.string().url().max(2048).optional()),
   address: z
     .string()
     .trim()

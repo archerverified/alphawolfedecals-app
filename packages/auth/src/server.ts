@@ -1,6 +1,12 @@
-// Next.js / Node side of @alphawolf/auth. Wraps NextAuth() so app/api can
-// import a single set of handlers. Kept on its own subpath so that the
-// signup pure-logic surface (./index) stays usable from any runtime.
+// Server-only public surface of @alphawolf/auth.
+//
+// Everything reachable from this module is allowed to depend on argon2,
+// node:crypto, node:fs, @alphawolf/db, Next.js server runtimes, etc.
+//
+// NEVER import this from a "use client" component or any module reachable
+// from one. If you need a constant or a pure function on the client, add it
+// to one of the *-constants.ts files or to password-policy.ts and re-export
+// from ./index.
 
 import NextAuth from 'next-auth';
 import type { NextAuthResult } from 'next-auth';
@@ -17,3 +23,57 @@ export const signIn: NextAuthResult['signIn'] = nextAuth.signIn;
 export const signOut: NextAuthResult['signOut'] = nextAuth.signOut;
 
 export { authConfig } from './auth-config';
+
+// Password hashing / verification (argon2).
+export { hashPassword, verifyPassword } from './password';
+
+// OTP generation / hashing / verification (argon2 + node:crypto).
+export { generateOtpCode, hashOtp, verifyOtp, otpExpiry } from './otp';
+
+// CSRF token generation / verification (node:crypto).
+export { generateCsrfToken, verifyCsrf } from './csrf';
+
+// Signup, login, lockout, email dispatch.
+export {
+  signupCustomer,
+  signupShop,
+  resendVerificationOtp,
+  verifySignupOtp,
+  customerSignupSchema,
+  shopSignupSchema,
+  type CustomerSignupInput,
+  type ShopSignupInput,
+  type SignupResult,
+  type ResendResult,
+  type VerifyResult,
+} from './signup';
+
+export { login, type LoginResult } from './login';
+
+export {
+  checkLoginGuards,
+  recordLoginFailure,
+  clearLoginFailures,
+  IP_LOGIN_THRESHOLD,
+  IP_LOGIN_WINDOW_MS,
+  ACCOUNT_LOGIN_THRESHOLD,
+  ACCOUNT_LOCKOUT_MS,
+  type LockoutGuard,
+  type FailureOutcome,
+} from './lockout';
+
+export { sendOtpEmail, _getDevOtp, _stashDevOtp } from './email';
+
+// Re-export the client-safe surface from here too, so server code only needs
+// one import path. Bundlers will resolve these straight from ./index.
+export {
+  CSRF_COOKIE_NAME,
+  CSRF_FIELD_NAME,
+  OTP_LENGTH,
+  OTP_TTL_MS,
+  OTP_MAX_ATTEMPTS,
+  OTP_RESEND_MIN_INTERVAL_MS,
+  OTP_HOURLY_RESEND_LIMIT,
+  validatePasswordPolicy,
+  passwordStrength,
+} from './index';

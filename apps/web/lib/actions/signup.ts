@@ -10,14 +10,42 @@ import {
   signupShop,
   verifyCsrf,
   verifySignupOtp,
-} from '@alphawolf/auth';
+} from '@alphawolf/auth/server';
 
 type ActionState = {
   ok: boolean;
   message?: string;
   fieldErrors?: Record<string, string>;
   email?: string;
+  // Submitted values returned on error so the form can preserve user input
+  // across re-renders. Omitted on success (the form is unmounted by redirect).
+  // Password is intentionally NEVER echoed back — even on validation errors,
+  // the user re-types it.
+  values?: Record<string, string>;
 };
+
+// Snapshot of submitted form values for error-path preservation. Excludes
+// password (security) and _csrf (internal). Trimmed to strings; nulls become
+// empty strings so defaultValue works cleanly in the JSX.
+function snapshotFormValues(form: FormData, fields: string[]): Record<string, string> {
+  const out: Record<string, string> = {};
+  for (const f of fields) {
+    const v = form.get(f);
+    out[f] = typeof v === 'string' ? v : '';
+  }
+  return out;
+}
+
+const CUSTOMER_FIELDS = ['firstName', 'lastName', 'email'];
+const SHOP_FIELDS = [
+  'firstName',
+  'lastName',
+  'email',
+  'companyName',
+  'phone',
+  'website',
+  'address',
+];
 
 async function requestMeta() {
   const h = await headers();
@@ -47,18 +75,38 @@ export async function signupCustomerAction(
   _prev: ActionState,
   form: FormData,
 ): Promise<ActionState> {
+  const values = snapshotFormValues(form, CUSTOMER_FIELDS);
   if (!(await csrfOk(form)))
-    return { ok: false, message: 'Invalid request token. Please refresh and try again.' };
+    return {
+      ok: false,
+      message: 'Invalid request token. Please refresh and try again.',
+      values,
+    };
   const meta = await requestMeta();
-  const result = await signupCustomer(
-    {
-      firstName: form.get('firstName'),
-      lastName: form.get('lastName'),
-      email: form.get('email'),
-      password: form.get('password'),
-    },
-    meta,
-  );
+  let result;
+  try {
+    result = await signupCustomer(
+      {
+        firstName: form.get('firstName'),
+        lastName: form.get('lastName'),
+        email: form.get('email'),
+        password: form.get('password'),
+      },
+      meta,
+    );
+  } catch (err) {
+    // Unhandled error from the auth package — most commonly: Resend rejected
+    // the OTP send (e.g. sandbox sender refuses non-owner recipients), or
+    // the DB connection dropped. We don't want a bare {ok:false} to reach
+    // the form (silent failure for the user). Surface a generic message
+    // and log details for the server console.
+    console.error('[signupCustomerAction] unhandled error', err);
+    return {
+      ok: false,
+      message: 'Something went wrong on our end. Please try again in a moment.',
+      values,
+    };
+  }
   if (result.ok) {
     const email = encodeURIComponent(result.email);
     redirect(`/verify?email=${email}&type=customer`);
@@ -68,6 +116,7 @@ export async function signupCustomerAction(
       ok: false,
       message: 'Please fix the highlighted fields.',
       fieldErrors: fieldErrorsFromMessages(result.messages),
+      values,
     };
   }
   if (result.reason === 'weak_password') {
@@ -75,32 +124,50 @@ export async function signupCustomerAction(
       ok: false,
       message: result.messages.join('. '),
       fieldErrors: { password: result.messages.join('. ') },
+      values,
     };
   }
   // email_in_use is surfaced without revealing whether the email actually exists.
   return {
     ok: false,
     message: 'We could not create that account. If you already have one, sign in instead.',
+    values,
   };
 }
 
 export async function signupShopAction(_prev: ActionState, form: FormData): Promise<ActionState> {
+  const values = snapshotFormValues(form, SHOP_FIELDS);
   if (!(await csrfOk(form)))
-    return { ok: false, message: 'Invalid request token. Please refresh and try again.' };
+    return {
+      ok: false,
+      message: 'Invalid request token. Please refresh and try again.',
+      values,
+    };
   const meta = await requestMeta();
-  const result = await signupShop(
-    {
-      firstName: form.get('firstName'),
-      lastName: form.get('lastName'),
-      email: form.get('email'),
-      password: form.get('password'),
-      companyName: form.get('companyName'),
-      phone: form.get('phone'),
-      website: form.get('website') || undefined,
-      address: form.get('address') || undefined,
-    },
-    meta,
-  );
+  let result;
+  try {
+    result = await signupShop(
+      {
+        firstName: form.get('firstName'),
+        lastName: form.get('lastName'),
+        email: form.get('email'),
+        password: form.get('password'),
+        companyName: form.get('companyName'),
+        phone: form.get('phone'),
+        website: form.get('website') || undefined,
+        address: form.get('address') || undefined,
+      },
+      meta,
+    );
+  } catch (err) {
+    // See signupCustomerAction's catch for rationale.
+    console.error('[signupShopAction] unhandled error', err);
+    return {
+      ok: false,
+      message: 'Something went wrong on our end. Please try again in a moment.',
+      values,
+    };
+  }
   if (result.ok) {
     const email = encodeURIComponent(result.email);
     redirect(`/verify?email=${email}&type=shop`);
@@ -110,6 +177,7 @@ export async function signupShopAction(_prev: ActionState, form: FormData): Prom
       ok: false,
       message: 'Please fix the highlighted fields.',
       fieldErrors: fieldErrorsFromMessages(result.messages),
+      values,
     };
   }
   if (result.reason === 'weak_password') {
@@ -117,11 +185,13 @@ export async function signupShopAction(_prev: ActionState, form: FormData): Prom
       ok: false,
       message: result.messages.join('. '),
       fieldErrors: { password: result.messages.join('. ') },
+      values,
     };
   }
   return {
     ok: false,
     message: 'We could not create that account. If you already have one, sign in instead.',
+    values,
   };
 }
 
