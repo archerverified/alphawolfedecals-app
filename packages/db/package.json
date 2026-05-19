@@ -14,8 +14,11 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run --passWithNoTests",
     "prisma:generate": "prisma generate",
+    "prisma:push": "prisma db push",
     "prisma:migrate:dev": "prisma migrate dev",
     "prisma:migrate:deploy": "prisma migrate deploy",
+    "db:setup": "prisma db push --skip-generate && pnpm db:apply-sql",
+    "db:apply-sql": "psql \"$DIRECT_URL\" -v ON_ERROR_STOP=1 -f prisma/sql/auth_rls.sql",
     "db:seed": "tsx seeds/index.ts"
   },
   "dependencies": {

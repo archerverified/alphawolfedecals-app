@@ -6,6 +6,32 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-05-19 — Archer + Claude (Phase 1 auth: GH-001 + GH-002 + GH-020)
+
+- **Decision**: PII (name, email, phone, company name, website, address) is encrypted at rest via pgcrypto column encryption. The symmetric key is injected per-transaction via the Postgres GUC `app.pii_key`, alongside `app.current_user_id`, by `@alphawolf/db`'s `withUser` / `withSystem` helpers. SQL-side helpers `app_encrypt_pii`, `app_decrypt_pii`, and `app_email_lookup_hash` read the key — the key never crosses the wire as a query parameter. See ADR-0004 §1.
+- **Decision**: Email lookup is deterministic via HMAC-SHA256 (`email_lower_hash`, unique-indexed) so login can find a user by email without exposing plaintext to indexes or replication slots.
+- **Decision**: `account_type` permanence is enforced by a `BEFORE UPDATE` trigger (`users_block_account_type_change`) rather than a check constraint, so the rule applies even for the superuser connection used by migrations. Trigger raises with `errcode = 'check_violation'`.
+- **Decision**: RLS policies attached to `users`, `shops`, `memberships`, `otp_codes`, `auth_events`. All read `current_setting('app.current_user_id', true)::uuid` and fail closed when unset. A non-superuser `app_user` role is created in `prisma/sql/auth_rls.sql`; production `DATABASE_URL` must switch to this role before launch — superuser bypasses RLS in dev (tracked as Phase 4 followup).
+- **Decision**: `@alphawolf/db` exposes `withUser(userId, fn)` and `withSystem(fn)` transaction helpers. The Prisma `$extends` middleware shape can't naturally wrap every query in a transaction without infinite recursion; the explicit-helper pattern is what the Prisma docs recommend for RLS session-var setups. Repos like `users.createUser` use `withSystem` for unauthenticated bootstrap paths (signup, OTP issuance, password reset).
+- **Decision**: ESLint `no-restricted-imports` rule bans bare `@prisma/client` imports outside `packages/db`. ADR-0002 followup discharged.
+- **Decision**: Auth.js v5 with JWT session strategy (not DB adapter). 30-day `maxAge`, 1-day `updateAge`, cookie is httpOnly + Secure + SameSite=strict with `__Secure-` / `__Host-` prefixes in production. Argon2id at `m=64 MiB, t=3, p=4` per OWASP. ADR-0004 §5.
+- **Decision**: Rate limit + lockout state lives in Postgres (`rate_limits` table) for Phase 1, not Upstash Redis. Auth flows are low-volume and we don't have Upstash provisioned. The repo surface is key-scoped strings so a Phase 2 Redis swap is an adapter change with no schema churn. ADR-0004 §2.
+- **Decision**: Lockout policy implemented: 5 failed logins per IP per 15 min → IP lockout (15 min in Phase 1, exponential backoff is a Phase 2 refinement once we have lockout history data); 10 failed logins per account → 1-hour account lockout. All auth events (`signup`, `login`, `login_failed`, `otp_*`, `account_locked`, `ip_locked`) written to `auth_events`.
+- **Decision**: Pending shop signup data (company name, phone, website, address) is held in an in-process Map between signup and OTP verify. 30-minute TTL, lost on restart. If lost, the user re-enters company info via the shop setup wizard (GH-009). Acceptable for Phase 1; a dedicated `pending_shop_signups` table is over-engineered for a 30-min window. ADR-0004 §3.
+- **Decision**: Dev-only `GET /api/auth/dev-otp?email=…` endpoint returns the most-recent OTP for a given email from an in-process ring buffer. Hard-gated on `NODE_ENV !== 'production'`. Required for Playwright E2E because the Resend sandbox sender only delivers to the Resend account owner. ADR-0004 §4.
+- **Decision**: OTP codes are stored as argon2id hashes (cheaper parameters: `m=16 MiB, t=2, p=1` — short-lived, low-entropy). Plaintext never lands in the DB. Prior open codes for the same (user, purpose) are consumed when a new code is issued, so a fresh code invalidates the previous one.
+- **Decision**: CSRF for the bespoke signup/verify/resend server actions uses the double-submit-cookie pattern with a separate `alphawolf.csrf-form` cookie + hidden form field, comparison via `timingSafeEqual`. Auth.js continues to handle CSRF for its own sign-in endpoints.
+- **Artifacts produced**: Prisma schema (`users`, `shops`, `memberships`, `otp_codes`, `auth_events`, `rate_limits`), `prisma/sql/auth_rls.sql` (pgcrypto extension, helper functions, app_user role, RLS policies, permanence trigger), `@alphawolf/db` (client + crypto + repos), `@alphawolf/auth` (password / otp / lockout / email / signup / login / csrf / Auth.js wrappers), `apps/web` (signup pages, verify page, welcome pages, server actions, dev-otp peek route, Auth.js handler), Vitest suite (59 tests, 93.4% statement coverage on `@alphawolf/auth`), Playwright spec (`apps/web/e2e/signup.spec.ts`) for both account types' happy paths plus wrong-code retry, ESLint rule banning `@prisma/client` outside `packages/db`, ADR-0004.
+- **Hard scope**: Vehicle template, asset upload, editor work explicitly NOT in this PR — those are Steps 4–5.
+- **Followups**:
+  - **Production RLS hardening**: switch `DATABASE_URL` to the `app_user` non-superuser role (created in `auth_rls.sql`) before public launch. Currently dev uses the Supabase `postgres` superuser, which bypasses RLS in practice. Tracked in Phase 4 hardening pass.
+  - **Domain + Resend verification**: verify `alphawolfwrap.com` in Resend; switch `RESEND_FROM_EMAIL` to `no-reply@alphawolfwrap.com`; align SPF/DKIM/DMARC. Lifts the dev OTP peek endpoint's role to legacy. Track in GH-016.
+  - **Rate-limit migration**: when Upstash is provisioned and auth volume justifies it, swap the `rate_limits` repo for a Redis adapter. No schema churn required.
+  - **PII key rotation runbook**: pgcrypto symmetric key cannot be rotated without a planned migration that decrypts every row with the old key and re-encrypts with the new one. Phase 4.
+  - **Integration tests against real DB**: the test suite is unit-only with mocked `@alphawolf/db`. Integration tests (testcontainers or local Supabase) per the task spec are a follow-on PR once we standardize the test-DB bootstrap.
+
+---
+
 ## 2026-05-18 — Archer + Claude (monorepo skeleton + CI)
 
 - **Decision**: Adopted pnpm workspaces + Turborepo as the monorepo orchestration. Top-level layout locked: `apps/{web,api}`, `services/{parse,ai,paneling}`, `packages/{db,ui,canvas,auth}`. Adding a new top-level package or service now requires a superseding/supplementary ADR.
