@@ -51,6 +51,14 @@ Then work through `docs/phase-1-readiness-checklist.md`. Don't proceed to Step 1
 ````
 You are a senior full-stack engineer starting work on Alpha Wolf Wrap Studio. This session is read-only — do not write or modify any code.
 
+## Skills to activate
+Load and apply these skills from /.claude/skills/ for this task:
+- product-manager-toolkit (PR planning, story decomposition)
+- product-strategist (gap analysis, scope challenge)
+- software-architecture (cross-cutting architectural review)
+- senior-architect (stack and topology validation)
+- senior-prompt-engineer (apply prompt rigor to the questions you ask back)
+
 Read these files in order, completely:
 1. /prd.md
 2. /docs/adr/0000-record-architecture-decisions.md
@@ -94,6 +102,15 @@ Constraints:
 
 ````
 Implement the monorepo skeleton for Alpha Wolf Wrap Studio. One PR. No feature code in this PR — structure and tooling only.
+
+## Skills to activate
+Load and apply these skills from /.claude/skills/ for this task:
+- senior-architect (monorepo design, package boundaries)
+- software-architecture (cross-cutting decisions)
+- file-organizer (directory layout, naming consistency)
+- clean-code (baseline code standards, linter configs)
+- workflow-automation (GitHub Actions CI, pre-commit hooks)
+- code-reviewer (PR template, CODEOWNERS, review gates)
 
 ## Scope
 Create the following directory layout. Each package gets a minimal package.json, tsconfig, and a README placeholder. No business logic yet.
@@ -158,6 +175,16 @@ Implement Phase 1 auth. Three stories, one PR (they share infrastructure so coup
 - GH-002 Shop signup + org creation
 - GH-020 Auth + session hardening
 
+## Skills to activate
+Load and apply these skills from /.claude/skills/ for this task:
+- api-security-best-practices (auth flows, sessions, CSRF, rate limiting, OWASP Top 10)
+- senior-data-engineer (Prisma schema, Supabase RLS, pgcrypto column encryption)
+- react-best-practices (signup UI components, form state, accessibility)
+- ui-design-system (signup screen tokens, button hierarchy)
+- webapp-testing (Vitest unit + Playwright E2E for the full OTP flow)
+- code-reviewer (security-focused review pass before marking ready)
+- clean-code (general)
+
 ## Read first
 - /prd.md §10.1, §10.2, §10.20 (acceptance criteria)
 - /docs/adr/0001-locked-stack.md (Auth.js + Supabase)
@@ -214,6 +241,17 @@ Implement the vehicle template system. One PR covering:
 - GH-004 Admin template CRUD
 - GH-017 "Request this vehicle" loop
 
+## Skills to activate
+Load and apply these skills from /.claude/skills/ for this task:
+- senior-data-engineer (vehicles/panels/requests schema, search index, facet queries)
+- react-best-practices (cascade selector, search-as-you-type, faceted filter UI)
+- ui-ux-pro-max (admin CRUD UX, browse/select flows)
+- frontend-design (template preview card layout, empty states)
+- ui-design-system (consistent control treatment with auth screens)
+- web-design-guidelines (admin route shell)
+- webapp-testing (SVG validator unit tests, browse-and-select E2E)
+- code-reviewer (schema and validator review)
+
 ## Read first
 - /docs/vehicle-database-spec.md (the schema and SVG standard are mandatory)
 - /prd.md §10.3, §10.4, §10.17
@@ -261,6 +299,19 @@ Title the PR: `[GH-003/004/017] Vehicle template system`
 Implement asset upload and the base canvas editor.
 - GH-005 Asset upload + vector parsing pipeline
 - GH-008 Canvas editor with per-panel masking (base only, manual tools — AI integration is Phase 2)
+
+## Skills to activate
+Load and apply these skills from /.claude/skills/ for this task:
+- frontend-design (canvas tool layout, panel-aware editor chrome)
+- ui-ux-pro-max (editor interaction model, snap behavior, tool hierarchy)
+- ux-researcher-designer (validate editor flow against the "Mara" power-user persona)
+- react-best-practices (Konva-in-React integration, state shape, debounced persistence)
+- ui-design-system (tool palette consistency)
+- web-performance-optimization (60fps with 200 layers benchmark, layer batching)
+- python-patterns (vector parsing worker: Inkscape CLI subprocess, svgo, rembg)
+- senior-data-engineer (project/version/asset schema, canvas_state persistence)
+- webapp-testing (parse-output schema tests, editor E2E)
+- code-reviewer (final review)
 
 ## Read first
 - /prd.md §10.5, §10.8
@@ -311,6 +362,14 @@ Title the PR: `[GH-005/008] Asset upload + base canvas editor`
 
 ````
 Wrap Phase 1. Three tasks, one PR.
+
+## Skills to activate
+Load and apply these skills from /.claude/skills/ for this task:
+- workflow-automation (Vercel + Fly.io deploy pipelines, env promotion)
+- api-security-best-practices (basic-auth gate, secret hygiene on staging)
+- web-performance-optimization (Lighthouse pass on staging)
+- webapp-testing (Playwright smoke test of the full Phase 1 flow)
+- code-reviewer (final pre-launch review)
 
 ## Scope
 1. Deploy /apps/web to Vercel staging at staging.alphawolfwrap.com with basic-auth gate.
