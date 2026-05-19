@@ -15,6 +15,7 @@ type FormState = {
   ok: boolean;
   message?: string;
   fieldErrors?: Record<string, string>;
+  values?: Record<string, string>;
 };
 
 const initialState: FormState = { ok: false };
@@ -24,6 +25,10 @@ export function SignupForm({ variant, csrfToken }: Props) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(action, initialState);
   const [password, setPassword] = useState('');
   const strength = passwordStrength(password);
+
+  // Preserve user input across validation-error re-renders.
+  // Password is intentionally never echoed back from the server — user re-types it.
+  const v = state.values ?? {};
 
   const strengthLabels = ['Too weak', 'Weak', 'Okay', 'Strong', 'Excellent'];
   const strengthColors = [
@@ -44,6 +49,7 @@ export function SignupForm({ variant, csrfToken }: Props) {
           name="firstName"
           autoComplete="given-name"
           required
+          defaultValue={v.firstName}
           error={state.fieldErrors?.firstName}
         />
         <Field
@@ -51,6 +57,7 @@ export function SignupForm({ variant, csrfToken }: Props) {
           name="lastName"
           autoComplete="family-name"
           required
+          defaultValue={v.lastName}
           error={state.fieldErrors?.lastName}
         />
       </div>
@@ -61,6 +68,7 @@ export function SignupForm({ variant, csrfToken }: Props) {
         type="email"
         autoComplete="email"
         required
+        defaultValue={v.email}
         error={state.fieldErrors?.email}
       />
 
@@ -97,6 +105,7 @@ export function SignupForm({ variant, csrfToken }: Props) {
             name="companyName"
             autoComplete="organization"
             required
+            defaultValue={v.companyName}
             error={state.fieldErrors?.companyName}
           />
           <Field
@@ -105,6 +114,7 @@ export function SignupForm({ variant, csrfToken }: Props) {
             type="tel"
             autoComplete="tel"
             required
+            defaultValue={v.phone}
             error={state.fieldErrors?.phone}
           />
           <Field
@@ -112,12 +122,14 @@ export function SignupForm({ variant, csrfToken }: Props) {
             name="website"
             type="url"
             autoComplete="url"
+            defaultValue={v.website}
             error={state.fieldErrors?.website}
           />
           <Field
             label="Business address (optional)"
             name="address"
             autoComplete="street-address"
+            defaultValue={v.address}
             error={state.fieldErrors?.address}
           />
         </>
@@ -156,6 +168,7 @@ type FieldProps = {
   error?: string;
   minLength?: number;
   value?: string;
+  defaultValue?: string;
   onChange?: (e: React.ChangeEvent<HTMLInputElement>) => void;
   describedBy?: string;
 };
@@ -169,10 +182,15 @@ function Field({
   error,
   minLength,
   value,
+  defaultValue,
   onChange,
   describedBy,
 }: FieldProps) {
   const id = `field-${name}`;
+  // Pick exactly one of `value` (controlled) or `defaultValue` (uncontrolled).
+  // React warns if both are passed.
+  const valueProps =
+    value !== undefined ? { value, onChange } : { defaultValue: defaultValue ?? '' };
   return (
     <div className="flex flex-col gap-1">
       <label htmlFor={id} className="text-sm font-medium text-zinc-800">
@@ -185,11 +203,10 @@ function Field({
         required={required}
         autoComplete={autoComplete}
         minLength={minLength}
-        value={value}
-        onChange={onChange}
         aria-invalid={Boolean(error) || undefined}
         aria-describedby={describedBy}
         className={`rounded-md border px-3 py-2 text-sm shadow-sm outline-none transition focus:border-zinc-900 focus:ring-2 focus:ring-zinc-200 ${error ? 'border-red-400' : 'border-zinc-300'}`}
+        {...valueProps}
       />
       {error ? (
         <p className="text-xs text-red-600" role="alert">

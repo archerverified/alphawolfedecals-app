@@ -24,9 +24,7 @@ export default async function CustomerSignupPage() {
         >
           I run a wrap shop →
         </Link>
-        <Link href="/signin" className="underline-offset-2 hover:underline">
-          Sign in
-        </Link>
+        {/* Sign-in flow lands in a follow-on PR. See activities.md. */}
       </div>
     </>
   );

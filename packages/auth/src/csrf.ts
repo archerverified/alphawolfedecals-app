@@ -6,10 +6,14 @@
 // cookie at first GET; submissions must echo the same token in a hidden form
 // field. Comparison is constant-time.
 
+// SERVER ONLY — uses node:crypto. The constants (cookie name + form field
+// name) live in ./csrf-constants and are safe to import from the client.
+
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 
-export const CSRF_COOKIE_NAME = 'alphawolf.csrf-form';
-export const CSRF_FIELD_NAME = '_csrf';
+// Re-exported for backwards compatibility within this package. New code should
+// import these directly from ./csrf-constants.
+export { CSRF_COOKIE_NAME, CSRF_FIELD_NAME } from './csrf-constants';
 
 const TOKEN_BYTES = 32;
 
