@@ -1,14 +1,156 @@
-// Alpha Wolf Wrap Studio — Prisma schema
-// Empty for now. Models land in feature PRs (auth, projects, vehicles, designs, exports).
-// Row-level security policies are managed via raw SQL migrations alongside generated migrations.
-// See ADR-0002 for the `app.current_user_id` session-variable pattern.
+// Alpha Wolf Wrap Studio — Prisma schema.
+// RLS policies + pgcrypto helpers live in prisma/sql/auth_rls.sql and are applied
+// after `prisma db push` / `prisma migrate deploy`. See ADR-0002 for the
+// app.current_user_id session-variable pattern.
 
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  binaryTargets = ["native"]
 }
 
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
   directUrl = env("DIRECT_URL")
+}
+
+enum AccountType {
+  customer
+  shop_user
+}
+
+enum AccountStatus {
+  pending_verification
+  active
+  locked
+  deleted
+}
+
+enum MembershipRole {
+  shop_admin
+  shop_designer
+}
+
+enum AuthEventType {
+  signup
+  login
+  login_failed
+  logout
+  otp_requested
+  otp_verified
+  otp_failed
+  password_reset_requested
+  password_reset_completed
+  account_locked
+  ip_locked
+}
+
+// Users. PII (name, email, phone) is encrypted at rest via pgcrypto.
+// email_lower_hash is an HMAC-SHA256 of the lowercase email, used for deterministic
+// lookup without exposing the plaintext to indexes or logs.
+model User {
+  id                 String        @id @default(uuid()) @db.Uuid
+  emailEncrypted     Bytes         @map("email_encrypted")
+  emailLowerHash     Bytes         @unique @map("email_lower_hash")
+  firstNameEncrypted Bytes         @map("first_name_encrypted")
+  lastNameEncrypted  Bytes         @map("last_name_encrypted")
+  phoneEncrypted     Bytes?        @map("phone_encrypted")
+  passwordHash       String        @map("password_hash")
+  accountType        AccountType   @map("account_type")
+  status             AccountStatus @default(pending_verification)
+  failedLoginCount   Int           @default(0) @map("failed_login_count")
+  lockedUntil        DateTime?     @map("locked_until")
+  lastLoginAt        DateTime?     @map("last_login_at")
+  createdAt          DateTime      @default(now()) @map("created_at")
+  updatedAt          DateTime      @updatedAt @map("updated_at")
+
+  memberships Membership[]
+  otpCodes    OtpCode[]
+  authEvents  AuthEvent[]
+
+  @@index([accountType])
+  @@index([status])
+  @@map("users")
+}
+
+// Shops. company_name is encrypted; receive_code is a 12-char public handoff
+// token for project transfer (GH-012) — not secret.
+model Shop {
+  id                   String   @id @default(uuid()) @db.Uuid
+  companyNameEncrypted Bytes    @map("company_name_encrypted")
+  websiteEncrypted     Bytes?   @map("website_encrypted")
+  addressEncrypted     Bytes?   @map("address_encrypted")
+  receiveCode          String   @unique @map("receive_code") @db.VarChar(12)
+  createdAt            DateTime @default(now()) @map("created_at")
+  updatedAt            DateTime @updatedAt @map("updated_at")
+
+  memberships Membership[]
+
+  @@map("shops")
+}
+
+model Membership {
+  id        String         @id @default(uuid()) @db.Uuid
+  userId    String         @map("user_id") @db.Uuid
+  shopId    String         @map("shop_id") @db.Uuid
+  role      MembershipRole
+  createdAt DateTime       @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, shopId])
+  @@index([shopId])
+  @@map("memberships")
+}
+
+// One-time codes for email verification, password reset, etc.
+// code_hash stores an argon2id hash of the 6-digit code (codes are never stored in clear).
+// attempts caps wrong-code guesses (5 per code per 15 min — see PRD §10.1).
+model OtpCode {
+  id         String    @id @default(uuid()) @db.Uuid
+  userId     String    @map("user_id") @db.Uuid
+  codeHash   String    @map("code_hash")
+  purpose    String    @db.VarChar(64)
+  expiresAt  DateTime  @map("expires_at")
+  consumedAt DateTime? @map("consumed_at")
+  attempts   Int       @default(0)
+  createdAt  DateTime  @default(now()) @map("created_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, purpose, consumedAt])
+  @@index([expiresAt])
+  @@map("otp_codes")
+}
+
+// Audit log of all auth events. user_id is nullable for events that happen before
+// the user identity is established (e.g. failed login against unknown email).
+model AuthEvent {
+  id        String        @id @default(uuid()) @db.Uuid
+  userId    String?       @map("user_id") @db.Uuid
+  eventType AuthEventType @map("event_type")
+  ipAddress String?       @map("ip_address") @db.VarChar(64)
+  userAgent String?       @map("user_agent")
+  metadata  Json?
+  createdAt DateTime      @default(now()) @map("created_at")
+
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([eventType, createdAt])
+  @@map("auth_events")
+}
+
+// Sliding-window rate-limit + lockout tracking. Keyed by a string that encodes
+// the bucket (e.g. "ip:1.2.3.4:login", "account:<userId>:login").
+model RateLimit {
+  key           String   @id @db.VarChar(255)
+  attempts      Int      @default(0)
+  resetAt       DateTime @map("reset_at")
+  lockedUntil   DateTime? @map("locked_until")
+  lastAttemptAt DateTime @default(now()) @map("last_attempt_at")
+
+  @@index([resetAt])
+  @@map("rate_limits")
 }
