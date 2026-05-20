@@ -32,6 +32,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # The Prisma schema lives at packages/db/prisma (a non-default path), so
+      # @prisma/client's postinstall can't find it and ships only the stub
+      # client. Generate explicitly here, otherwise typecheck fails against the
+      # rich Prisma namespace (Prisma.LogLevel, PrismaClientKnownRequestError, …).
+      - name: Generate Prisma client
+        run: pnpm --filter @alphawolf/db exec prisma generate
+
       - name: Lint
         run: pnpm turbo run lint
 

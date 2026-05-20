@@ -6,6 +6,7 @@
     "NODE_ENV",
     "CI",
     "DATABASE_URL",
+    "DATABASE_URL_APP",
     "DIRECT_URL",
     "SUPABASE_URL",
     "SUPABASE_ANON_KEY",
