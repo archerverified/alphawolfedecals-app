@@ -6,6 +6,19 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-05-19 — Archer + Claude ([infra] dev RLS enforcement via app_user)
+
+- **Context**: The Phase 1 auth PR shipped RLS policies but ran every Prisma query — authenticated and bootstrap alike — through the Supabase `postgres` superuser, which bypasses RLS. So in dev, RLS policies attached but never actually enforced. This unblocks Step 4 (vehicle templates) from landing code that assumes RLS works in dev when it didn't. Discharges the dev half of the prior entry's "Production RLS hardening" followup.
+- **Decision**: `@alphawolf/db` now uses **two physical connections**. `withUser` (authenticated request paths) runs on the non-superuser `app_user` role via `DATABASE_URL_APP` (NOBYPASSRLS) so RLS enforces. `withSystem` (signup, OTP, login, audit writes) keeps the superuser `DATABASE_URL`, which bypasses RLS — required because those bootstrap paths run before a user is authenticated and `prisma/sql/auth_rls.sql` deliberately defines no INSERT policy. Implements ADR-0002's session-variable pattern; no new ADR.
+  - **Why two connections, not one**: pointing the single shared client at `app_user` would have broken signup/login/OTP outright — under `nobypassrls` with no `app.current_user_id`, the bootstrap INSERTs are denied and SELECTs fail closed. `auth_rls.sql` already documents that bootstrap "runs as the system role (BYPASSRLS)"; this just makes the implementation match. `auth_rls.sql` was not modified.
+- **Decision**: `getPrisma()` defaults its `datasourceUrl` to `DATABASE_URL_APP`, falling back to `DATABASE_URL` with a once-per-process `console.warn('[db] RLS bypass — running as superuser. Set DATABASE_URL_APP before production.')`. The warning is load-bearing: it fires on first DB touch of any path (including signup) so a contributor who forgets `DATABASE_URL_APP` can't silently lose RLS enforcement.
+- **Decision**: First real-DB integration test — `packages/db/tests/rls.integration.test.ts` — proves cross-tenant isolation: with `app.current_user_id` pinned to user A, `withUser(A, db => db.user.findMany())` returns only A's row, never B's. Lives in a dedicated Vitest `integration` project (new `vitest.workspace.ts`), excluded from the default `vitest run` so an unreachable dev DB never fails CI. Run via `pnpm --filter @alphawolf/db test:integration`.
+- **Artifacts produced**: `packages/db/src/client.ts` (two-connection split + `getSystemPrisma()` + RLS-bypass warning), `packages/db/vitest.workspace.ts` (unit + integration projects), `packages/db/tests/rls.integration.test.ts`, `test:integration` script, `DATABASE_URL_APP` in `.env.example` and `turbo.json` `globalEnv`.
+- **Hard scope**: Production secret management (Phase 4 staging deploy), a full testcontainers harness, and a CI integration-test job are explicitly NOT in this PR — parked as follow-ons. `auth_rls.sql`, `password.ts`, `otp.ts`, signup logic, and `apps/web` untouched.
+- **Followups**:
+  - **CI integration job**: wire `pnpm --filter @alphawolf/db test:integration` into CI against an ephemeral/seeded test DB (needs a test-DB bootstrap + `DATABASE_URL_APP` secret). Separate PR.
+  - **Production RLS hardening (remaining)**: provision the `app_user` password and `DATABASE_URL_APP` in the Phase 4 staging/prod secret store; confirm the production runtime connection is `app_user`, not the superuser.
+
 ## 2026-05-19 — Archer + Claude (Phase 1 auth: GH-001 + GH-002 + GH-020)
 
 - **Decision**: PII (name, email, phone, company name, website, address) is encrypted at rest via pgcrypto column encryption. The symmetric key is injected per-transaction via the Postgres GUC `app.pii_key`, alongside `app.current_user_id`, by `@alphawolf/db`'s `withUser` / `withSystem` helpers. SQL-side helpers `app_encrypt_pii`, `app_decrypt_pii`, and `app_email_lookup_hash` read the key — the key never crosses the wire as a query parameter. See ADR-0004 §1.
