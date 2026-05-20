@@ -244,6 +244,11 @@ model Vehicle {
   // Templating assets.
   outlineSvgUrl String  @map("outline_svg_url")
   topviewSvgUrl String? @map("topview_svg_url")
+  // ⚠️ STOPGAP DATA (resolves in GH-005). The column name (per spec §2) promises
+  // a PNG, and that IS the end state. Until GH-005's raster pipeline lands there
+  // are no PNGs, so this PR stores the OUTLINE SVG URL here (renders fine in an
+  // <img>). GH-005 must write a real PNG URL — which makes the name honest and
+  // ends the mismatch. Do not build anything that assumes the bytes are PNG yet.
   thumbPngUrl   String  @map("thumb_png_url")
 
   // Provenance.
@@ -277,6 +282,14 @@ model VehiclePanel {
   svgPath          String     @map("svg_path")
   view             String
   wrapSafeZone     Json       @map("wrap_safe_zone")
+  // ⚠️ CROSS-PR COUPLING (GH-005 -> GH-010). 0 is a SENTINEL meaning "surface
+  // area not yet computed", NOT a real zero area. This PR (GH-003/004) writes 0
+  // because the geometry precompute is the paneling pipeline (out of scope).
+  // GH-005 must populate this with the real precomputed area; GH-010 (print
+  // paneling) MUST treat 0 as "missing data" and refuse to panel — never feed it
+  // into area math, or a template paneled with area 0 prints to nothing. When
+  // GH-005 lands, add `CHECK (printable_area_mm2 > 0)` here to make the
+  // guarantee enforceable.
   printableAreaMm2 Int        @map("printable_area_mm2")
   finishHint       FinishHint @default(none) @map("finish_hint")
   installOrder     Int        @map("install_order")

@@ -1,13 +1,16 @@
-// Local filesystem store for vehicle template assets (outline SVGs, thumbnails).
+// ⚠️⚠️⚠️ DEV-ONLY STORAGE — DO NOT SHIP TO STAGING OR PRODUCTION. ⚠️⚠️⚠️
+// Files written here are LOCAL to the running process (a git-ignored dir at the
+// repo root). They survive `pnpm dev` restarts but ANY DEPLOY WIPES THEM, so a
+// production deploy would silently lose every uploaded template SVG on the first
+// redeploy. This is a stopgap until GH-005's real blob pipeline (Supabase
+// Storage / Cloudflare R2). To make the footgun impossible to trip, the write
+// path FAILS CLOSED when NODE_ENV === 'production' (see writeVehicleAsset).
 //
-// SCOPE / STOPGAP: real blob storage (Supabase Storage / S3 + CDN) is GH-005's
-// asset pipeline. For Phase 1 this writes validated, SVGO-optimised assets to a
-// git-ignored directory at the repo root and serves them through the web app's
-// /api/vehicle-assets route. It works under `pnpm dev` and a long-lived
-// `next start` host (Fly.io per ADR-0002); it does NOT work on a read-only
-// serverless filesystem. The vehicles.*_svg_url columns store the app-relative
-// URL, so swapping this backend for real object storage in GH-005 is a
-// one-module change with no schema churn.
+// SCOPE: For Phase 1 this writes validated, SVGO-optimised assets to that dir
+// and serves them through the web app's /api/vehicle-assets route. The
+// vehicles.*_svg_url columns store the app-relative URL, so swapping this
+// backend for real object storage in GH-005 is a one-module change with no
+// schema churn.
 //
 // Owned by @alphawolf/db (the data layer) so the seed loader and the web app
 // share one directory + URL convention. node:fs only — server-only, never
@@ -55,6 +58,15 @@ export function writeVehicleAsset(
   filename: string,
   data: Buffer | string,
 ): string {
+  // FAIL CLOSED in production: this store is process-local and any deploy wipes
+  // it (see the file header). A misconfigured prod deploy must not silently
+  // accept uploads it will lose — GH-005 replaces this with real blob storage.
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      '[db] vehicle asset store is dev-only and writes are disabled in production. ' +
+        'Wire up real blob storage (GH-005) before serving template uploads.',
+    );
+  }
   assertSafe(vehicleId, 'vehicleId');
   assertSafe(filename, 'filename');
   const dir = join(vehicleAssetsRoot(), vehicleId);

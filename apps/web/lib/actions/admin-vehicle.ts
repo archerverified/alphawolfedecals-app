@@ -177,7 +177,7 @@ export async function createVehicleAction(
       view: p.view,
       svgPath: p.outlinePath,
       wrapSafeZone: svg.wrapSafeZoneFor(p),
-      printableAreaMm2: 0, // precompute is the paneling pipeline (GH-010)
+      printableAreaMm2: 0, // SENTINEL: not computed. GH-005 populates; GH-010 must treat 0 as missing (see schema.prisma).
       finishHint: p.finishHint,
       installOrder: p.installOrder,
       notes: p.notes,
