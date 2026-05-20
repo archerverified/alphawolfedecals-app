@@ -19,6 +19,14 @@ export default function HomePage() {
           I run a wrap shop
         </Link>
       </nav>
+      <div className="flex gap-4 text-sm text-zinc-600">
+        <Link href="/vehicles/select" className="underline-offset-2 hover:underline">
+          Browse vehicles
+        </Link>
+        <Link href="/signin" className="underline-offset-2 hover:underline">
+          Sign in
+        </Link>
+      </div>
     </main>
   );
 }

@@ -34,7 +34,17 @@ function getFromAddress(): string {
 
 // Ring buffer of the last 20 OTPs in non-production. Read by the dev-only
 // peek route during E2E tests.
-const devOtpRing: Array<{ to: string; code: string; createdAt: number }> = [];
+//
+// Pinned to globalThis because `next dev` can compile the signup Server Action
+// and the dev-otp Route Handler into SEPARATE module instances — a plain
+// module-level array would then give each its own ring, so the route never sees
+// the code the action stashed. globalThis is one-per-process, so both instances
+// share the same buffer. (Same reasoning as the well-known Prisma-client
+// global-singleton pattern.)
+type DevOtpEntry = { to: string; code: string; createdAt: number };
+const DEV_OTP_RING_KEY = Symbol.for('alphawolf.dev-otp-ring');
+const globalForOtp = globalThis as unknown as { [DEV_OTP_RING_KEY]?: DevOtpEntry[] };
+const devOtpRing: DevOtpEntry[] = (globalForOtp[DEV_OTP_RING_KEY] ??= []);
 const DEV_OTP_RING_MAX = 20;
 
 export function _stashDevOtp(to: string, code: string): void {
@@ -70,6 +80,30 @@ function renderOtpHtml(code: string, accountType: 'customer' | 'shop_user'): str
 
 function renderOtpText(code: string): string {
   return `Your Alpha Wolf Wrap Studio verification code is: ${code}\n\nThis code expires in 10 minutes. If you didn't request this, ignore this email.`;
+}
+
+// Generic transactional send, reusing the one Resend client + from-address.
+// Used for non-OTP notifications (e.g. GH-017 "your requested template shipped").
+// Best-effort callers should wrap this in try/catch; it throws if Resend rejects.
+export async function sendEmail(input: {
+  to: string;
+  subject: string;
+  html: string;
+  text: string;
+}): Promise<void> {
+  if (process.env.NODE_ENV !== 'production') {
+    console.log(`[auth][dev] email to ${input.to}: ${input.subject}`);
+  }
+  if (process.env.AUTH_EMAIL_TRANSPORT === 'console') {
+    return;
+  }
+  await getResend().emails.send({
+    from: getFromAddress(),
+    to: input.to,
+    subject: input.subject,
+    html: input.html,
+    text: input.text,
+  });
 }
 
 export async function sendOtpEmail(input: SendOtpInput): Promise<void> {

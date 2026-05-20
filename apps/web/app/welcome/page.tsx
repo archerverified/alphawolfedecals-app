@@ -1,7 +1,9 @@
 // Customer post-verification landing.
 // PRD §10.1 AC: "user lands on vehicle selector with their account scoped to customer".
-// Vehicle selector itself is GH-003 (separate PR) — this is the placeholder
-// destination that proves the verification flow completes.
+// The vehicle selector itself shipped in GH-003 (this PR), so the welcome screen
+// now links straight into it.
+
+import Link from 'next/link';
 
 export const metadata = {
   title: 'Welcome — Alpha Wolf Wrap Studio',
@@ -15,9 +17,17 @@ export default function CustomerWelcomePage() {
         <p className="mt-2 text-zinc-600">Pick the vehicle you want to wrap to get started.</p>
         <div
           data-testid="customer-welcome"
-          className="mt-8 rounded-xl border border-dashed border-zinc-300 bg-white p-8 text-center text-sm text-zinc-500"
+          className="mt-8 rounded-xl border border-zinc-200 bg-white p-8 text-center"
         >
-          Vehicle selector lands in GH-003.
+          <p className="text-sm text-zinc-600">
+            Your design starts on an accurate vehicle outline.
+          </p>
+          <Link
+            href="/vehicles/select"
+            className="mt-4 inline-flex items-center justify-center rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800"
+          >
+            Choose your vehicle
+          </Link>
         </div>
       </div>
     </main>

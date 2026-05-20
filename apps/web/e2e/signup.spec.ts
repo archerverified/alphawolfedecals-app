@@ -73,7 +73,9 @@ test.describe('GH-001 customer signup → OTP → welcome', () => {
     await page.locator('input[name="code"]').fill('000000');
     await page.getByRole('button', { name: /^verify$/i }).click();
 
-    await expect(page.getByRole('alert')).toContainText(/incorrect code/i);
+    // getByText (not getByRole('alert')) — Next's route announcer also has
+    // role="alert", which makes the role lookup ambiguous.
+    await expect(page.getByText(/incorrect code/i)).toBeVisible();
   });
 });
 

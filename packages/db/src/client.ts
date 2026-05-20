@@ -112,9 +112,16 @@ export function getSystemPrisma(): PrismaClient {
 //
 // Inputs to applySessionConfig are server-controlled (env var or authenticated
 // session userId — never raw user input), so this is defence-in-depth rather
-// than the primary injection guard. Use this helper only for values you
-// already trust by provenance.
-function pgQuoteLiteral(value: string): string {
+// than the primary injection guard.
+//
+// EXPORTED for repos that must build raw SQL with $queryRawUnsafe /
+// $executeRawUnsafe (the only safe shape on the Supabase transaction pooler —
+// tagged-template $queryRaw/$executeRaw create prepared statements that collide
+// across pool reuse; see the long note in applySessionConfig). When you embed a
+// VALUE in raw SQL, it MUST go through this helper. Unlike the session-config
+// path, repo search inputs can be raw user input — so the doubling/escaping
+// here is the actual injection guard there, not just defence-in-depth.
+export function pgQuoteLiteral(value: string): string {
   const hasBackslash = value.includes('\\');
   const escaped = value.replace(/'/g, "''").replace(/\\/g, '\\\\');
   return hasBackslash ? `E'${escaped}'` : `'${escaped}'`;

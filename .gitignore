@@ -13,6 +13,10 @@ out/
 .vercel/
 *.tsbuildinfo
 
+# Local vehicle template asset store (GH-003/004 dev stopgap; real blob storage
+# is GH-005). Written at runtime by the admin upload + the seed loader.
+.vehicle-assets/
+
 # Testing
 coverage/
 playwright-report/

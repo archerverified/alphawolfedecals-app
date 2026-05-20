@@ -12,6 +12,10 @@ import NextAuth from 'next-auth';
 import type { NextAuthResult } from 'next-auth';
 import { authConfig } from './auth-config';
 
+// Re-exported so apps/web can distinguish a failed credentials sign-in (catch)
+// from the success redirect (rethrow) without taking a direct next-auth dep.
+export { AuthError } from 'next-auth';
+
 // Explicit type annotations on each export work around next-auth v5's
 // portable-type inference problem (TS2742) when re-exporting from a
 // workspace package that has tsconfig `declaration: true`.
@@ -62,7 +66,7 @@ export {
   type FailureOutcome,
 } from './lockout';
 
-export { sendOtpEmail, _getDevOtp, _stashDevOtp } from './email';
+export { sendOtpEmail, sendEmail, _getDevOtp, _stashDevOtp } from './email';
 
 // Re-export the client-safe surface from here too, so server code only needs
 // one import path. Bundlers will resolve these straight from ./index.

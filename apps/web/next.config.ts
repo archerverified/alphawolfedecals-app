@@ -12,7 +12,13 @@ const nextConfig: NextConfig = {
   // does not reach the (action-browser) bundling context that Next.js uses
   // to prepare Server Actions. So we ALSO mark the same packages as webpack
   // externals on the server below. Belt + suspenders.
-  serverExternalPackages: ['@node-rs/argon2'],
+  //
+  // svgo is the vehicle SVG validator's optimiser (@alphawolf/db). It is NOT a
+  // native module, but its Node entry (svgo-node.js) loads config via a dynamic
+  // require() that webpack can't statically analyse ("Critical dependency"
+  // warning), and the @alphawolf/db barrel pulls it into every consumer. It's
+  // server-only, so externalise it: required at runtime, never bundled.
+  serverExternalPackages: ['@node-rs/argon2', 'svgo'],
 
   webpack: (config, { isServer }) => {
     if (isServer) {
@@ -27,7 +33,10 @@ const nextConfig: NextConfig = {
         : config.externals
           ? [config.externals]
           : [];
-      config.externals = [...existingExternals, /^@node-rs\//];
+      // /^@node-rs\// : native bindings (see above).
+      // svgo : its Node entry's dynamic require() can't be statically bundled;
+      //        externalise so webpack emits require('svgo') and Node loads it.
+      config.externals = [...existingExternals, /^@node-rs\//, 'svgo'];
     }
     return config;
   },
