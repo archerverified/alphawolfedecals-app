@@ -19,11 +19,15 @@
     "prisma:migrate:dev": "dotenv -e .env -- prisma migrate dev",
     "prisma:migrate:deploy": "dotenv -e .env -- prisma migrate deploy",
     "db:setup": "pnpm prisma:push --skip-generate && pnpm db:apply-sql",
+    "db:migrate": "pnpm prisma:migrate:deploy && pnpm db:apply-sql",
     "db:apply-sql": "dotenv -e .env -- sh -c 'psql \"$DIRECT_URL\" -v ON_ERROR_STOP=1 -f prisma/sql/auth_rls.sql'",
-    "db:seed": "dotenv -e .env -- tsx seeds/index.ts"
+    "db:seed": "dotenv -e .env -- tsx seeds/index.ts",
+    "db:make-admin": "dotenv -e .env -- tsx scripts/make-admin.ts"
   },
   "dependencies": {
-    "@prisma/client": "^5.22.0"
+    "@prisma/client": "^5.22.0",
+    "svgo": "^3.3.2",
+    "svgson": "^5.3.1"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",

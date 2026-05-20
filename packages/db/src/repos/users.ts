@@ -15,6 +15,7 @@ export type DecryptedUser = {
   lastName: string;
   phone: string | null;
   accountType: AccountType;
+  isAdmin: boolean;
   status: AccountStatus;
   failedLoginCount: number;
   lockedUntil: Date | null;
@@ -40,6 +41,7 @@ async function rowToUser(db: TxClient, row: UserRow): Promise<DecryptedUser> {
     lastName: await decryptPii(db, row.lastNameEncrypted),
     phone: row.phoneEncrypted ? await decryptPii(db, row.phoneEncrypted) : null,
     accountType: row.accountType,
+    isAdmin: row.isAdmin,
     status: row.status,
     failedLoginCount: row.failedLoginCount,
     lockedUntil: row.lockedUntil,
@@ -57,6 +59,7 @@ type UserRow = {
   phoneEncrypted: Buffer | null;
   passwordHash: string;
   accountType: AccountType;
+  isAdmin: boolean;
   status: AccountStatus;
   failedLoginCount: number;
   lockedUntil: Date | null;
@@ -161,6 +164,31 @@ export async function getOwnUser(userId: string): Promise<DecryptedUser | null> 
     const row = (await db.user.findUnique({ where: { id: userId } })) as UserRow | null;
     if (!row) return null;
     return rowToUser(db, row);
+  });
+}
+
+// Grant/revoke the internal-admin flag (ADR-0005). Runs on the system role:
+// is_admin is staff provisioning, done out-of-band (a CLI script or the
+// dev-only promote endpoint), not by the user about themselves, so there is no
+// app.current_user_id to scope by. Looks the user up by email hash so operators
+// can promote by email without first resolving an id. Returns the updated user,
+// or null if no user matches the email.
+export async function setUserAdminByEmail(
+  email: string,
+  isAdmin: boolean,
+): Promise<DecryptedUser | null> {
+  return withSystem(async (db) => {
+    const lookupHash = await emailLookupHash(db, email);
+    const existing = (await db.user.findUnique({
+      where: { emailLowerHash: lookupHash },
+      select: { id: true },
+    })) as { id: string } | null;
+    if (!existing) return null;
+    const updated = (await db.user.update({
+      where: { id: existing.id },
+      data: { isAdmin },
+    })) as unknown as UserRow;
+    return rowToUser(db, updated);
   });
 }
 

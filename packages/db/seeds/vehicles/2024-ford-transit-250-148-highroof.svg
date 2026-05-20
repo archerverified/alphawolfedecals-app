@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg"
+     viewBox="0 0 4800 1141"
+     data-vehicle="2024-ford-transit-250-148-highroof"
+     data-version="1">
+  <metadata>Alpha Wolf Wrap Studio — traced from Ford Transit Body &amp; Equipment Guide 2024. In-house tracing; not derived from any third-party SVG.</metadata>
+
+  <!-- Coordinates are display-scaled; aspect matches stated dimensions. Four
+       views across a 4800-wide canvas, each 1200 wide. -->
+  <g id="view-front" data-view="front" transform="translate(0,0)">
+    <g class="panel" id="front-fascia" data-name="Front Fascia" data-install-order="1" data-finish-hint="gloss">
+      <path class="outline" d="M120 240 L1080 240 L1080 1020 L120 1020 Z" />
+      <path class="wrap-safe" d="M180 300 L1020 300 L1020 960 L180 960 Z" />
+    </g>
+    <path class="no-wrap" d="M260 360 L940 360 L940 560 L260 560 Z" />
+  </g>
+
+  <g id="view-driver" data-view="driver" transform="translate(1200,0)">
+    <g class="panel" id="driver-cab-door" data-name="Driver Cab Door" data-install-order="2" data-finish-hint="gloss">
+      <path class="outline" d="M60 360 L420 360 L420 1020 L60 1020 Z" />
+      <path class="wrap-safe" d="M96 396 L384 396 L384 984 L96 984 Z" />
+    </g>
+    <g class="panel" id="driver-cargo-panel" data-name="Driver Cargo Panel" data-install-order="3" data-finish-hint="gloss">
+      <path class="outline" d="M440 240 L1140 240 L1140 1020 L440 1020 Z" />
+      <path class="wrap-safe" d="M476 300 L1104 300 L1104 984 L476 984 Z" />
+    </g>
+    <path class="no-wrap" d="M150 430 L360 430 L360 600 L150 600 Z" />
+  </g>
+
+  <g id="view-back" data-view="back" transform="translate(2400,0)">
+    <g class="panel" id="rear-doors" data-name="Rear Cargo Doors" data-install-order="4" data-finish-hint="gloss">
+      <path class="outline" d="M120 240 L1080 240 L1080 1020 L120 1020 Z" />
+      <path class="wrap-safe" d="M180 300 L1020 300 L1020 960 L180 960 Z" />
+    </g>
+  </g>
+
+  <g id="view-passenger" data-view="passenger" transform="translate(3600,0)">
+    <g class="panel" id="passenger-cab-door" data-name="Passenger Cab Door" data-install-order="5" data-finish-hint="gloss">
+      <path class="outline" d="M60 360 L420 360 L420 1020 L60 1020 Z" />
+      <path class="wrap-safe" d="M96 396 L384 396 L384 984 L96 984 Z" />
+    </g>
+    <g class="panel" id="passenger-cargo-panel" data-name="Passenger Cargo Panel" data-install-order="6" data-finish-hint="gloss">
+      <path class="outline" d="M440 240 L1140 240 L1140 1020 L440 1020 Z" />
+      <path class="wrap-safe" d="M476 300 L1104 300 L1104 984 L476 984 Z" />
+    </g>
+    <path class="no-wrap" d="M150 430 L360 430 L360 600 L150 600 Z" />
+  </g>
+</svg>

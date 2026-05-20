@@ -57,6 +57,11 @@ model User {
   phoneEncrypted     Bytes?        @map("phone_encrypted")
   passwordHash       String        @map("password_hash")
   accountType        AccountType   @map("account_type")
+  // Internal Alpha Wolf staff flag. Separate from account_type (which is
+  // permanent and constrained to customer | shop_user). Gates the admin
+  // vehicle-template CRUD routes and is the subject the vehicle RLS policies
+  // check via app_is_admin(). See ADR-0005.
+  isAdmin            Boolean       @default(false) @map("is_admin")
   status             AccountStatus @default(pending_verification)
   failedLoginCount   Int           @default(0) @map("failed_login_count")
   lockedUntil        DateTime?     @map("locked_until")
@@ -64,9 +69,11 @@ model User {
   createdAt          DateTime      @default(now()) @map("created_at")
   updatedAt          DateTime      @updatedAt @map("updated_at")
 
-  memberships Membership[]
-  otpCodes    OtpCode[]
-  authEvents  AuthEvent[]
+  memberships      Membership[]
+  otpCodes         OtpCode[]
+  authEvents       AuthEvent[]
+  verifiedVehicles Vehicle[]                @relation("VehicleVerifiedBy")
+  templateRequests VehicleTemplateRequest[]
 
   @@index([accountType])
   @@index([status])
@@ -145,12 +152,164 @@ model AuthEvent {
 // Sliding-window rate-limit + lockout tracking. Keyed by a string that encodes
 // the bucket (e.g. "ip:1.2.3.4:login", "account:<userId>:login").
 model RateLimit {
-  key           String   @id @db.VarChar(255)
-  attempts      Int      @default(0)
-  resetAt       DateTime @map("reset_at")
+  key           String    @id @db.VarChar(255)
+  attempts      Int       @default(0)
+  resetAt       DateTime  @map("reset_at")
   lockedUntil   DateTime? @map("locked_until")
-  lastAttemptAt DateTime @default(now()) @map("last_attempt_at")
+  lastAttemptAt DateTime  @default(now()) @map("last_attempt_at")
 
   @@index([resetAt])
   @@map("rate_limits")
+}
+
+// ----------------------------------------------------------------------------
+// Vehicle template library (GH-003 / GH-004 / GH-017).
+// Schema mirrors docs/vehicle-database-spec.md §2 exactly. Vehicle templates are
+// shared, public, non-PII resources — they are NOT encrypted via pgcrypto.
+// RLS (public read of published rows, admin-only writes) lives in
+// prisma/sql/auth_rls.sql. The expression/partial indexes the spec mandates
+// (tsvector full-text, pg_trgm typo-tolerant search, the published partial
+// unique key) and the year CHECK constraint are not expressible in the Prisma
+// schema language, so they are appended as raw SQL in the migration.
+// ----------------------------------------------------------------------------
+
+enum BodyType {
+  sedan
+  suv
+  crossover
+  pickup
+  van
+  box_truck
+  sprinter
+  motorcycle
+  rv
+  trailer
+  boat
+  equipment
+
+  @@map("body_type")
+}
+
+enum TemplateStatus {
+  draft
+  review
+  published
+  retired
+
+  @@map("template_status")
+}
+
+enum SourceAuthority {
+  manufacturer_spec
+  measured_in_shop
+  licensed
+  community_verified
+
+  @@map("source_authority")
+}
+
+enum FinishHint {
+  gloss
+  satin
+  matte
+  chrome
+  carbon
+  brushed
+  none
+
+  @@map("finish_hint")
+}
+
+model Vehicle {
+  id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  year     Int
+  make     String
+  model    String
+  trim     String?
+  variant  String?
+  bodyType BodyType @map("body_type")
+
+  // Universal dimensions (millimetres).
+  lengthMm    Int  @map("length_mm")
+  widthMm     Int  @map("width_mm")
+  heightMm    Int  @map("height_mm")
+  wheelbaseMm Int? @map("wheelbase_mm")
+
+  // Body-type-specific facets (nullable per type).
+  cabSize    String? @map("cab_size")
+  bedSize    String? @map("bed_size")
+  roofHeight String? @map("roof_height")
+  doorCount  Int?    @map("door_count")
+
+  // Templating assets.
+  outlineSvgUrl String  @map("outline_svg_url")
+  topviewSvgUrl String? @map("topview_svg_url")
+  thumbPngUrl   String  @map("thumb_png_url")
+
+  // Provenance.
+  sourceAuthority SourceAuthority @map("source_authority")
+  sourceNotes     String?         @map("source_notes")
+  verifiedAt      DateTime?       @map("verified_at") @db.Timestamptz
+  verifiedById    String?         @map("verified_by") @db.Uuid
+
+  // Versioning.
+  version      Int            @default(1)
+  status       TemplateStatus @default(draft)
+  supersedesId String?        @map("supersedes_id") @db.Uuid
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  verifiedBy      User?                    @relation("VehicleVerifiedBy", fields: [verifiedById], references: [id])
+  supersedes      Vehicle?                 @relation("VehicleSupersedes", fields: [supersedesId], references: [id])
+  supersededBy    Vehicle[]                @relation("VehicleSupersedes")
+  panels          VehiclePanel[]
+  shippedRequests VehicleTemplateRequest[] @relation("RequestShippedVehicle")
+
+  @@index([year, make, model], map: "vehicles_year_make_model_idx")
+  @@map("vehicles")
+}
+
+model VehiclePanel {
+  id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vehicleId        String     @map("vehicle_id") @db.Uuid
+  name             String
+  svgPath          String     @map("svg_path")
+  view             String
+  wrapSafeZone     Json       @map("wrap_safe_zone")
+  printableAreaMm2 Int        @map("printable_area_mm2")
+  finishHint       FinishHint @default(none) @map("finish_hint")
+  installOrder     Int        @map("install_order")
+  notes            String?
+  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz
+
+  vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
+
+  @@index([vehicleId], map: "vehicle_panels_vehicle_idx")
+  @@map("vehicle_panels")
+}
+
+model VehicleTemplateRequest {
+  id                 String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  requesterId        String?   @map("requester_id") @db.Uuid
+  // Stored only when the requester opts in to ship notifications. Left NULL on
+  // opt-out so no follow-up email can be sent (GH-017 email opt-out).
+  requesterEmail     String?   @map("requester_email")
+  year               Int
+  make               String
+  model              String
+  trim               String?
+  variant            String?
+  referencePhotoUrls String[]  @map("reference_photo_urls")
+  notes              String?
+  status             String    @default("pending")
+  shippedVehicleId   String?   @map("shipped_vehicle_id") @db.Uuid
+  createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  resolvedAt         DateTime? @map("resolved_at") @db.Timestamptz
+
+  requester      User?    @relation(fields: [requesterId], references: [id])
+  shippedVehicle Vehicle? @relation("RequestShippedVehicle", fields: [shippedVehicleId], references: [id])
+
+  @@index([status, createdAt])
+  @@map("vehicle_template_requests")
 }

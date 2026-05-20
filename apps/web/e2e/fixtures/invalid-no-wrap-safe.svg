@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4800 1141">
+  <!-- INVALID on purpose (admin-create negative test): the back view is missing,
+       and the front panel has no .wrap-safe path. -->
+  <g id="view-front" data-view="front" transform="translate(0,0)">
+    <g class="panel" id="front-fascia" data-name="Front Fascia" data-install-order="1">
+      <path class="outline" d="M120 240 L1080 240 L1080 1020 L120 1020 Z" />
+    </g>
+  </g>
+  <g id="view-driver" data-view="driver" transform="translate(1200,0)">
+    <g class="panel" id="driver-panel" data-name="Driver Panel" data-install-order="2">
+      <path class="outline" d="M60 360 L420 360 L420 1020 L60 1020 Z" />
+      <path class="wrap-safe" d="M96 396 L384 396 L384 984 L96 984 Z" />
+    </g>
+  </g>
+  <g id="view-passenger" data-view="passenger" transform="translate(3600,0)">
+    <g class="panel" id="passenger-panel" data-name="Passenger Panel" data-install-order="3">
+      <path class="outline" d="M60 360 L420 360 L420 1020 L60 1020 Z" />
+      <path class="wrap-safe" d="M96 396 L384 396 L384 984 L96 984 Z" />
+    </g>
+  </g>
+</svg>

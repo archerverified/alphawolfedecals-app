@@ -63,5 +63,5 @@ export function middleware(request: NextRequest) {
 // validates CSRF. Keep this list tight — middleware runs on every match,
 // so unnecessary matchers add latency to every request.
 export const config = {
-  matcher: ['/signup', '/signup-shop', '/verify'],
+  matcher: ['/signup', '/signup-shop', '/verify', '/vehicles/request', '/admin/:path*'],
 };

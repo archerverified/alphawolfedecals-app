@@ -1,0 +1,21 @@
+{
+  "id": "a0000000-0000-4000-8000-000000000001",
+  "year": 2024,
+  "make": "Ford",
+  "model": "Transit 250",
+  "trim": null,
+  "variant": "148\" WB · High Roof",
+  "bodyType": "van",
+  "lengthMm": 5531,
+  "widthMm": 2032,
+  "heightMm": 2630,
+  "wheelbaseMm": 3750,
+  "cabSize": null,
+  "bedSize": null,
+  "roofHeight": "high",
+  "doorCount": null,
+  "sourceAuthority": "manufacturer_spec",
+  "sourceNotes": "Ford Transit Body & Equipment Guide 2024 (in-house tracing).",
+  "status": "published",
+  "svgFile": "2024-ford-transit-250-148-highroof.svg"
+}
