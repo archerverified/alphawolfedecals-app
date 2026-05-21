@@ -2,7 +2,13 @@ import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
-  transpilePackages: ['@alphawolf/auth', '@alphawolf/canvas', '@alphawolf/db', '@alphawolf/ui'],
+  transpilePackages: [
+    '@alphawolf/auth',
+    '@alphawolf/canvas',
+    '@alphawolf/db',
+    '@alphawolf/parse',
+    '@alphawolf/ui',
+  ],
 
   // Native modules — Next.js/webpack can't parse .node binaries. Mark them
   // as server-side externals so they're loaded via Node's native require()
@@ -18,7 +24,19 @@ const nextConfig: NextConfig = {
   // require() that webpack can't statically analyse ("Critical dependency"
   // warning), and the @alphawolf/db barrel pulls it into every consumer. It's
   // server-only, so externalise it: required at runtime, never bundled.
-  serverExternalPackages: ['@node-rs/argon2', 'svgo'],
+  // sharp (raster pipeline), canvas (Konva's native server peer), and the parse
+  // worker's queue/AI deps are native or dynamic-require modules that must not be
+  // bundled. The editor is client-only (dynamic, ssr:false) so Konva itself never
+  // SSRs; `canvas` is listed belt-and-suspenders. See ADR-0006 §8 / ADR-0009.
+  serverExternalPackages: [
+    '@node-rs/argon2',
+    'svgo',
+    'sharp',
+    'canvas',
+    'bullmq',
+    'ioredis',
+    'replicate',
+  ],
 
   webpack: (config, { isServer }) => {
     if (isServer) {
@@ -34,9 +52,21 @@ const nextConfig: NextConfig = {
           ? [config.externals]
           : [];
       // /^@node-rs\// : native bindings (see above).
-      // svgo : its Node entry's dynamic require() can't be statically bundled;
-      //        externalise so webpack emits require('svgo') and Node loads it.
-      config.externals = [...existingExternals, /^@node-rs\//, 'svgo'];
+      // svgo : its Node entry's dynamic require() can't be statically bundled.
+      // sharp/canvas : native .node binaries (raster pipeline + Konva server peer).
+      // bullmq/ioredis/replicate : pulled in via @alphawolf/parse's enqueue();
+      //        dynamically imported there, externalised here so webpack never
+      //        tries to statically bundle them into a server chunk.
+      config.externals = [
+        ...existingExternals,
+        /^@node-rs\//,
+        'svgo',
+        'sharp',
+        'canvas',
+        'bullmq',
+        'ioredis',
+        'replicate',
+      ];
     }
     return config;
   },

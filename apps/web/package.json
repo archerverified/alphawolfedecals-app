@@ -16,10 +16,18 @@
     "@alphawolf/auth": "workspace:*",
     "@alphawolf/canvas": "workspace:*",
     "@alphawolf/db": "workspace:*",
+    "@alphawolf/parse": "workspace:^",
     "@alphawolf/ui": "workspace:*",
+    "@supabase/supabase-js": "^2.106.1",
+    "konva": "^10.3.0",
+    "lucide-react": "^1.16.0",
     "next": "^15.0.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "react-konva": "^19.2.4",
+    "sharp": "^0.34.5",
+    "sonner": "^2.0.7",
+    "use-image": "^1.1.4"
   },
   "devDependencies": {
     "@playwright/test": "^1.49.0",

@@ -14,9 +14,10 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { geometry } from '@alphawolf/canvas';
 import { withSystem } from '../src/client';
 import { validateOutlineSvg, wrapSafeZoneFor } from '../src/svg/validate';
-import { writeVehicleAsset } from '../src/storage/vehicle-assets';
+import { uploadVehicleOutline } from '../src/storage/supabase';
 import type { BodyType, SourceAuthority, TemplateStatus } from '@prisma/client';
 
 const SEED_DIR = join(fileURLToPath(new URL('.', import.meta.url)), 'vehicles');
@@ -63,7 +64,8 @@ async function seedVehicle(v: SeedVehicle): Promise<void> {
     );
   }
 
-  const outlineUrl = writeVehicleAsset(v.id, 'outline.svg', validated.optimizedSvg);
+  // GH-005: upload to the public bucket + generate a real PNG thumbnail.
+  const { outlineSvgUrl, thumbPngUrl } = await uploadVehicleOutline(v.id, validated.optimizedSvg);
 
   await withSystem(async (db) => {
     // Idempotent: replace the row (panels cascade) so re-running the seed is safe.
@@ -85,8 +87,8 @@ async function seedVehicle(v: SeedVehicle): Promise<void> {
         bedSize: v.bedSize,
         roofHeight: v.roofHeight,
         doorCount: v.doorCount,
-        outlineSvgUrl: outlineUrl,
-        thumbPngUrl: outlineUrl, // raster thumbnails come with the GH-005 pipeline
+        outlineSvgUrl,
+        thumbPngUrl,
         sourceAuthority: v.sourceAuthority,
         sourceNotes: v.sourceNotes,
         status: v.status,
@@ -97,7 +99,8 @@ async function seedVehicle(v: SeedVehicle): Promise<void> {
             view: p.view,
             svgPath: p.outlinePath,
             wrapSafeZone: wrapSafeZoneFor(p),
-            printableAreaMm2: 0, // SENTINEL: not computed. GH-005 populates; GH-010 must treat 0 as missing (see schema.prisma).
+            // GH-005: real printable area (mm²) from the wrap-safe path geometry.
+            printableAreaMm2: Math.round(geometry.pathAreaMm2(p.wrapSafePath)),
             finishHint: p.finishHint,
             installOrder: p.installOrder,
             notes: p.notes,

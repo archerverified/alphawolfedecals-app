@@ -328,3 +328,80 @@ drop policy if exists vtr_admin_delete on vehicle_template_requests;
 create policy vtr_admin_delete on vehicle_template_requests
   for delete
   using (app_is_admin());
+
+-- ----------------------------------------------------------------------------
+-- Customer projects + canvas persistence + uploaded assets (GH-005 / GH-008).
+-- See ADR-0006 (canvas model) and ADR-0007 (asset storage).
+--
+-- These are TENANT rows owned by a single user (unlike the shared vehicle
+-- catalog above). They scope by app.current_user_id, mirroring the auth tables:
+--   * projects: owner_user_id = current session user (FOR ALL — read/write/delete).
+--     Soft-delete (status='deleted') is a normal UPDATE the owner performs; the
+--     SELECT side intentionally still returns deleted rows so the 30-day recovery
+--     window works (the repo filters them out of the default list).
+--   * project_versions / project_assets: no owner column of their own — they
+--     scope via an EXISTS on the parent project's owner (the vehicle_panels
+--     pattern). canvas_state / uploaded bytes are never visible cross-tenant.
+--
+-- The Supabase superuser-bypass caveat documented at the top of this file applies
+-- equally here: enforcement is real only on the app_user (withUser) connection,
+-- which the RLS integration test exercises.
+--
+-- New tables created by the latest migration also need table-level grants for
+-- app_user; the `grant ... on all tables in schema public` re-run at the top of
+-- this (idempotent) file covers them on every db:apply-sql.
+-- ----------------------------------------------------------------------------
+
+-- projects -------------------------------------------------------------------
+alter table projects enable row level security;
+alter table projects force row level security;
+
+drop policy if exists projects_owner_all on projects;
+create policy projects_owner_all on projects
+  for all
+  using (owner_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid)
+  with check (owner_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid);
+
+-- project_versions -----------------------------------------------------------
+alter table project_versions enable row level security;
+alter table project_versions force row level security;
+
+drop policy if exists project_versions_owner_all on project_versions;
+create policy project_versions_owner_all on project_versions
+  for all
+  using (
+    exists (
+      select 1 from projects p
+      where p.id = project_versions.project_id
+        and p.owner_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
+    )
+  )
+  with check (
+    exists (
+      select 1 from projects p
+      where p.id = project_versions.project_id
+        and p.owner_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
+    )
+  );
+
+-- project_assets -------------------------------------------------------------
+alter table project_assets enable row level security;
+alter table project_assets force row level security;
+
+drop policy if exists project_assets_owner_all on project_assets;
+create policy project_assets_owner_all on project_assets
+  for all
+  using (
+    exists (
+      select 1 from projects p
+      where p.id = project_assets.project_id
+        and p.owner_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
+    )
+  )
+  with check (
+    exists (
+      select 1 from projects p
+      where p.id = project_assets.project_id
+        and p.owner_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
+    )
+  );

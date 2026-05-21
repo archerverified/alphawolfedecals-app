@@ -270,6 +270,7 @@ model Vehicle {
   supersededBy    Vehicle[]                @relation("VehicleSupersedes")
   panels          VehiclePanel[]
   shippedRequests VehicleTemplateRequest[] @relation("RequestShippedVehicle")
+  projects        Project[]
 
   @@index([year, make, model], map: "vehicles_year_make_model_idx")
   @@map("vehicles")
@@ -325,4 +326,115 @@ model VehicleTemplateRequest {
 
   @@index([status, createdAt])
   @@map("vehicle_template_requests")
+}
+
+// ----------------------------------------------------------------------------
+// Customer projects + canvas editor persistence (GH-005 / GH-008). See ADR-0006
+// (canvas data model / persistence) and ADR-0007 (asset storage).
+//
+// Ownership is scoped by RLS via app.current_user_id (prisma/sql/auth_rls.sql),
+// mirroring the user-owned auth tables — owner_user_id is a plain Uuid column,
+// not a Prisma relation, so user soft-delete doesn't cascade-wipe project data.
+// canvas_state is opaque JSONB to @alphawolf/db; the apps/web Server Action runs
+// the @alphawolf/canvas migrate/validate round-trip before it ever lands here.
+// ----------------------------------------------------------------------------
+
+enum ProjectStatus {
+  draft
+  active
+  deleted
+
+  @@map("project_status")
+}
+
+// Lifecycle of a project_versions row. `working` is the single mutable autosave
+// target; a milestone freezes that row (submitted/approved/rejected) and clones
+// a new `working` row forward (see ADR-0006 §4).
+enum ApprovalState {
+  working
+  submitted
+  approved
+  rejected
+
+  @@map("approval_state")
+}
+
+// Parse pipeline status for an uploaded asset (services/parse). queued_missing_cli
+// means a vector job (AI/EPS/PDF) was accepted but inkscape/pdf2svg is absent on
+// the worker host — the editor surfaces "waiting on dependency" instead of failing.
+enum AssetParseStatus {
+  pending
+  processing
+  parsed
+  failed
+  queued_missing_cli
+
+  @@map("asset_parse_status")
+}
+
+model Project {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  ownerUserId   String        @map("owner_user_id") @db.Uuid
+  ownerShopId   String?       @map("owner_shop_id") @db.Uuid
+  vehicleId     String        @map("vehicle_id") @db.Uuid
+  // User-facing project name (rename CRUD, GH-008). Defaulted at creation from
+  // the chosen vehicle label; editable.
+  name          String        @default("Untitled project")
+  status        ProjectStatus @default(draft)
+  // 12-char public handoff token for project transfer (GH-012). Not secret.
+  transferToken String?       @unique @map("transfer_token")
+  // Set when status flips to `deleted`; drives the 30-day recovery window (PRD §8.2).
+  deletedAt     DateTime?     @map("deleted_at") @db.Timestamptz
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  vehicle  Vehicle          @relation(fields: [vehicleId], references: [id])
+  versions ProjectVersion[]
+  assets   ProjectAsset[]
+
+  @@index([ownerUserId, status])
+  @@map("projects")
+}
+
+model ProjectVersion {
+  id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId     String        @map("project_id") @db.Uuid
+  version       Int
+  canvasState   Json          @map("canvas_state")
+  approvalState ApprovalState @default(working) @map("approval_state")
+  // Optimistic-concurrency token for single-editor last-write-wins (ADR-0006 §4).
+  // Each autosave UPDATE bumps it; the action sends the rev it loaded with.
+  rev           Int           @default(0)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, version])
+  @@index([projectId, approvalState])
+  @@map("project_versions")
+}
+
+model ProjectAsset {
+  assetId       String           @id @default(dbgenerated("gen_random_uuid()")) @map("asset_id") @db.Uuid
+  projectId     String           @map("project_id") @db.Uuid
+  ownerUserId   String           @map("owner_user_id") @db.Uuid
+  mimeType      String           @map("mime_type")
+  // Bucket-relative storage key of the uploaded original (project-assets bucket).
+  sourceUrl     String           @map("source_url")
+  // Storage key of the parse worker's output (SVG / cleaned raster). Null until parsed.
+  parsedUrl     String?          @map("parsed_url")
+  parseStatus   AssetParseStatus @default(pending) @map("parse_status")
+  // Worker-written context: dimensions, bbox, rembg flag, error detail, etc.
+  parseMetadata Json?            @map("parse_metadata")
+  // Bumped when a re-parse supersedes prior output, so the editor can invalidate
+  // cached canvas references to this asset (ADR-0009 version vectors).
+  version       Int              @default(1)
+  createdAt     DateTime         @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt     DateTime         @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@index([projectId])
+  @@map("project_assets")
 }
