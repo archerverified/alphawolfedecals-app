@@ -44,6 +44,8 @@ interface Props {
   onCommit: (cmd: Command) => void;
   /** When set, expose the stage as window.__KONVA_STAGE__ (non-prod only). */
   exposeStage?: boolean;
+  /** Bubbled up when the out-of-bounds cue toggles (for the aria-live region). */
+  onCueChange?: (visible: boolean) => void;
 }
 
 const VIEW_ORDER = ['front', 'driver', 'back', 'passenger', 'top'];
@@ -112,6 +114,7 @@ export function CanvasStage({
   onSelect,
   onCommit,
   exposeStage,
+  onCueChange,
 }: Props) {
   const stageRef = useRef<Konva.Stage | null>(null);
   const artworkLayerRef = useRef<Konva.Layer | null>(null);
@@ -293,6 +296,8 @@ export function CanvasStage({
         guides={guides}
         snap={snap}
         getNode={getNode}
+        scale={fit.scale}
+        onCueChange={onCueChange}
       />
     </Stage>
   );

@@ -8,6 +8,7 @@
 
 import { projects, storage } from '@alphawolf/db';
 import { classifyMime, sourceExtFor, MAX_FILE_SIZE_BYTES } from './mime';
+import { bytesMatchKind, describeSignature } from './sniff';
 import { commandExists } from './cli';
 import { aiToSvg, pdfToSvg, sanitizeSvg, rasterToPng } from './converters';
 import type { ParseAssetPayload, ParseOutcome } from './types';
@@ -36,6 +37,20 @@ export async function processParseAsset(payload: ParseAssetPayload): Promise<Par
         assetId,
         parseStatus: 'failed',
         parseMetadata: { error },
+      });
+      return { status: 'failed', error };
+    }
+
+    // Magic-byte sniff: the declared MIME is client-controlled, so reject files
+    // whose bytes contradict it before they reach a converter (defence-in-depth
+    // on top of the MIME allowlist). A sniff *miss* is allowed through.
+    if (!bytesMatchKind(kind, source)) {
+      const sniffed = describeSignature(source);
+      const error = `declared ${mimeType} (${kind}) but the file header looks like ${sniffed}`;
+      await projects.setAssetParseResult(ownerUserId, {
+        assetId,
+        parseStatus: 'failed',
+        parseMetadata: { error, reason: 'mime_mismatch', claimedMime: mimeType, sniffed },
       });
       return { status: 'failed', error };
     }

@@ -42,7 +42,7 @@ import {
   TooltipProvider,
 } from '@alphawolf/ui/components/ui/tooltip';
 import { Popover, PopoverContent, PopoverTrigger } from '@alphawolf/ui/components/ui/popover';
-import { factory, deserializeDocument } from '@alphawolf/canvas';
+import { factory, deserializeDocument, geometry } from '@alphawolf/canvas';
 import type {
   CanvasDocument,
   CanvasElement,
@@ -157,6 +157,8 @@ export default function CanvasEditor(props: EditorProps) {
   const [tool, setTool] = useState<Tool>('select');
   const [shapeKind, setShapeKind] = useState<ShapeKind>('rect');
   const [snap, setSnap] = useState<SnapSettings>({ enabled: true, thresholdPx: 8 });
+  // Mirrors the Konva out-of-bounds cue into a DOM aria-live region (a11y).
+  const [cueVisible, setCueVisible] = useState(false);
 
   // Mount + viewport sizing.
   const [mounted, setMounted] = useState(false);
@@ -215,15 +217,34 @@ export default function CanvasEditor(props: EditorProps) {
     [doc.panels, dispatch, select],
   );
 
+  // Where a freshly-added element lands: the centre of the target panel's
+  // wrap-safe area, cascaded by ~40px per existing element so repeated "Add"
+  // clicks fan out instead of stacking on top of each other.
+  const placementFor = useCallback(() => {
+    if (!targetPanel) return { x: 400, y: 400 };
+    let cx = 400;
+    let cy = 400;
+    const clip = clips[targetPanel.id];
+    if (clip && clip.rings.length > 0) {
+      const b = geometry.bbox(clip.rings);
+      cx = (b.minX + b.maxX) / 2;
+      cy = (b.minY + b.maxY) / 2;
+    }
+    const ps = doc.panels[targetPanel.id];
+    const offset = ((ps ? ps.elementIds.length : 0) % 6) * 40;
+    return { x: cx + offset, y: cy + offset };
+  }, [targetPanel, clips, doc.panels]);
+
   const addText = useCallback(() => {
     if (!targetPanel) return;
+    const { x, y } = placementFor();
     addElement(
       factory.newText(
         { id: factory.elementId(mintId()), panelId: targetPanel.id, view: targetPanel.view },
-        { x: 400, y: 400, content: 'Double-click to edit' },
+        { x, y, content: 'Double-click to edit' },
       ),
     );
-  }, [targetPanel, addElement, mintId]);
+  }, [targetPanel, addElement, mintId, placementFor]);
 
   const addShape = useCallback(() => {
     if (!targetPanel) return;
@@ -232,14 +253,15 @@ export default function CanvasEditor(props: EditorProps) {
       panelId: targetPanel.id,
       view: targetPanel.view,
     };
+    const { x, y } = placementFor();
     const el =
       shapeKind === 'ellipse'
-        ? factory.newEllipse(init, { x: 400, y: 400 })
+        ? factory.newEllipse(init, { x, y })
         : shapeKind === 'line'
-          ? factory.newLine(init, { x: 400, y: 400 })
-          : factory.newRect(init, { x: 400, y: 400 });
+          ? factory.newLine(init, { x, y })
+          : factory.newRect(init, { x, y });
     addElement(el);
-  }, [targetPanel, shapeKind, addElement, mintId]);
+  }, [targetPanel, shapeKind, addElement, mintId, placementFor]);
 
   const onPlaceImage = useCallback((el: ImageElement) => addElement(el), [addElement]);
 
@@ -272,6 +294,75 @@ export default function CanvasEditor(props: EditorProps) {
       dispatch({ kind: 'removeElements', elements, panelIds, indices });
     }
   }, [doc.selection, doc.elements, doc.panels, dispatch]);
+
+  // Nudge the selection by (dx, dy) canvas units as one undoable Command.
+  const translateSelected = useCallback(
+    (dx: number, dy: number) => {
+      const ids = doc.selection;
+      if (ids.length === 0) return;
+      const before: { id: ElementId; x: number; y: number }[] = [];
+      const after: { id: ElementId; x: number; y: number }[] = [];
+      for (const id of ids) {
+        const el = doc.elements[id];
+        if (!el) continue;
+        before.push({ id, x: el.x, y: el.y });
+        after.push({ id, x: el.x + dx, y: el.y + dy });
+      }
+      if (after.length > 0) dispatch({ kind: 'updateElements', before, after });
+    },
+    [doc.selection, doc.elements, dispatch],
+  );
+
+  // Tab / Shift+Tab moves the selection through the active panel in z-order.
+  const cycleSelection = useCallback(
+    (dir: 1 | -1) => {
+      if (!targetPanel) return;
+      const ps = doc.panels[targetPanel.id];
+      if (!ps || ps.elementIds.length === 0) return;
+      const ids = ps.elementIds;
+      const cur = doc.selection[0];
+      let idx = cur ? ids.indexOf(cur) : -1;
+      idx = idx === -1 ? (dir === 1 ? 0 : ids.length - 1) : (idx + dir + ids.length) % ids.length;
+      const next = ids[idx];
+      if (next) select([next]);
+    },
+    [targetPanel, doc.panels, doc.selection, select],
+  );
+
+  // Keyboard handling for the focusable canvas host (a11y: full mouse-free use).
+  // Delete/Backspace and undo/redo stay on the window listeners below; here we
+  // own Tab cycling, arrow-nudge, and select-all so they don't fire page-wide.
+  const handleCanvasKey = useCallback(
+    (e: React.KeyboardEvent<HTMLDivElement>) => {
+      const meta = e.metaKey || e.ctrlKey;
+      if (meta && e.key.toLowerCase() === 'a') {
+        e.preventDefault();
+        if (targetPanel) {
+          const ps = doc.panels[targetPanel.id];
+          if (ps && ps.elementIds.length > 0) select(ps.elementIds);
+        }
+        return;
+      }
+      if (meta) return; // undo/redo (z/y) are handled by the window listener.
+      if (e.key === 'Tab') {
+        e.preventDefault();
+        cycleSelection(e.shiftKey ? -1 : 1);
+        return;
+      }
+      const step = e.shiftKey ? 10 : 1;
+      let dx = 0;
+      let dy = 0;
+      if (e.key === 'ArrowLeft') dx = -step;
+      else if (e.key === 'ArrowRight') dx = step;
+      else if (e.key === 'ArrowUp') dy = -step;
+      else if (e.key === 'ArrowDown') dy = step;
+      if (dx !== 0 || dy !== 0) {
+        e.preventDefault();
+        translateSelected(dx, dy);
+      }
+    },
+    [targetPanel, doc.panels, select, cycleSelection, translateSelected],
+  );
 
   // Delete / Backspace removes the selection.
   useEffect(() => {
@@ -367,8 +458,12 @@ export default function CanvasEditor(props: EditorProps) {
                     />
                   </div>
                   <div className="flex flex-col gap-2">
-                    <Label className="text-xs text-zinc-600">Threshold: {snap.thresholdPx}px</Label>
+                    <Label htmlFor="snap-threshold" className="text-xs text-zinc-600">
+                      Threshold: {snap.thresholdPx}px
+                    </Label>
                     <Slider
+                      id="snap-threshold"
+                      aria-label="Snap threshold in pixels"
                       value={[snap.thresholdPx]}
                       min={2}
                       max={24}
@@ -388,6 +483,15 @@ export default function CanvasEditor(props: EditorProps) {
                 <>
                   <Loader2 className="size-3.5 animate-spin" /> Saving…
                 </>
+              ) : autosave.status === 'error' ? (
+                <button
+                  type="button"
+                  onClick={() => autosave.flushNow()}
+                  className="font-medium text-red-600 hover:text-red-700"
+                  aria-label="Retry save"
+                >
+                  Save failed — retry
+                </button>
               ) : autosave.status === 'saved' || autosave.lastSavedAt ? (
                 <>
                   <Check className="size-3.5 text-emerald-600" /> Saved
@@ -409,7 +513,7 @@ export default function CanvasEditor(props: EditorProps) {
             />
             <ToolButton
               active={tool === 'text'}
-              label="Text"
+              label="Add text"
               testId="tool-text"
               onClick={() => {
                 setTool('text');
@@ -419,7 +523,7 @@ export default function CanvasEditor(props: EditorProps) {
             />
             <ToolButton
               active={tool === 'shape'}
-              label="Shape"
+              label="Add shape"
               testId="tool-shape"
               onClick={() => {
                 setTool('shape');
@@ -476,44 +580,72 @@ export default function CanvasEditor(props: EditorProps) {
 
           {/* Canvas host */}
           <main ref={canvasHostRef} className="relative min-w-0 flex-1 bg-zinc-200">
-            {size.width > 0 && size.height > 0 ? (
-              <CanvasStage
-                doc={doc}
-                panels={vehicle.panels}
-                clips={clips}
-                snap={snap}
-                width={size.width}
-                height={size.height}
-                onSelect={onSelect}
-                onCommit={onCommit}
-                exposeStage={!IS_PROD}
-              />
-            ) : null}
-            <div
-              data-testid="canvas-ready"
-              className="pointer-events-none absolute bottom-0 right-0 size-px opacity-0"
-            />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <div
+                  data-testid="canvas-host"
+                  tabIndex={0}
+                  role="application"
+                  aria-label="Design canvas. Press Tab to cycle elements, arrow keys to move, Delete to remove."
+                  onKeyDown={handleCanvasKey}
+                  className="absolute inset-0 outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-zinc-400"
+                >
+                  {size.width > 0 && size.height > 0 ? (
+                    <CanvasStage
+                      doc={doc}
+                      panels={vehicle.panels}
+                      clips={clips}
+                      snap={snap}
+                      width={size.width}
+                      height={size.height}
+                      onSelect={onSelect}
+                      onCommit={onCommit}
+                      exposeStage={!IS_PROD}
+                      onCueChange={setCueVisible}
+                    />
+                  ) : null}
+                  <div
+                    data-testid="canvas-ready"
+                    className="pointer-events-none absolute bottom-0 right-0 size-px opacity-0"
+                  />
 
-            {elementCount === 0 ? (
-              <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
-                <Card className="pointer-events-auto w-80 text-center">
-                  <CardHeader>
-                    <CardTitle>Start your wrap</CardTitle>
-                    <CardDescription>
-                      Add text, a shape, or upload artwork to place it on a panel.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="flex justify-center gap-2">
-                    <Button size="sm" variant="outline" onClick={addText} className="gap-1.5">
-                      <Type className="size-4" /> Text
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={addShape} className="gap-1.5">
-                      <Square className="size-4" /> Shape
-                    </Button>
-                  </CardContent>
-                </Card>
-              </div>
-            ) : null}
+                  {elementCount === 0 ? (
+                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
+                      <Card className="pointer-events-auto w-80 text-center">
+                        <CardHeader>
+                          <CardTitle>Start your wrap</CardTitle>
+                          <CardDescription>
+                            Add text, a shape, or upload artwork to place it on a panel.
+                          </CardDescription>
+                        </CardHeader>
+                        <CardContent className="flex justify-center gap-2">
+                          <Button size="sm" variant="outline" onClick={addText} className="gap-1.5">
+                            <Type className="size-4" /> Text
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={addShape}
+                            className="gap-1.5"
+                          >
+                            <Square className="size-4" /> Shape
+                          </Button>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  ) : null}
+                </div>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                Press Tab to navigate · arrow keys to move · Delete to remove
+              </TooltipContent>
+            </Tooltip>
+
+            {/* Visually-hidden live region: announces the out-of-bounds state to
+                assistive tech (Konva is a canvas and opaque to screen readers). */}
+            <div data-testid="oob-announce" role="status" aria-live="polite" className="sr-only">
+              {cueVisible ? 'Element is outside the printable area' : ''}
+            </div>
           </main>
 
           {/* Right inspector */}

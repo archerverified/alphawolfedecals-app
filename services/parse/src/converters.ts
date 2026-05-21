@@ -41,17 +41,36 @@ export function pdfToSvg(input: Buffer): Promise<Buffer> {
   });
 }
 
-// Baseline anti-XSS sanitisation for stored/served SVGs (api-security guideline).
+// Anti-XSS sanitisation for stored/served SVGs (api-security guideline).
 // The editor renders SVG via Konva/Image (not innerHTML), but the bytes are also
-// served from Storage, so strip the obvious script vectors. Not a full DOMPurify
-// (that needs a DOM); documented as a baseline in ADR-0007.
+// served from Storage and could be opened directly, so we strip every active
+// content vector. This is a hardened string sanitiser, not a full DOM purifier
+// (that needs a DOM in the worker); documented as a baseline in ADR-0007.
+//
+// Covered vectors:
+//   • <script> and <style> elements (style can carry @import / expression()),
+//   • <foreignObject> (arbitrary embedded HTML),
+//   • event handlers in ANY namespace (on*, xlink:on*, ev:on*…),
+//   • dangerous URI schemes (javascript:, data:, vbscript:) in href/xlink:href/src.
 export function sanitizeSvg(input: Buffer): Buffer {
   let s = input.toString('utf8');
-  s = s.replace(/<script[\s\S]*?<\/script>/gi, '');
-  s = s.replace(/<foreignObject[\s\S]*?<\/foreignObject>/gi, '');
-  s = s.replace(/\son\w+\s*=\s*"[^"]*"/gi, '');
-  s = s.replace(/\son\w+\s*=\s*'[^']*'/gi, '');
-  s = s.replace(/(href|xlink:href)\s*=\s*("|')\s*javascript:[^"']*\2/gi, '');
+  // Active elements, both paired and self-closing forms.
+  s = s.replace(/<script\b[\s\S]*?<\/script\s*>/gi, '');
+  s = s.replace(/<script\b[^>]*\/>/gi, '');
+  s = s.replace(/<style\b[\s\S]*?<\/style\s*>/gi, '');
+  s = s.replace(/<style\b[^>]*\/>/gi, '');
+  s = s.replace(/<foreignObject\b[\s\S]*?<\/foreignObject\s*>/gi, '');
+  s = s.replace(/<foreignObject\b[^>]*\/>/gi, '');
+  // Event handlers regardless of namespace prefix: on*, xlink:on*, ev:on*, …
+  s = s.replace(/\s[\w:-]*\bon\w+\s*=\s*"[^"]*"/gi, '');
+  s = s.replace(/\s[\w:-]*\bon\w+\s*=\s*'[^']*'/gi, '');
+  s = s.replace(/\s[\w:-]*\bon\w+\s*=\s*[^\s">]+/gi, '');
+  // Dangerous URI schemes in any href/xlink:href/src (covers <image>, <use>, <a>).
+  s = s.replace(
+    /\b((?:xlink:)?href|src)\s*=\s*("|')\s*(?:javascript|data|vbscript)\s*:[^"']*\2/gi,
+    '',
+  );
+  s = s.replace(/\b((?:xlink:)?href|src)\s*=\s*(?:javascript|data|vbscript)\s*:[^\s">]+/gi, '');
   return Buffer.from(s, 'utf8');
 }
 

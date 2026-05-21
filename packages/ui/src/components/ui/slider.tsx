@@ -18,6 +18,11 @@ function Slider({
     [value, defaultValue, min, max],
   );
 
+  // The element with role="slider" is the Thumb, so forward the accessible name
+  // there (not just onto the Root span) for assistive tech and a11y audits.
+  const ariaLabel = props['aria-label'];
+  const ariaLabelledby = props['aria-labelledby'];
+
   return (
     <SliderPrimitive.Root
       data-slot="slider"
@@ -48,6 +53,8 @@ function Slider({
         <SliderPrimitive.Thumb
           data-slot="slider-thumb"
           key={index}
+          aria-label={_values.length === 1 ? ariaLabel : undefined}
+          aria-labelledby={_values.length === 1 ? ariaLabelledby : undefined}
           className="block size-4 shrink-0 rounded-full border border-primary bg-white shadow-sm ring-ring/50 transition-[color,box-shadow] hover:ring-4 focus-visible:ring-4 focus-visible:outline-hidden disabled:pointer-events-none disabled:opacity-50"
         />
       ))}

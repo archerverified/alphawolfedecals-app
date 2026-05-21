@@ -49,7 +49,14 @@ export function useAutosave({ projectId, versionId, initialRev, doc }: Params): 
   const savedDocRef = useRef<CanvasDocument>(doc);
   // Guard against overlapping saves.
   const inFlight = useRef(false);
+  // A flush (flushNow / visibilitychange / beforeunload) that arrived while a
+  // save was in flight. We re-run doSave immediately when the current one
+  // settles so the trailing edit is never dropped on the floor.
+  const pendingFlush = useRef(false);
   const reloadingRef = useRef(false);
+  // Self-reference so the `finally` block can re-invoke doSave without a
+  // circular useCallback dependency (mirrors scheduleRef below).
+  const doSaveRef = useRef<() => void>(() => {});
 
   const clearTimers = useCallback(() => {
     if (debounceTimer.current) {
@@ -70,12 +77,18 @@ export function useAutosave({ projectId, versionId, initialRev, doc }: Params): 
       setStatus((s) => (s === 'pending' ? 'idle' : s));
       return;
     }
-    if (inFlight.current) return;
+    // A save is already running: remember that another flush is wanted and bail.
+    // The in-flight save's `finally` will re-run us with the latest doc.
+    if (inFlight.current) {
+      pendingFlush.current = true;
+      return;
+    }
     inFlight.current = true;
     clearTimers();
     setStatus('saving');
 
     const snapshot = current;
+    let saveOk = false;
     try {
       const res = await saveCanvasAction({
         projectId,
@@ -84,6 +97,7 @@ export function useAutosave({ projectId, versionId, initialRev, doc }: Params): 
         canvasState: serializeDocument(snapshot) as unknown as Record<string, unknown>,
       });
       if (res.ok) {
+        saveOk = true;
         revRef.current = res.rev;
         savedDocRef.current = snapshot;
         setLastSavedAt(Date.now());
@@ -97,20 +111,30 @@ export function useAutosave({ projectId, versionId, initialRev, doc }: Params): 
           window.setTimeout(() => window.location.reload(), 600);
         }
       } else {
-        toast.error('Could not save your changes. Retrying…');
+        toast.error('Could not save your changes.');
         setStatus('error');
       }
     } catch {
-      toast.error('Could not save your changes. Retrying…');
+      toast.error('Could not save your changes.');
       setStatus('error');
     } finally {
       inFlight.current = false;
-      // Re-arm if more edits landed during the save.
-      if (!reloadingRef.current && docRef.current !== savedDocRef.current) {
-        scheduleRef.current();
+      if (!reloadingRef.current) {
+        if (pendingFlush.current) {
+          // A flush was requested mid-save — honour it NOW, not on the debounce.
+          pendingFlush.current = false;
+          doSaveRef.current();
+        } else if (saveOk && docRef.current !== savedDocRef.current) {
+          // Save succeeded but newer edits landed — debounce the next pass.
+          scheduleRef.current();
+        }
+        // On a hard error we deliberately do NOT auto-reschedule: status stays
+        // 'error' so the "Save failed — retry" button shows. A subsequent edit
+        // (the doc-change effect) or the retry button re-arms the save.
       }
     }
   }, [projectId, versionId, clearTimers]);
+  doSaveRef.current = () => void doSave();
 
   // Hold `schedule` in a ref so `doSave` can re-arm without a circular dep.
   const scheduleRef = useRef<() => void>(() => {});

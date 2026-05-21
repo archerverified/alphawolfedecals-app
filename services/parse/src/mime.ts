@@ -10,12 +10,11 @@ export const MAX_FILE_SIZE_BYTES = 50 * 1024 * 1024; // 50 MB (matches bucket li
 export type ParseKind = 'vector-ai' | 'vector-pdf' | 'svg' | 'raster' | 'unsupported';
 
 const RASTER = new Set(['image/png', 'image/jpeg', 'image/webp', 'image/heic', 'image/heif']);
-// Browsers are inconsistent about .ai/.eps — some send octet-stream.
-const VECTOR_AI = new Set([
-  'application/postscript',
-  'application/illustrator',
-  'application/octet-stream',
-]);
+// Only the explicit vector MIME types. We deliberately do NOT accept
+// `application/octet-stream` here: browsers send it for *any* unknown binary, so
+// trusting it routes arbitrary blobs into the Inkscape path. The client picker
+// already rejects octet-stream, and process.ts magic-byte-sniffs the bytes.
+const VECTOR_AI = new Set(['application/postscript', 'application/illustrator']);
 
 export function classifyMime(mimeType: string): ParseKind {
   const m = mimeType.toLowerCase().split(';')[0]?.trim() ?? '';

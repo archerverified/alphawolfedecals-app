@@ -2,7 +2,7 @@
 title: Quick reference
 type: reference
 status: current
-last_updated: 2026-05-20 (Upstash endpoint registered, TCP vs REST split)
+last_updated: 2026-05-21 (web vitest now discovers colocated components/** tests)
 tags:
   - reference
   - daily-driver
@@ -77,6 +77,7 @@ pnpm install                                    # always run after branch switch
 pnpm dev                                        # boots web (3000) + api (4000) + parse (4001)
 pnpm turbo run lint typecheck test              # full local check before push
 pnpm turbo run test --filter @alphawolf/auth    # single-package test
+pnpm --filter @alphawolf/web test               # web unit tests (tests/** AND colocated components/**/*.test.tsx, e.g. editor/useAutosave.test.tsx)
 ```
 
 ### Database

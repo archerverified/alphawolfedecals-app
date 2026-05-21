@@ -289,6 +289,7 @@ export function UploadPanel({ projectId, targetPanelId, targetView, mintId, onPl
               <span>Tight crop</span>
             </div>
             <Slider
+              aria-label="Crop tightness (full frame to tight content crop)"
               value={[cropTight]}
               min={0}
               max={100}

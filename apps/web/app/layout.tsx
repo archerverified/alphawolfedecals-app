@@ -14,7 +14,7 @@ export default function RootLayout({ children }: { children: ReactNode }) {
       <body>
         {children}
         {/* Sonner toast host (upload success/failure, parse-complete — GH-005). */}
-        <Toaster richColors closeButton />
+        <Toaster richColors closeButton position="top-right" />
       </body>
     </html>
   );

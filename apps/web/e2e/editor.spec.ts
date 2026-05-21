@@ -65,11 +65,15 @@ test.describe('GH-008 canvas editor', () => {
       return true;
     });
     expect(cueShown).toBe(true);
-    await expect(page.getByTestId('oob-cue')).toBeVisible();
+    // The Konva cue is canvas-only and opaque to assistive tech, so the editor
+    // mirrors it into a DOM aria-live region — assert the announcement fires.
+    await expect(page.getByTestId('oob-announce')).toHaveText(
+      'Element is outside the printable area',
+    );
 
-    // Undo removes the placement (cue clears); redo re-applies.
+    // Undo removes the placement (cue clears, announcement empties); redo re-applies.
     await page.getByTestId('undo').click();
-    await expect(page.getByTestId('oob-cue')).toBeHidden();
+    await expect(page.getByTestId('oob-announce')).toHaveText('');
     await page.getByTestId('redo').click();
 
     // Autosave is debounced; give it room then reload and confirm the element
