@@ -41,6 +41,19 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-05-20 — Archer + Claude (Observability: PostHog + Sentry)
+
+- **Context**: cross-cutting observability, separate from the Step 5 feature PR (#38). Two integrations: PostHog product analytics (Python AI service) and Sentry error tracking + profiling (Node services + the Next.js app). Shipped as its own PR off `main` to keep #38's GH-005/008 review clean.
+- **PostHog (`services/ai`)**: Archer ran the PostHog wizard, which instruments the FastAPI service — a `Posthog` client initialised from `POSTHOG_API_KEY`/`POSTHOG_HOST` (Pydantic Settings, no hardcoded creds), `ai service started` (lifespan startup) + `ai health checked` (`/health`) events, automatic exception capture, flush on shutdown. `posthog` + `pydantic-settings` added to `pyproject.toml` (uv.lock synced). **CI-safety tweak**: the client is constructed `disabled=not POSTHOG_API_KEY`, so with no key (CI) every `capture()` is a no-op — no network, no init assertion. ruff + pytest green. The PostHog setup also left an `integration-fastapi` agent skill + `posthog-setup-report.md` (kept). Dashboards/insights live in PostHog (see the report).
+- **Sentry**: chose `@sentry/node` + `@sentry/profiling-node` for the Node backends (`apps/api`, `services/parse`) and `@sentry/nextjs` for `apps/web` (the correct SDK for Next — not `@sentry/node`). One `SENTRY_DSN` (project "node").
+  - **Node services**: an `instrument.ts` imported FIRST in each entry (`apps/api/src/index.ts`, `services/parse/src/index.ts`) initialises Sentry with the profiling integration; `Sentry.setupExpressErrorHandler(app)` runs after the routes. **CI-safety**: init is gated on `SENTRY_DSN` and the native `@sentry/profiling-node` is loaded via dynamic import only when the DSN is present — so CI/tests never touch the native module and Sentry stays a no-op. A dev-only `/debug-sentry` route triggers a test error.
+  - **Next.js**: `sentry.server.config.ts` + `sentry.edge.config.ts` (loaded by `instrumentation.ts`'s `register()`), `instrumentation-client.ts` (browser, `NEXT_PUBLIC_SENTRY_DSN` + router-transition tracing), `onRequestError` for RSC errors, and `next.config.ts` wrapped with `withSentryConfig` (source-map upload only when `SENTRY_AUTH_TOKEN` is set — CI/build without it is unaffected).
+- **Verified**: `pnpm turbo run lint typecheck test` green (22/22) + `pnpm install --frozen-lockfile` OK; `services/ai` ruff + pytest green; **Sentry delivery confirmed** — a Node-SDK test capture with the real DSN flushed `true` (native profiling loaded on M1), so the event reached the Sentry project.
+- **Artifacts**: `services/ai/app/main.py` + `pyproject.toml` + `uv.lock` (PostHog); `apps/api` + `services/parse` `instrument.ts` + wired entries (Sentry node); `apps/web` Sentry config files + `next.config.ts` wrap; new env vars documented in `70-quick-reference.md`.
+- **Note (merge order)**: this branch is off `main`, so it touches `services/parse/src/index.ts` and `apps/web/next.config.ts` in their pre-#38 form. Expect small, additive merge conflicts with PR #38 (the parse worker rewrite + the GH-005/008 next.config externals) — resolve by keeping both the Sentry wiring and the #38 changes.
+
+---
+
 ## 2026-05-19 — Archer + Claude (Vehicle template system: GH-003 + GH-004 + GH-017)
 
 - **Context**: Step 4 — the proprietary vehicle template library. Browse + select (cascade/search/facets), internal admin template CRUD with an SVG validator, and the "request this vehicle" loop. Built on the now-enforcing RLS infra from PR #36.

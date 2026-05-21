@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { withSentryConfig } from '@sentry/nextjs';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -72,4 +73,14 @@ const nextConfig: NextConfig = {
   },
 };
 
-export default nextConfig;
+// Wrap with Sentry: injects the build-time instrumentation and (only when a
+// SENTRY_AUTH_TOKEN is present, i.e. CI/prod builds) uploads source maps for
+// readable stack traces. org/project overridable via env.
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG ?? 'alphawolfdecals',
+  project: process.env.SENTRY_PROJECT ?? 'node',
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: !process.env.CI,
+  widenClientFileUpload: true,
+  disableLogger: true,
+});
