@@ -1,0 +1,55 @@
+// Editor route (GH-008). Server Component: authorise + load project, working
+// version, and vehicle panels, then hand serialisable props to the client-only
+// editor (mounted via EditorMount → dynamic(ssr:false), so Konva never SSRs).
+
+import { notFound } from 'next/navigation';
+import { projects, vehicles } from '@alphawolf/db';
+import { requireUser } from '../../../../lib/admin/guard';
+import { EditorMount } from '../../../../components/editor/EditorMount';
+import type { EditorPanel } from '../../../../components/editor/contract';
+
+export const dynamic = 'force-dynamic';
+
+export const metadata = {
+  title: 'Editor — Alpha Wolf Wrap Studio',
+};
+
+type WrapSafeZone = { clip_path?: string };
+
+export default async function EditorPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id: projectId } = await params;
+  const user = await requireUser(`/projects/${projectId}/editor`);
+
+  const project = await projects.getProject(user.id, projectId);
+  if (!project || project.status === 'deleted') notFound();
+
+  const working = await projects.getWorkingVersion(user.id, projectId);
+  if (!working) notFound();
+
+  const vehicle = await vehicles.getPublishedDetail(project.vehicleId);
+  if (!vehicle) notFound();
+
+  const panels: EditorPanel[] = vehicle.panels.map((p) => {
+    const zone = (p.wrapSafeZone ?? {}) as WrapSafeZone;
+    return {
+      id: p.id,
+      name: p.name,
+      view: p.view,
+      outlinePath: p.svgPath,
+      wrapSafePath: zone.clip_path ?? '',
+      finishHint: p.finishHint,
+    };
+  });
+
+  const label = [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(' ');
+
+  return (
+    <EditorMount
+      projectId={projectId}
+      versionId={working.id}
+      initialRev={working.rev}
+      vehicle={{ id: vehicle.id, label, panels }}
+      initialDocument={(working.canvasState ?? {}) as Record<string, unknown>}
+    />
+  );
+}

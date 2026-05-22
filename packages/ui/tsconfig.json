@@ -4,7 +4,10 @@
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
     "jsx": "react-jsx",
     "outDir": "dist",
-    "noEmit": true
+    "noEmit": true,
+    // shadcn components self-reference via the `@alphawolf/ui/...` export map;
+    // tsc needs an explicit rootDir to resolve those self-imports (TS2209).
+    "rootDir": "."
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist"]

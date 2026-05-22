@@ -14,13 +14,14 @@ import { revalidatePath } from 'next/cache';
 import { CSRF_COOKIE_NAME, CSRF_FIELD_NAME, verifyCsrf } from '@alphawolf/auth/server';
 import {
   svg,
-  vehicleAssets,
+  storage,
   vehicles,
   type BodyType,
   type CreateVehicleInput,
   type SourceAuthority,
   type TemplateStatus,
 } from '@alphawolf/db';
+import { geometry } from '@alphawolf/canvas';
 import { requireAdmin } from '../admin/guard';
 
 const BODY_TYPES: readonly BodyType[] = [
@@ -150,7 +151,12 @@ export async function createVehicleAction(
 
   // Generate the id up front so assets can be named before insert.
   const id = randomUUID();
-  const outlineUrl = vehicleAssets.writeVehicleAsset(id, 'outline.svg', validated.optimizedSvg);
+  // GH-005: upload the optimised outline to the public vehicle-templates bucket and
+  // generate a real PNG thumbnail (ends PR #37's local store + SVG-as-thumb stopgap).
+  const { outlineSvgUrl, thumbPngUrl } = await storage.uploadVehicleOutline(
+    id,
+    validated.optimizedSvg,
+  );
 
   const input: CreateVehicleInput = {
     id,
@@ -168,8 +174,8 @@ export async function createVehicleAction(
     bedSize: str(form, 'bedSize') || null,
     roofHeight: str(form, 'roofHeight') || null,
     doorCount: intOrNull(values.doorCount),
-    outlineSvgUrl: outlineUrl,
-    thumbPngUrl: outlineUrl, // raster thumbnail arrives with GH-005
+    outlineSvgUrl,
+    thumbPngUrl,
     sourceAuthority,
     sourceNotes: str(form, 'sourceNotes') || null,
     panels: validated.panels.map((p) => ({
@@ -177,7 +183,8 @@ export async function createVehicleAction(
       view: p.view,
       svgPath: p.outlinePath,
       wrapSafeZone: svg.wrapSafeZoneFor(p),
-      printableAreaMm2: 0, // SENTINEL: not computed. GH-005 populates; GH-010 must treat 0 as missing (see schema.prisma).
+      // GH-005: compute real printable area (mm²) from the wrap-safe path geometry.
+      printableAreaMm2: Math.round(geometry.pathAreaMm2(p.wrapSafePath)),
       finishHint: p.finishHint,
       installOrder: p.installOrder,
       notes: p.notes,

@@ -10,6 +10,24 @@ tags:
   - phase-1
 ---
 
+> [!tip] Templater enabled
+> Press `Cmd+T` (or command palette → "Templater: Insert template") to create a new ADR, PR review, daily note, open question, or session handoff. Templates live in `_templates/`. See [[70-quick-reference]] for the daily commands.
+
+> [!note] Two AI augmentation surfaces in `.claude/`
+>
+> - `.claude/skills/` — domain skills (per-task expertise) auto-activated by description match. Invoke by name in the "Skills to activate" block of any Claude Code prompt.
+> - `.claude/agents/` — coordination agents (cross-task orchestrators). Currently: `context-manager` — use when designing distributed state (BullMQ job metadata, asset metadata cache, multi-agent shared context, large-scale event/error stores). Invoke by name in the same block as skills, with a clarifying note on what it should coordinate.
+
+> [!tip] UI/UX skill stack — how they compose
+> Frontend work activates **four** UI/UX skills together, each at a different layer:
+>
+> - **`frontend-design`** — visual decisions: layout, hierarchy, brand expression, screen composition. The "what should this look like" lens.
+> - **`ui-design-system`** — design tokens: color scale, spacing, typography, finish swatches. The "what are the building-block values" lens.
+> - **`ui-ux-pro-max`** — interaction model: micro-interactions, accessibility, focus management, error states, empty states. The "how should this feel" lens.
+> - **`shadcn/ui`** — component implementation: which Radix-based primitive to compose, exact CLI install commands, accessibility primitives baked in. The "how do we build this" lens.
+>
+> Order of application: design (frontend-design + ui-design-system) → behaviour (ui-ux-pro-max) → implementation (shadcn/ui). When you list these in a "Skills to activate" block, put them in that order so the model layers their concerns correctly.
+
 # Alpha Wolf Wrap Studio — Start Here
 
 > [!info] What this file is

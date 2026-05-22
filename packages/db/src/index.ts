@@ -12,7 +12,8 @@ export * as authEvents from './repos/auth-events';
 export * as rateLimit from './repos/rate-limit';
 export * as vehicles from './repos/vehicles';
 export * as vehicleRequests from './repos/vehicle-template-requests';
-export * as vehicleAssets from './storage/vehicle-assets';
+export * as projects from './repos/projects';
+export * as storage from './storage/supabase';
 export * as svg from './svg/validate';
 
 export type { AccountType, AccountStatus, DecryptedUser } from './repos/users';
@@ -38,6 +39,15 @@ export type {
   CreateRequestInput,
   RequestStatus,
 } from './repos/vehicle-template-requests';
+export type {
+  ProjectRow,
+  WorkingVersionRow,
+  AssetRow,
+  SaveResult,
+  ProjectStatus,
+  ApprovalState,
+  AssetParseStatus,
+} from './repos/projects';
 export type {
   SvgValidationResult,
   SvgValidationError,

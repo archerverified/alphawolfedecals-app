@@ -6,6 +6,8 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { vehicles } from '@alphawolf/db';
 import { OutlinePreview } from '../../../components/vehicles/OutlinePreview';
+import { StartProjectButton } from '../../../components/projects/StartProjectButton';
+import { getOrCreateFormCsrfToken } from '../../../lib/csrf';
 import { bodyTypeLabel, formatDimensions, vehicleTitle } from '../../../lib/vehicles/format';
 
 export const dynamic = 'force-dynamic';
@@ -16,6 +18,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
   if (!vehicle) notFound();
 
   const title = vehicleTitle(vehicle);
+  const csrfToken = await getOrCreateFormCsrfToken();
 
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-12" data-testid="vehicle-detail">
@@ -66,14 +69,7 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
         </section>
 
         <div className="mt-8 flex items-center gap-3">
-          <button
-            type="button"
-            disabled
-            title="The wrap editor lands in GH-008"
-            className="inline-flex cursor-not-allowed items-center justify-center rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white opacity-60"
-          >
-            Start designing (editor — GH-008)
-          </button>
+          <StartProjectButton vehicleId={vehicle.id} defaultName={title} csrfToken={csrfToken} />
           <Link
             href="/vehicles/select"
             className="text-sm font-medium text-zinc-700 underline-offset-2 hover:underline"

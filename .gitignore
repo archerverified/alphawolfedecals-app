@@ -75,3 +75,16 @@ lerna-debug.log*
 .cache/
 .husky/_/
 .agents/
+
+# Claude Code per-machine state (allow-list, MCP cache, etc.)
+.claude/settings.local.json
+
+# Obsidian — per-user state and plugin binaries
+# Track shareable config (app.json, appearance.json, community-plugins.json,
+# core-plugins.json, templates.json). Ignore everything else.
+docs/vault/.obsidian/workspace*.json
+docs/vault/.obsidian/cache
+docs/vault/.obsidian/plugins/
+docs/vault/.obsidian/snippets/
+docs/vault/.obsidian/types.json
+docs/vault/.trash/
