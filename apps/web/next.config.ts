@@ -3,6 +3,30 @@ import { withSentryConfig } from '@sentry/nextjs';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+
+  images: {
+    // Supabase Storage — vehicle templates and project assets.
+    // Locked to the specific project ref and the public-read path; never a
+    // wildcard hostname (that would let any Supabase tenant's images route
+    // through our optimization pipeline).
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: 'dxwnzxlmggpdjyoxdybh.supabase.co',
+        pathname: '/storage/v1/object/public/**',
+      },
+    ],
+    // AVIF first: 40-50% smaller than WebP at equivalent quality. Falls back
+    // to WebP for browsers that don't support AVIF.
+    formats: ['image/avif', 'image/webp'],
+    // Vehicle/decal images are immutable on upload (new object path on
+    // re-upload), so a 30-day CDN cache TTL is safe.
+    minimumCacheTTL: 2_592_000,
+    // Covers mobile cards (320/640), tablet (768), desktop gallery (1024/1280),
+    // and full-bleed hero (1920). Omit 2048/3840 — no retina hero images yet.
+    deviceSizes: [320, 640, 768, 1024, 1280, 1920],
+  },
+
   transpilePackages: [
     '@alphawolf/auth',
     '@alphawolf/canvas',

@@ -6,6 +6,37 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-05-22 — Archer + Claude (Step 6: Phase 1 demo + staging deploy)
+
+- **Branch**: `feat/step-6-demo-and-deploy` → PR opened off `main`.
+- **Host choice**: `apps/web` → **Vercel Hobby** (region `sfo1`, closest available Vercel region to Oregon services). `apps/api` + `services/parse` + `services/ai` → **Render Free** (Oregon `us-west`). Both free tiers; total Phase 1 cost ~$0–2/month. See ADR-0012 for full cost projection and Phase 4 upgrade path.
+- **Deploy URL**: _Fill in after first Vercel deploy. Run `vercel deploy apps/web -y` or use the Vercel dashboard after this PR merges._
+- **Lighthouse baseline**: _Run against the deployed preview URL post-deploy: `pnpm --filter @alphawolf/web test:e2e -- e2e/deploy-smoke.spec.ts`._
+- **Artifacts delivered**:
+  - **ADR-0012** (`/docs/adr/0012-production-deployment-architecture.md`) — service topology, Vercel/Render config, environments, secret management, cost projection, rollback, Mermaid diagram.
+  - **`/render.yaml`** — three services: `alphawolf-api` (web), `alphawolf-parse` (worker), `alphawolf-ai` (Python web). All Oregon. All free tier.
+  - **`/apps/web/vercel.json`** — region `["sfo1"]`, per-function `maxDuration` (health 5s, default 15s).
+  - **`/apps/web/next.config.ts`** — `images: {}` config: Supabase Storage remote pattern, AVIF+WebP formats, 30-day CDN TTL, `deviceSizes: [320, 640, 768, 1024, 1280, 1920]`.
+  - **`/apps/web/app/layout.tsx`** — `<SpeedInsights />` + `<Analytics />` from `@vercel/speed-insights/next` and `@vercel/analytics/react` (no-ops outside Vercel).
+  - **`/apps/web/app/(public)/health/route.ts`** — Edge-runtime health endpoint: `{ status: 'ok', commit: VERCEL_GIT_COMMIT_SHA }`.
+  - **`/apps/web/middleware.ts`** — Extended from CSRF-only to: CSP, HSTS, X-Frame-Options, X-Content-Type-Options, Referrer-Policy, Permissions-Policy on every response; per-IP sliding-window rate limiting (10 req/min) on auth routes via `@upstash/ratelimit` (gracefully disabled when REST credentials absent); CSRF bootstrap preserved.
+  - **`/docs/deployment/env-matrix.md`** — Complete env var matrix: source, rotation, owner.
+  - **`/docs/deployment/vercel-env.md`** — Vercel env var setup checklist.
+  - **`/docs/deployment/render-env.md`** — Render env var setup checklist + inkscape limitation note.
+  - **`/docs/deployment/phase-1-demo-script.md`** — 2-minute Phase 1 demo walkthrough.
+  - **`/apps/web/e2e/deploy-smoke.spec.ts`** — Playwright smoke test against `DEPLOY_URL` env var.
+  - **`.env.example`** — Updated with `NEXT_PUBLIC_SUPABASE_*`, `REDIS_URL`, `REPLICATE_API_TOKEN`, `SENTRY_ENVIRONMENT`; dead `POSTHOG_KEY` commented out.
+  - **Vault**: `00-START-HERE.md` + `70-quick-reference.md` updated with production deploy section, ADR-0012 entry, two new Critical Learnings.
+- **Vercel deployment-specialist agent findings**:
+  - `pdx1` (Portland) is NOT a generally available Hobby-tier region — use `sfo1`.
+  - `connection_limit=1` in the pgBouncer URL is correct and must not be raised (see Critical Learnings).
+  - Edge runtime is appropriate for the `/health` endpoint (no Prisma, zero cold-start).
+  - Vehicle gallery should use ISR `revalidate: 3600`; project/editor routes must be `force-dynamic` (RLS-scoped, cannot cache per-user responses).
+- **Scope deviations**: inkscape/pdf2svg NOT installed on Render free tier (Phase 4 Docker follow-up). Lighthouse baseline and E2E smoke run deferred to post-deploy (requires live URL). Per-PR Render preview deploys deferred to Phase 4 (paid tier). `services/paneling` not deployed in Phase 1 (Phase 3 feature).
+- **Follow-up issues to open after PR merges** (7 Phase 4 items): custom domain, Replicate spend monitoring, autoscaling parse worker, Sentry quota ratchet, blue/green deploys, PITR rehearsal, pen test scope.
+
+---
+
 ## 2026-05-22 — Archer + Claude (Post-fixup merge orchestration: PR #38 → PR #39)
 
 - **Issues opened**: #61 (redact only token params in `event.request.query_string`, for parity with the URL redaction) and #62 (tighten `@alphawolf/observability` peerDependencies to `@sentry/core` >=10), both `tech-debt,observability` follow-ups surfaced by the PR #39 fixup review.

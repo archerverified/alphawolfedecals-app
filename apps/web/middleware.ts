@@ -1,52 +1,177 @@
-// CSRF cookie bootstrap.
+// Production middleware — runs on every matched request (Edge runtime).
 //
-// Next.js 15 Server Components can READ cookies but cannot WRITE them.
-// Cookie writes are only allowed in Server Actions, Route Handlers, and
-// middleware. This middleware runs before any of the bespoke auth pages
-// render and ensures the form-CSRF cookie exists, so the page's Server
-// Component can simply read it.
+// Responsibilities:
+// 1. Security headers: CSP, HSTS, X-Frame-Options, X-Content-Type-Options,
+//    Referrer-Policy, Permissions-Policy — on every response.
+// 2. Rate limiting: per-IP sliding window on auth flows (signup, signin, OTP).
+//    Uses Upstash Redis REST API. Gracefully disabled when credentials absent
+//    (CI, local without secrets, development).
+// 3. CSRF bootstrap: double-submit cookie for Server Actions on forms.
 //
-// Middleware runs in the Edge runtime, which does NOT support `node:crypto`
-// or other node: scheme imports. We use the Web Crypto API (available
-// globally in both Edge and Node runtimes) to generate the random token.
-// This means we do not import from @alphawolf/auth/server here — that path
-// pulls in node:crypto, argon2, Prisma, and Resend, none of which run on
-// Edge.
+// Edge runtime constraint: no `node:*` imports, no Prisma, no argon2.
+// Use Web Crypto API for CSRF token generation.
 //
-// Pattern: double-submit cookie. The cookie set here is paired with a
-// hidden form field on the signup/verify/resend forms; the server actions
-// in apps/web/lib/actions/signup.ts compare the two in constant time
-// (using node:crypto's timingSafeEqual, which is fine — those actions
-// run on the Node runtime, not Edge).
+// CSP trade-off: `'unsafe-inline'` is required for two reasons:
+//   - Next.js 15 App Router injects an inline bootstrap script into every HTML page
+//   - Tailwind v4 and shadcn/Radix inject per-component style strings at runtime
+// Phase 2 will explore nonce-based CSP (requires SSR nonce propagation through
+// all RSC boundaries) to narrow this gap. `'unsafe-eval'` is included as a
+// safety net for Konva's canvas rendering path; audit and remove if confirmed
+// unnecessary in the deployed build.
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
 import { CSRF_COOKIE_NAME } from '@alphawolf/auth';
 
+// ---------------------------------------------------------------------------
+// Security headers
+// ---------------------------------------------------------------------------
+
+const SUPABASE_HOSTNAME = 'dxwnzxlmggpdjyoxdybh.supabase.co';
+
+const SECURITY_HEADERS: [string, string][] = [
+  [
+    'Content-Security-Policy',
+    [
+      "default-src 'self'",
+      // 'unsafe-inline': Next.js bootstrap + Tailwind v4 runtime styles.
+      // 'unsafe-eval': Konva canvas path; revisit in Phase 2.
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      "style-src 'self' 'unsafe-inline'",
+      // blob: for canvas.toBlob(), data: for inline SVG data URIs.
+      `img-src 'self' data: blob: https://${SUPABASE_HOSTNAME}`,
+      [
+        "connect-src 'self'",
+        `https://${SUPABASE_HOSTNAME}`,
+        `wss://${SUPABASE_HOSTNAME}`,
+        // Sentry error ingestion
+        'https://*.ingest.sentry.io',
+        // PostHog analytics (services/ai events, Phase 2 web events)
+        'https://us.i.posthog.com',
+        'https://eu.i.posthog.com',
+        // Vercel Speed Insights and Analytics
+        'https://vitals.vercel-insights.com',
+        'https://va.vercel-scripts.com',
+      ].join(' '),
+      "font-src 'self'",
+      "frame-src 'none'",
+      "object-src 'none'",
+      "base-uri 'self'",
+      "form-action 'self'",
+      'upgrade-insecure-requests',
+    ].join('; '),
+  ],
+  // 2 years; includeSubDomains. Only effective on HTTPS (production).
+  ['Strict-Transport-Security', 'max-age=63072000; includeSubDomains'],
+  ['X-Frame-Options', 'DENY'],
+  ['X-Content-Type-Options', 'nosniff'],
+  ['Referrer-Policy', 'strict-origin-when-cross-origin'],
+  ['Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=(), usb=()'],
+];
+
+// ---------------------------------------------------------------------------
+// Rate limiting (Upstash Redis — gracefully disabled when credentials absent)
+// ---------------------------------------------------------------------------
+
+// Auth routes that receive per-IP rate limiting.
+const RATE_LIMITED_PREFIXES = ['/signup', '/signin', '/verify'];
+
+// Initialise rate limiter lazily. Returns null when credentials are absent,
+// which bypasses rate limiting without throwing. Uses @upstash/ratelimit +
+// @upstash/redis (both edge-safe REST clients).
+let _ratelimiter: unknown | null = undefined; // undefined = not yet checked
+
+async function getRatelimiter(): Promise<{
+  limit: (id: string) => Promise<{ success: boolean }>;
+} | null> {
+  // Already resolved (null = no credentials, object = live limiter)
+  if (_ratelimiter !== undefined) return _ratelimiter as Awaited<ReturnType<typeof getRatelimiter>>;
+
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  if (!url || !token) {
+    _ratelimiter = null;
+    return null;
+  }
+
+  try {
+    const [{ Ratelimit }, { Redis }] = await Promise.all([
+      import('@upstash/ratelimit'),
+      import('@upstash/redis'),
+    ]);
+    _ratelimiter = new Ratelimit({
+      redis: new Redis({ url, token }),
+      // 10 attempts per IP per minute on auth routes. Generous enough to not
+      // frustrate legitimate users; tight enough to block credential-stuffing.
+      limiter: Ratelimit.slidingWindow(10, '1 m'),
+      prefix: 'rl:auth',
+    });
+    return _ratelimiter as Awaited<ReturnType<typeof getRatelimiter>>;
+  } catch {
+    _ratelimiter = null;
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// CSRF token bootstrap (Edge Crypto API — no node:crypto)
+// ---------------------------------------------------------------------------
+
 const TOKEN_BYTES = 32;
 
-// Edge-compatible: uses Web Crypto API (crypto.getRandomValues is a global
-// in both Edge and Node runtimes). Returns a 32-byte base64url-encoded
-// string matching the format produced by @alphawolf/auth/server's
-// generateCsrfToken (which uses node:crypto for the same purpose in
-// non-middleware contexts).
 function generateEdgeCsrfToken(): string {
   const bytes = new Uint8Array(TOKEN_BYTES);
   crypto.getRandomValues(bytes);
-  // for...of yields `number` directly (not `number | undefined` like bytes[i]
-  // under noUncheckedIndexedAccess). Avoids needing a non-null assertion.
   let binary = '';
   for (const byte of bytes) {
     binary += String.fromCharCode(byte);
   }
-  // base64url: standard base64, then URL-safe character swaps + strip padding
   return btoa(binary).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
 }
 
-export function middleware(request: NextRequest) {
+// Routes that require the CSRF cookie to be bootstrapped before render.
+const CSRF_ROUTES = new Set(['/signup', '/signup-shop', '/verify', '/vehicles/request']);
+
+function needsCsrfBootstrap(pathname: string): boolean {
+  if (CSRF_ROUTES.has(pathname)) return true;
+  if (pathname.startsWith('/admin')) return true;
+  return false;
+}
+
+// ---------------------------------------------------------------------------
+// Middleware
+// ---------------------------------------------------------------------------
+
+export async function middleware(request: NextRequest): Promise<NextResponse> {
+  const { pathname } = request.nextUrl;
   const response = NextResponse.next();
 
-  if (!request.cookies.get(CSRF_COOKIE_NAME)) {
+  // 1. Security headers — every response.
+  for (const [name, value] of SECURITY_HEADERS) {
+    response.headers.set(name, value);
+  }
+
+  // 2. Rate limiting — auth routes only.
+  const isRateLimited = RATE_LIMITED_PREFIXES.some((p) => pathname.startsWith(p));
+  if (isRateLimited) {
+    const rl = await getRatelimiter();
+    if (rl) {
+      const ip =
+        request.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ??
+        request.headers.get('x-real-ip') ??
+        'unknown';
+      const { success } = await rl.limit(ip);
+      if (!success) {
+        return new NextResponse('Too Many Requests', {
+          status: 429,
+          headers: { 'Retry-After': '60' },
+        });
+      }
+    }
+  }
+
+  // 3. CSRF bootstrap — form pages only.
+  if (needsCsrfBootstrap(pathname) && !request.cookies.get(CSRF_COOKIE_NAME)) {
     const token = generateEdgeCsrfToken();
     response.cookies.set(CSRF_COOKIE_NAME, token, {
       httpOnly: true,
@@ -59,9 +184,8 @@ export function middleware(request: NextRequest) {
   return response;
 }
 
-// Run on every route that renders a form wired to a server action that
-// validates CSRF. Keep this list tight — middleware runs on every match,
-// so unnecessary matchers add latency to every request.
+// Run on all routes except Next.js internals and static assets. The security
+// headers must reach every page; CSRF + rate limiting are gated internally.
 export const config = {
-  matcher: ['/signup', '/signup-shop', '/verify', '/vehicles/request', '/admin/:path*'],
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|svg|ico|webp|avif)$).*)'],
 };

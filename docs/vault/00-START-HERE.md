@@ -2,7 +2,7 @@
 title: Alpha Wolf Wrap Studio — Start Here
 type: project-index
 status: phase-1-in-progress
-last_updated: 2026-05-21
+last_updated: 2026-05-22
 owner: archer
 tags:
   - project-root
@@ -78,8 +78,8 @@ flowchart LR
     P3[Step 3: Auth scaffold]:::done
     P36[PR #36: RLS hardening]:::done
     P4[Step 4: Vehicle templates]:::done
-    P5[Step 5: Asset upload + canvas]:::next
-    P6[Step 6: Phase 1 demo]:::pending
+    P5[Step 5: Asset upload + canvas]:::done
+    P6[Step 6: Phase 1 demo + deploy]:::next
 
     P2 --> P3 --> P36 --> P4 --> P5 --> P6
 ```
@@ -92,8 +92,11 @@ flowchart LR
 - ✓ RLS actually enforces in dev (two-connection split: `withUser` → `app_user`, `withSystem` → superuser)
 - ✓ Vehicle template system: schema, RLS policies, admin CRUD, customer browse/select, request-this-vehicle loop, SVG validator
 - ✓ Migration history introduced (Prisma migrate, baselined `0_init`)
+- ✓ Asset upload pipeline + base canvas editor (GH-005 + GH-008) — Supabase Storage, BullMQ/Upstash, rembg, Konva/react-konva, autosave, undo/redo
+- ✓ Observability: PostHog (services/ai) + Sentry (all runtimes) with PII scrubber
+- ✓ Production deploy infrastructure (Step 6): ADR-0012, render.yaml, Vercel config, security headers, rate limiting, health endpoint
 
-**Next:** Step 5 — asset upload pipeline + base canvas editor (GH-005, GH-008). See [[60-claude-code-playbook]] §5.
+**Next:** First Vercel deploy (Archer connects repo in Vercel dashboard). See [[60-claude-code-playbook]] §6 and `/docs/deployment/`.
 
 **Phase 2+ deferred:** AI generation, print paneling, export, customer approval portal, installer mode, material estimator, mobile (React Native).
 
@@ -140,14 +143,18 @@ The two-connection database split is the most non-obvious architectural choice a
 
 ## Key decisions (ADRs at a glance)
 
-| ADR  | Decision                                                                                                                                              | Why                                                              |
-| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| 0000 | Record decisions using MADR                                                                                                                           | Decisions decay; markdown ADRs in repo don't                     |
-| 0001 | Lock v1 stack (Next.js 15 + Node + Postgres + Python AI service)                                                                                      | Avoid drift across PRs                                           |
-| 0002 | Monorepo + CI + Auth.js + RLS-via-session-var + Express + BullMQ + Upstash                                                                            | Stack details once, never re-derive                              |
-| 0003 | `services/parse` is a Node worker, not Python                                                                                                         | Sharp + svgo + Inkscape CLI are native in Node; amends ADR-0001  |
-| 0004 | Auth Phase 1 non-obvious choices (pgcrypto key via session GUC, Postgres-backed rate limits, in-memory pending shop data, dev OTP peek, JWT sessions) | Cryptographic key never crosses wire as parameter; defer Upstash |
-| 0005 | `users.is_admin` boolean (over enum or table)                                                                                                         | Simplest for v1; refactor path is clear                          |
+| ADR  | Decision                                                                                                                                              | Why                                                                         |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| 0000 | Record decisions using MADR                                                                                                                           | Decisions decay; markdown ADRs in repo don't                                |
+| 0001 | Lock v1 stack (Next.js 15 + Node + Postgres + Python AI service)                                                                                      | Avoid drift across PRs                                                      |
+| 0002 | Monorepo + CI + Auth.js + RLS-via-session-var + Express + BullMQ + Upstash                                                                            | Stack details once, never re-derive                                         |
+| 0003 | `services/parse` is a Node worker, not Python                                                                                                         | Sharp + svgo + Inkscape CLI are native in Node; amends ADR-0001             |
+| 0004 | Auth Phase 1 non-obvious choices (pgcrypto key via session GUC, Postgres-backed rate limits, in-memory pending shop data, dev OTP peek, JWT sessions) | Cryptographic key never crosses wire as parameter; defer Upstash            |
+| 0005 | `users.is_admin` boolean (over enum or table)                                                                                                         | Simplest for v1; refactor path is clear                                     |
+| 0006 | Canvas editor data model (flat elements map, panel-local coords, 50-step undo)                                                                        | Framework-agnostic core; coordinate system stays pure-TS                    |
+| 0007 | Supabase Storage strategy (two buckets, app-layer auth, server-minted signed URLs)                                                                    | Custom auth can't use Supabase auth.uid() for storage RLS                   |
+| 0009 | Parse queue (BullMQ/Upstash TCP; inline fallback when REDIS_URL absent)                                                                               | CI/dev works without Redis; production uses real queue                      |
+| 0012 | Production deployment topology (Vercel sfo1 + Render Oregon + existing Supabase/Upstash)                                                              | Zero cost at Phase 1 scale; Oregon-aligned latency; instant Vercel rollback |
 
 Full ADRs live in [[10-architecture-decisions]] (which links into `/docs/adr/`).
 
@@ -167,6 +174,8 @@ Lessons earned by shipping eight bugs in PR #34 alone, all surfaced by live test
 - **`pgcrypto` search_path** — pin `SET search_path = public, pg_catalog` on encrypt/decrypt helper functions so they're resilient to caller search_path.
 - **`dev-otp` ring buffer** — Server Actions and Route Handlers get separate module instances in Next.js dev. Module-level state needs `globalThis` to be truly process-global.
 - **Third-party observability bypasses the encryption boundary unless every init scrubs.** Sentry's `sendDefaultPii: true` ships cookies, `Authorization` headers, IPs, and user emails to a vendor in plaintext — defeating the pgcrypto/PII layer. Never `sendDefaultPii: true`; every `Sentry.init` must set `sendDefaultPii: false` and `beforeSend: scrubSentryEvent` (`@alphawolf/observability`). An ESLint guard enforces both. See [[70-quick-reference]] (Observability) and ADR-0011.
+- **Vercel `pdx1` (Portland) is NOT a generally available compute region on Hobby tier.** Pin to `sfo1` (San Francisco) — the closest available Vercel region to Oregon services (Supabase `aws-1-us-west-1`, Upstash `aws-us-west-2`, Render Oregon). Attempting `pdx1` silently falls back to `iad1` (Virginia), adding 60-80ms round-trip to all DB/queue calls. See ADR-0012.
+- **`connection_limit=1` in the pgBouncer DATABASE_URL is correct and must not be raised.** Each Vercel serverless function instance is isolated; raising the limit multiplies connection count under load (50 concurrent instances × 3 = 150 pgBouncer connections vs 50). The `?pgbouncer=true` flag already eliminates the most expensive part of connection setup (prepared statement cache). See ADR-0012 §Vercel.
 
 ## Development workflow
 
