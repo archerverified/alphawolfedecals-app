@@ -2,7 +2,7 @@
 title: Alpha Wolf Wrap Studio — Start Here
 type: project-index
 status: phase-1-in-progress
-last_updated: 2026-05-20
+last_updated: 2026-05-21
 owner: archer
 tags:
   - project-root
@@ -166,6 +166,7 @@ Lessons earned by shipping eight bugs in PR #34 alone, all surfaced by live test
 - **CI must run `prisma generate`** — schema lives at a non-default path so the @prisma/client install hook ships only the stub.
 - **`pgcrypto` search_path** — pin `SET search_path = public, pg_catalog` on encrypt/decrypt helper functions so they're resilient to caller search_path.
 - **`dev-otp` ring buffer** — Server Actions and Route Handlers get separate module instances in Next.js dev. Module-level state needs `globalThis` to be truly process-global.
+- **Third-party observability bypasses the encryption boundary unless every init scrubs.** Sentry's `sendDefaultPii: true` ships cookies, `Authorization` headers, IPs, and user emails to a vendor in plaintext — defeating the pgcrypto/PII layer. Never `sendDefaultPii: true`; every `Sentry.init` must set `sendDefaultPii: false` and `beforeSend: scrubSentryEvent` (`@alphawolf/observability`). An ESLint guard enforces both. See [[70-quick-reference]] (Observability) and ADR-0011.
 
 ## Development workflow
 

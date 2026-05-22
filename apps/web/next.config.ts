@@ -1,4 +1,5 @@
 import type { NextConfig } from 'next';
+import { withSentryConfig } from '@sentry/nextjs';
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -6,6 +7,7 @@ const nextConfig: NextConfig = {
     '@alphawolf/auth',
     '@alphawolf/canvas',
     '@alphawolf/db',
+    '@alphawolf/observability',
     '@alphawolf/parse',
     '@alphawolf/ui',
   ],
@@ -36,6 +38,7 @@ const nextConfig: NextConfig = {
     'bullmq',
     'ioredis',
     'replicate',
+    '@sentry/profiling-node',
   ],
 
   webpack: (config, { isServer }) => {
@@ -57,6 +60,11 @@ const nextConfig: NextConfig = {
       // bullmq/ioredis/replicate : pulled in via @alphawolf/parse's enqueue();
       //        dynamically imported there, externalised here so webpack never
       //        tries to statically bundle them into a server chunk.
+      // @sentry/profiling-node : also reached through @alphawolf/parse's barrel
+      //        (its instrument.ts dynamic-imports it); it pulls the native
+      //        @sentry-internal/node-cpu-profiler .node binaries, which webpack
+      //        can't parse. Externalise so Node loads them at runtime (only when
+      //        a SENTRY_DSN is set) instead of bundling.
       config.externals = [
         ...existingExternals,
         /^@node-rs\//,
@@ -66,10 +74,21 @@ const nextConfig: NextConfig = {
         'bullmq',
         'ioredis',
         'replicate',
+        '@sentry/profiling-node',
       ];
     }
     return config;
   },
 };
 
-export default nextConfig;
+// Wrap with Sentry: injects the build-time instrumentation and (only when a
+// SENTRY_AUTH_TOKEN is present, i.e. CI/prod builds) uploads source maps for
+// readable stack traces. org/project overridable via env.
+export default withSentryConfig(nextConfig, {
+  org: process.env.SENTRY_ORG ?? 'alphawolfdecals',
+  project: process.env.SENTRY_PROJECT ?? 'node',
+  authToken: process.env.SENTRY_AUTH_TOKEN,
+  silent: !process.env.CI,
+  widenClientFileUpload: true,
+  disableLogger: true,
+});

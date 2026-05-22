@@ -1,3 +1,6 @@
+// IMPORTANT: ./instrument must be the first import so Sentry instruments the rest.
+import './instrument';
+import * as Sentry from '@sentry/node';
 import express from 'express';
 
 const app = express();
@@ -6,6 +9,17 @@ app.use(express.json());
 app.get('/health', (_req, res) => {
   res.json({ status: 'ok', service: 'api' });
 });
+
+// Dev/verification-only: an intentional error to confirm Sentry reporting works.
+if (process.env.NODE_ENV !== 'production') {
+  app.get('/debug-sentry', () => {
+    throw new Error('Sentry test error (api)');
+  });
+}
+
+// Sentry's Express error handler — after all controllers, before any other error
+// middleware. No-op when Sentry is uninitialised (no DSN).
+Sentry.setupExpressErrorHandler(app);
 
 const port = Number(process.env.PORT ?? 4000);
 

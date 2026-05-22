@@ -6,6 +6,35 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-05-22 — Archer + Claude (Post-fixup merge orchestration: PR #38 → PR #39)
+
+- **Issues opened**: #61 (redact only token params in `event.request.query_string`, for parity with the URL redaction) and #62 (tighten `@alphawolf/observability` peerDependencies to `@sentry/core` >=10), both `tech-debt,observability` follow-ups surfaced by the PR #39 fixup review.
+- **PR #38 merged**: squash-merged to `main` as `e0094c5` ("[GH-005/008] Asset upload pipeline + base canvas editor (#38)"); local `main` fast-forwarded. The editor/canvas work + its review fixup are now on `main`.
+- **PR #39 rebased**: `feat/observability-posthog-sentry` rebased onto the new `main`. The brief anticipated three conflicts; the replay actually touched six files across the three commits, all additive and resolved as unions:
+  - `apps/web/next.config.ts` — **auto-merged cleanly** (kept #38's `serverExternalPackages` + webpack externals AND #39's `withSentryConfig` wrap / `@alphawolf/observability` in `transpilePackages`); no manual resolution needed.
+  - `services/parse/src/index.ts` — kept #38's full BullMQ worker + Express server (`startWorker`, `/health` reporting `bullmq|inline`, queue exports); prepended #39's `import './instrument'` as the first import + `import * as Sentry`. The auto-merge had already placed `Sentry.setupExpressErrorHandler(app)` before `app.listen` and `/debug-sentry` inside the existing `NODE_ENV !== 'production'` block.
+  - `services/parse/package.json` + `apps/web/package.json` — unioned deps from both PRs (#38's bullmq/ioredis/replicate/sharp/supabase + #39's `@sentry/*` and the `@alphawolf/observability` workspace dep).
+  - `pnpm-lock.yaml` — regenerated via `pnpm install`, then `--frozen-lockfile` verified stable.
+  - `docs/vault/70-quick-reference.md` — add/add conflict: kept #38's comprehensive reference and inserted #39's "## Observability" section into it.
+  - `activities.md` — unioned the entries from both branches (this is also the file you're reading).
+- **Merge-emergent build fix** (`dd3bfca`): the rebase exposed a chain neither PR hit alone — `apps/web/lib/actions/asset.ts` imports `enqueue` from `@alphawolf/parse`, whose barrel now runs `./instrument` → dynamic-imports `@sentry/profiling-node` → the native `@sentry-internal/node-cpu-profiler` `.node` binaries, which broke `next build`. Fixed by adding `@sentry/profiling-node` to `serverExternalPackages` + the webpack server externals, mirroring #38's existing treatment of bullmq/ioredis/replicate ("pulled in via @alphawolf/parse's enqueue()"). `next build` is not a required CI context — the build check from the brief is what caught it.
+- **Verified locally**: `pnpm install --frozen-lockfile`; `pnpm turbo run lint typecheck test` (26/26); `pnpm --filter @alphawolf/web build` (after a `prisma generate` to refresh the client for #38's `projects`/`project_versions`/`project_assets` models).
+- **CI**: green on all 3 required contexts on rebased HEAD `dd3bfca` (Node lint+typecheck+test 1m5s; Python ai 9s; Python paneling 9s). Supabase Preview skips (not a required gate).
+- **Hand-off**: status comment posted on PR #39; **not merged** — Archer captures the `/debug-sentry` → Sentry-UI screenshot for the PR description, then merges (`gh pr merge 39` deliberately not run this session).
+
+---
+
+## 2026-05-21 — Archer + Claude (Opened review follow-up issues)
+
+- **Context**: with the PR #39 fixup CI-green, batch-opened the deferred follow-up items from the PR #38 and PR #39 reviews as GitHub issues so they don't get lost. New labels created: `epic`, `architecture`, `adr`, `tech-debt`, `observability`, `frontend` (`phase-2`/`security` already existed).
+- **EPIC #46 — Phase 2 frontend polish** (children #40–#45): layer panel (#40), properties inspector (#41), project thumbnails (#42), drag-and-drop upload (#43), responsive editor (#44), armed click-to-place cursor (#45). The epic body links all six.
+- **EPIC #52 — Architecture follow-ups** (children #47–#51): type-safe signed-URL mint helpers (#47), move `computeViewLayouts` to packages/canvas (#48), BroadcastChannel tab-divergence heartbeat (#49), broaden `SchemaVersion` union (#50), GH-012 transfer atomicity (#51). The epic body links all five.
+- **ADRs**: ADR-0010 UI patterns lock-in (#53); ADR-0011 observability boundaries (#54) — codifies the scrubber-required / no-DSN-no-op / instrument-first rules this fixup established.
+- **Security / tech-debt singletons**: svgo SVG sanitiser (#55), `server-only` import on db storage (#56), phase-aware signed-URL TTL (#57), rembg `replicate.run` timeout (#58), gate/remove PostHog `/health` capture (#59), drop dead `POSTHOG_KEY` from `.env.example` (#60).
+- **Total**: 21 issues (#40–#60). Bodies transcribed verbatim from the review notes; epics edited (via creation) to link child numbers.
+
+---
+
 ## 2026-05-21 — Archer + Claude (PR #38 review fixup — Step 5 P0s + P1s)
 
 - **Context**: Single fixup commit on `feat/gh-005-008-asset-upload-canvas-editor` addressing the PR #38 review. No new PR; pushes to the same branch and lets CI gate the merge. Two items in the review brief were already shipped in 735421e and needed no change: **Sonner Toaster** was already mounted in `app/layout.tsx` (added `position="top-right"`), and **StartProjectButton** was already wired on `/vehicles/[id]` (not a placeholder).
@@ -38,6 +67,33 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 - **Verified**: `@alphawolf/canvas` 60 unit tests; `@alphawolf/parse` 7 unit tests; db + canvas + parse + ui typecheck; db integration RLS (10 tests, live); storage provisioning + local-asset migration (live, bucket contents + URL rewrite + area backfill confirmed).
 - **Artifacts**: `@alphawolf/canvas` core; `@alphawolf/db` projects repo + `storage/supabase.ts` (signed URLs, bucket helpers, `uploadVehicleOutline`) + schema/RLS/migrations + `provision-storage.ts` / `migrate-local-assets.ts`; `services/parse` worker (queue seam, converters, rembg, processor) + unit tests; `apps/web` editor route + Server Actions (`project.ts`, `asset.ts`) + editor components + project CRUD + upload UI; `next.config.ts` externals; 16 shadcn components; ADR-0006/0007/0009; integration + Playwright specs.
 - **Hard scope (NOT in this PR)**: AI generation (GH-006/007), print paneling (GH-010), export (GH-011), real-time co-edit; the two open Phase-4 follow-ons (fail-closed `DATABASE_URL_APP`, ESLint `withSystem` restriction) — untouched (`eslint.config.mjs` not modified).
+
+---
+
+## 2026-05-21 — Archer + Claude (PR #39 review fixup: Sentry PII scrubber)
+
+- **Context**: P0 from the PR #39 review. The five `Sentry.init` calls (apps/api, services/parse, apps/web server/edge/client) shipped with `sendDefaultPii: true` and no `beforeSend`. That routed cookies, `Authorization` headers, user emails, IPs, and Supabase signed-URL `?token=` values to a third-party vendor in plaintext — bypassing the pgcrypto/PII encryption boundary the rest of the app exists to protect. Single fixup commit on `feat/observability-posthog-sentry`; no new PR.
+- **Decision (shared scrubber)**: new tiny package `@alphawolf/observability` (`packages/observability/src/sentry-scrub.ts`) exporting `scrubSentryEvent`, imported as `beforeSend` by every init. Chose a dedicated package over re-exporting from `@alphawolf/db` (prompt option (a)) so future observability helpers have a home AND so the edge bundle never risks pulling `@alphawolf/db`'s server-only graph (Prisma, svgo). The module is **edge-runtime-safe**: its only dependency is a _type-only_ import of `@sentry/core`, erased at compile time — the emitted JS is pure ECMAScript.
+- **Deviation from the prompt's snippet**: the prompt imported `Event`/`EventHint` from `@sentry/types`, but this repo is on Sentry **v10**, which removed that package — the types live in `@sentry/core`. Also typed `scrubSentryEvent<T extends Event>(event, hint): T` (generic) rather than `(Event) => Event | null`, because v10's `beforeSend` signature is `(event: ErrorEvent, hint) => ErrorEvent | null` and a non-generic `Event` return is not assignable to it; and typed `scrubHeaders` over `Record<string, string>` (not `unknown`) to satisfy the repo's strict `tsc` against `RequestEventData.headers`.
+- **Wiring**: `sendDefaultPii: false` + `beforeSend: scrubSentryEvent` + `environment` on all five inits, preserving the existing `enableLogs`/`tracesSampleRate`/`profileSessionSampleRate`/dynamic-profiling-import settings (quota tuning is a separate follow-up). Browser init also pins `replaysSessionSampleRate`/`replaysOnErrorSampleRate` to `0.0` — Session Replay captures the DOM, which would defeat the scrubber. `@alphawolf/observability` added to `apps/web` `transpilePackages` and as a `workspace:*` dep of web/api/parse.
+- **Regression guard**: `eslint.config.mjs` `no-restricted-syntax` rules error on `sendDefaultPii: true` and on any `Sentry.init` whose options object lacks `beforeSend`. Verified both fire against a throwaway sample.
+- **Tests**: `packages/observability/tests/sentry-scrub.test.ts` — 6 cases (user email/ip stripped + id kept; cookies dropped; headers redacted case-insensitively; query-string token redacted; Supabase signed-URL breadcrumb token redacted; clean event passes through untouched).
+- **Verified**: `pnpm turbo run lint typecheck test` green (9/9), `pnpm install` lockfile updated. The cross-package typecheck (apps/web/api/parse) confirms `scrubSentryEvent` is assignable to each SDK's `beforeSend`. **Not performed in this environment**: the manual `/debug-sentry` → Sentry-UI screenshot (needs a live DSN + the Sentry dashboard) — left for Archer to capture for the PR description; the unit tests assert the same scrub guarantees deterministically.
+- **Artifacts**: `packages/observability/*` (package.json, tsconfig, vitest.config, src/index.ts, src/sentry-scrub.ts, tests, README); the five Sentry init files; `apps/web/next.config.ts` (transpilePackages); web/api/parse `package.json`; `eslint.config.mjs`; `pnpm-lock.yaml`; `docs/vault/70-quick-reference.md` (new, Observability section); `docs/vault/00-START-HERE.md` (Critical learning).
+- **Followups**: ADR-0011 (observability boundaries) will codify the instrument-first / no-DSN-no-op / scrubber-required rules; quota ratchet-down of `tracesSampleRate`/`profileSessionSampleRate` before traffic ramps; PostHog `/health` capture gating; drop dead `POSTHOG_KEY` from `.env.example`. Batch-opened as GH issues (see the next entry).
+
+---
+
+## 2026-05-20 — Archer + Claude (Observability: PostHog + Sentry)
+
+- **Context**: cross-cutting observability, separate from the Step 5 feature PR (#38). Two integrations: PostHog product analytics (Python AI service) and Sentry error tracking + profiling (Node services + the Next.js app). Shipped as its own PR off `main` to keep #38's GH-005/008 review clean.
+- **PostHog (`services/ai`)**: Archer ran the PostHog wizard, which instruments the FastAPI service — a `Posthog` client initialised from `POSTHOG_API_KEY`/`POSTHOG_HOST` (Pydantic Settings, no hardcoded creds), `ai service started` (lifespan startup) + `ai health checked` (`/health`) events, automatic exception capture, flush on shutdown. `posthog` + `pydantic-settings` added to `pyproject.toml` (uv.lock synced). **CI-safety tweak**: the client is constructed `disabled=not POSTHOG_API_KEY`, so with no key (CI) every `capture()` is a no-op — no network, no init assertion. ruff + pytest green. The PostHog setup also left an `integration-fastapi` agent skill + `posthog-setup-report.md` (kept). Dashboards/insights live in PostHog (see the report).
+- **Sentry**: chose `@sentry/node` + `@sentry/profiling-node` for the Node backends (`apps/api`, `services/parse`) and `@sentry/nextjs` for `apps/web` (the correct SDK for Next — not `@sentry/node`). One `SENTRY_DSN` (project "node").
+  - **Node services**: an `instrument.ts` imported FIRST in each entry (`apps/api/src/index.ts`, `services/parse/src/index.ts`) initialises Sentry with the profiling integration; `Sentry.setupExpressErrorHandler(app)` runs after the routes. **CI-safety**: init is gated on `SENTRY_DSN` and the native `@sentry/profiling-node` is loaded via dynamic import only when the DSN is present — so CI/tests never touch the native module and Sentry stays a no-op. A dev-only `/debug-sentry` route triggers a test error.
+  - **Next.js**: `sentry.server.config.ts` + `sentry.edge.config.ts` (loaded by `instrumentation.ts`'s `register()`), `instrumentation-client.ts` (browser, `NEXT_PUBLIC_SENTRY_DSN` + router-transition tracing), `onRequestError` for RSC errors, and `next.config.ts` wrapped with `withSentryConfig` (source-map upload only when `SENTRY_AUTH_TOKEN` is set — CI/build without it is unaffected).
+- **Verified**: `pnpm turbo run lint typecheck test` green (22/22) + `pnpm install --frozen-lockfile` OK; `services/ai` ruff + pytest green; **Sentry delivery confirmed** — a Node-SDK test capture with the real DSN flushed `true` (native profiling loaded on M1), so the event reached the Sentry project.
+- **Artifacts**: `services/ai/app/main.py` + `pyproject.toml` + `uv.lock` (PostHog); `apps/api` + `services/parse` `instrument.ts` + wired entries (Sentry node); `apps/web` Sentry config files + `next.config.ts` wrap; new env vars documented in `70-quick-reference.md`.
+- **Note (merge order)**: this branch is off `main`, so it touches `services/parse/src/index.ts` and `apps/web/next.config.ts` in their pre-#38 form. Expect small, additive merge conflicts with PR #38 (the parse worker rewrite + the GH-005/008 next.config externals) — resolve by keeping both the Sentry wiring and the #38 changes.
 
 ---
 

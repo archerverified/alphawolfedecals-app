@@ -67,4 +67,28 @@ export default tseslint.config(
       ],
     },
   },
+  // PR #39 follow-up: third-party observability (Sentry) bypasses the
+  // pgcrypto/PII encryption boundary unless every init scrubs. These guards
+  // catch the two regressions: turning sendDefaultPii back on, and adding a
+  // Sentry.init that forgets the shared scrubber. See
+  // packages/observability/src/sentry-scrub.ts and ADR-0011.
+  {
+    files: ['**/*.{ts,tsx,js,jsx,mjs,cjs}'],
+    rules: {
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector: "Property[key.name='sendDefaultPii'][value.value=true]",
+          message:
+            'Sentry sendDefaultPii must be false. Use the shared scrubber instead — see packages/observability/src/sentry-scrub.ts.',
+        },
+        {
+          selector:
+            "CallExpression[callee.object.name='Sentry'][callee.property.name='init'] > ObjectExpression:not(:has(Property[key.name='beforeSend']))",
+          message:
+            'Every Sentry.init must pass beforeSend: scrubSentryEvent (from @alphawolf/observability).',
+        },
+      ],
+    },
+  },
 );
