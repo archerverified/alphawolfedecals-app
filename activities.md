@@ -6,6 +6,17 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-05-21 — Archer + Claude (Opened review follow-up issues)
+
+- **Context**: with the PR #39 fixup CI-green, batch-opened the deferred follow-up items from the PR #38 and PR #39 reviews as GitHub issues so they don't get lost. New labels created: `epic`, `architecture`, `adr`, `tech-debt`, `observability`, `frontend` (`phase-2`/`security` already existed).
+- **EPIC #46 — Phase 2 frontend polish** (children #40–#45): layer panel (#40), properties inspector (#41), project thumbnails (#42), drag-and-drop upload (#43), responsive editor (#44), armed click-to-place cursor (#45). The epic body links all six.
+- **EPIC #52 — Architecture follow-ups** (children #47–#51): type-safe signed-URL mint helpers (#47), move `computeViewLayouts` to packages/canvas (#48), BroadcastChannel tab-divergence heartbeat (#49), broaden `SchemaVersion` union (#50), GH-012 transfer atomicity (#51). The epic body links all five.
+- **ADRs**: ADR-0010 UI patterns lock-in (#53); ADR-0011 observability boundaries (#54) — codifies the scrubber-required / no-DSN-no-op / instrument-first rules this fixup established.
+- **Security / tech-debt singletons**: svgo SVG sanitiser (#55), `server-only` import on db storage (#56), phase-aware signed-URL TTL (#57), rembg `replicate.run` timeout (#58), gate/remove PostHog `/health` capture (#59), drop dead `POSTHOG_KEY` from `.env.example` (#60).
+- **Total**: 21 issues (#40–#60). Bodies transcribed verbatim from the review notes; epics edited (via creation) to link child numbers.
+
+---
+
 ## 2026-05-21 — Archer + Claude (PR #38 review fixup — Step 5 P0s + P1s)
 
 - **Context**: Single fixup commit on `feat/gh-005-008-asset-upload-canvas-editor` addressing the PR #38 review. No new PR; pushes to the same branch and lets CI gate the merge. Two items in the review brief were already shipped in 735421e and needed no change: **Sonner Toaster** was already mounted in `app/layout.tsx` (added `position="top-right"`), and **StartProjectButton** was already wired on `/vehicles/[id]` (not a placeholder).
@@ -38,7 +49,6 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 - **Verified**: `@alphawolf/canvas` 60 unit tests; `@alphawolf/parse` 7 unit tests; db + canvas + parse + ui typecheck; db integration RLS (10 tests, live); storage provisioning + local-asset migration (live, bucket contents + URL rewrite + area backfill confirmed).
 - **Artifacts**: `@alphawolf/canvas` core; `@alphawolf/db` projects repo + `storage/supabase.ts` (signed URLs, bucket helpers, `uploadVehicleOutline`) + schema/RLS/migrations + `provision-storage.ts` / `migrate-local-assets.ts`; `services/parse` worker (queue seam, converters, rembg, processor) + unit tests; `apps/web` editor route + Server Actions (`project.ts`, `asset.ts`) + editor components + project CRUD + upload UI; `next.config.ts` externals; 16 shadcn components; ADR-0006/0007/0009; integration + Playwright specs.
 - **Hard scope (NOT in this PR)**: AI generation (GH-006/007), print paneling (GH-010), export (GH-011), real-time co-edit; the two open Phase-4 follow-ons (fail-closed `DATABASE_URL_APP`, ESLint `withSystem` restriction) — untouched (`eslint.config.mjs` not modified).
-
 ---
 
 ## 2026-05-21 — Archer + Claude (PR #39 review fixup: Sentry PII scrubber)
