@@ -16,6 +16,7 @@
     "@alphawolf/auth": "workspace:*",
     "@alphawolf/canvas": "workspace:*",
     "@alphawolf/db": "workspace:*",
+    "@alphawolf/observability": "workspace:*",
     "@alphawolf/parse": "workspace:^",
     "@alphawolf/ui": "workspace:*",
     "@sentry/nextjs": "^10.53.1",

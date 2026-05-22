@@ -4,6 +4,7 @@
 // call is a no-op — and the native @sentry/profiling-node module is never loaded.
 
 import * as Sentry from '@sentry/node';
+import { scrubSentryEvent } from '@alphawolf/observability';
 
 const dsn = process.env.SENTRY_DSN;
 
@@ -16,6 +17,9 @@ if (dsn) {
     tracesSampleRate: 1.0,
     profileSessionSampleRate: 1.0,
     profileLifecycle: 'trace',
-    sendDefaultPii: true,
+    // Never ship default PII to a third-party vendor; scrub residual PII too.
+    sendDefaultPii: false,
+    beforeSend: scrubSentryEvent,
+    environment: process.env.NODE_ENV,
   });
 }

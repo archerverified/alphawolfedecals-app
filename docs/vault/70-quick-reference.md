@@ -13,6 +13,54 @@ tags:
 > [!tip] What this file is
 > Daily-driver lookup. Env vars, commands, paths, passwords-where. If you reach for the same command twice this week, it belongs here.
 
+## Observability
+
+> [!danger] The encryption boundary rule
+> Third-party observability (Sentry) bypasses the pgcrypto/PII encryption boundary unless **every** init scrubs. Never `sendDefaultPii: true`.
+
+**Sentry is opt-in.** It initialises only when a DSN is present:
+
+- Backends + Next.js server/edge: `SENTRY_DSN`
+- Browser: `NEXT_PUBLIC_SENTRY_DSN`
+
+No DSN → no init → no events. CI and local-without-secrets stay completely silent (and the native `@sentry/profiling-node` module is never loaded).
+
+**Every `Sentry.init` MUST:**
+
+- set `sendDefaultPii: false` (override the SDK default we previously had wrong)
+- pass `beforeSend: scrubSentryEvent` from `@alphawolf/observability`
+
+```ts
+import * as Sentry from '@sentry/node'; // or @sentry/nextjs
+import { scrubSentryEvent } from '@alphawolf/observability';
+
+Sentry.init({
+  dsn: process.env.SENTRY_DSN,
+  sendDefaultPii: false,
+  beforeSend: scrubSentryEvent,
+  environment: process.env.NODE_ENV,
+});
+```
+
+`scrubSentryEvent` (`packages/observability/src/sentry-scrub.ts`) removes `user.email` / `ip_address` / `username` (keeps only the opaque `id`), drops `request.cookies` and sensitive request headers (`Authorization`, `Cookie`, `X-CSRF-Token`, …), and redacts query-string tokens — including Supabase signed-URL `?token=` values — in the request URL and every breadcrumb URL.
+
+**Never add a new `Sentry.init` without the scrubber.** An ESLint guard (`eslint.config.mjs`, `no-restricted-syntax`) errors on `sendDefaultPii: true` and on any `Sentry.init` missing `beforeSend`.
+
+**To capture a new field:** audit it for PII first. If it could carry user identifiers, add a scrub rule to `scrubSentryEvent` (and a test) _before_ merging.
+
+**Session Replay is OFF** (`replaysSessionSampleRate`/`replaysOnErrorSampleRate` = `0.0`). It captures the DOM, which would defeat the scrubber. Re-enabling it is an ADR-0011 conversation (capture must be PII-aware).
+
+**The scrubber module is edge-runtime-safe** — its only dependency is a type-only import of `@sentry/core`, erased at compile time. Keep it that way: no `node:`-prefixed imports anywhere in its module graph (it's imported by `apps/web/sentry.edge.config.ts`).
+
+**Sampling rates** (`tracesSampleRate` / `profileSessionSampleRate`) are `1.0` for launch. Ratchet down before traffic ramps — quota management is a tracked follow-up, not a security concern.
+
+### PostHog
+
+- Scope today: `services/ai` only.
+- The env var is **`POSTHOG_API_KEY`** (not `POSTHOG_KEY`). The client is constructed `disabled=not POSTHOG_API_KEY`, so no key → every `capture()` is a no-op.
+
+See ADR-0011 (observability boundaries) for the full set of rules future surfaces inherit.
+
 ## Environment variables
 
 | Variable                                              | Source                                                                                                     | Used by                                                                                     | Notes                                                                                                                                                                                                        |

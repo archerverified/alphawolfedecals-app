@@ -7,6 +7,7 @@ const nextConfig: NextConfig = {
     '@alphawolf/auth',
     '@alphawolf/canvas',
     '@alphawolf/db',
+    '@alphawolf/observability',
     '@alphawolf/parse',
     '@alphawolf/ui',
   ],

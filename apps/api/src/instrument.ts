@@ -4,6 +4,7 @@
 // call is a no-op — and the native @sentry/profiling-node module is never loaded.
 
 import * as Sentry from '@sentry/node';
+import { scrubSentryEvent } from '@alphawolf/observability';
 
 const dsn = process.env.SENTRY_DSN;
 
@@ -19,7 +20,11 @@ if (dsn) {
     // Profiling — evaluated once per init; trace lifecycle profiles active traces.
     profileSessionSampleRate: 1.0,
     profileLifecycle: 'trace',
-    // Default PII (e.g. IP addresses) — matches the provided setup.
-    sendDefaultPii: true,
+    // Never ship default PII (cookies, IPs, headers) to a third-party vendor —
+    // that would bypass the pgcrypto/PII encryption boundary. The scrubber
+    // strips any residual PII from every event before it's sent.
+    sendDefaultPii: false,
+    beforeSend: scrubSentryEvent,
+    environment: process.env.NODE_ENV,
   });
 }

@@ -50,6 +50,9 @@ importers:
       '@alphawolf/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@alphawolf/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
       '@sentry/node':
         specifier: ^10.53.1
         version: 10.53.1
@@ -93,6 +96,9 @@ importers:
       '@alphawolf/db':
         specifier: workspace:*
         version: link:../../packages/db
+      '@alphawolf/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
       '@alphawolf/parse':
         specifier: workspace:^
         version: link:../../services/parse
@@ -262,6 +268,18 @@ importers:
         specifier: ^2.1.5
         version: 2.1.9(@types/node@22.19.19)(jsdom@25.0.1)(lightningcss@1.32.0)(terser@5.48.0)
 
+  packages/observability:
+    devDependencies:
+      '@sentry/core':
+        specifier: ^10.53.1
+        version: 10.53.1
+      typescript:
+        specifier: ^5.6.3
+        version: 5.9.3
+      vitest:
+        specifier: ^2.1.5
+        version: 2.1.9(@types/node@22.19.19)(jsdom@25.0.1)(lightningcss@1.32.0)(terser@5.48.0)
+
   packages/ui:
     dependencies:
       class-variance-authority:
@@ -313,6 +331,9 @@ importers:
       '@alphawolf/db':
         specifier: workspace:^
         version: link:../../packages/db
+      '@alphawolf/observability':
+        specifier: workspace:*
+        version: link:../../packages/observability
       '@sentry/node':
         specifier: ^10.53.1
         version: 10.53.1
