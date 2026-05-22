@@ -6,6 +6,24 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-05-22 — Archer + Claude (Post-fixup merge orchestration: PR #38 → PR #39)
+
+- **Issues opened**: #61 (redact only token params in `event.request.query_string`, for parity with the URL redaction) and #62 (tighten `@alphawolf/observability` peerDependencies to `@sentry/core` >=10), both `tech-debt,observability` follow-ups surfaced by the PR #39 fixup review.
+- **PR #38 merged**: squash-merged to `main` as `e0094c5` ("[GH-005/008] Asset upload pipeline + base canvas editor (#38)"); local `main` fast-forwarded. The editor/canvas work + its review fixup are now on `main`.
+- **PR #39 rebased**: `feat/observability-posthog-sentry` rebased onto the new `main`. The brief anticipated three conflicts; the replay actually touched six files across the three commits, all additive and resolved as unions:
+  - `apps/web/next.config.ts` — **auto-merged cleanly** (kept #38's `serverExternalPackages` + webpack externals AND #39's `withSentryConfig` wrap / `@alphawolf/observability` in `transpilePackages`); no manual resolution needed.
+  - `services/parse/src/index.ts` — kept #38's full BullMQ worker + Express server (`startWorker`, `/health` reporting `bullmq|inline`, queue exports); prepended #39's `import './instrument'` as the first import + `import * as Sentry`. The auto-merge had already placed `Sentry.setupExpressErrorHandler(app)` before `app.listen` and `/debug-sentry` inside the existing `NODE_ENV !== 'production'` block.
+  - `services/parse/package.json` + `apps/web/package.json` — unioned deps from both PRs (#38's bullmq/ioredis/replicate/sharp/supabase + #39's `@sentry/*` and the `@alphawolf/observability` workspace dep).
+  - `pnpm-lock.yaml` — regenerated via `pnpm install`, then `--frozen-lockfile` verified stable.
+  - `docs/vault/70-quick-reference.md` — add/add conflict: kept #38's comprehensive reference and inserted #39's "## Observability" section into it.
+  - `activities.md` — unioned the entries from both branches (this is also the file you're reading).
+- **Merge-emergent build fix** (`dd3bfca`): the rebase exposed a chain neither PR hit alone — `apps/web/lib/actions/asset.ts` imports `enqueue` from `@alphawolf/parse`, whose barrel now runs `./instrument` → dynamic-imports `@sentry/profiling-node` → the native `@sentry-internal/node-cpu-profiler` `.node` binaries, which broke `next build`. Fixed by adding `@sentry/profiling-node` to `serverExternalPackages` + the webpack server externals, mirroring #38's existing treatment of bullmq/ioredis/replicate ("pulled in via @alphawolf/parse's enqueue()"). `next build` is not a required CI context — the build check from the brief is what caught it.
+- **Verified locally**: `pnpm install --frozen-lockfile`; `pnpm turbo run lint typecheck test` (26/26); `pnpm --filter @alphawolf/web build` (after a `prisma generate` to refresh the client for #38's `projects`/`project_versions`/`project_assets` models).
+- **CI**: green on all 3 required contexts on rebased HEAD `dd3bfca` (Node lint+typecheck+test 1m5s; Python ai 9s; Python paneling 9s). Supabase Preview skips (not a required gate).
+- **Hand-off**: status comment posted on PR #39; **not merged** — Archer captures the `/debug-sentry` → Sentry-UI screenshot for the PR description, then merges (`gh pr merge 39` deliberately not run this session).
+
+---
+
 ## 2026-05-21 — Archer + Claude (Opened review follow-up issues)
 
 - **Context**: with the PR #39 fixup CI-green, batch-opened the deferred follow-up items from the PR #38 and PR #39 reviews as GitHub issues so they don't get lost. New labels created: `epic`, `architecture`, `adr`, `tech-debt`, `observability`, `frontend` (`phase-2`/`security` already existed).
@@ -49,6 +67,7 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 - **Verified**: `@alphawolf/canvas` 60 unit tests; `@alphawolf/parse` 7 unit tests; db + canvas + parse + ui typecheck; db integration RLS (10 tests, live); storage provisioning + local-asset migration (live, bucket contents + URL rewrite + area backfill confirmed).
 - **Artifacts**: `@alphawolf/canvas` core; `@alphawolf/db` projects repo + `storage/supabase.ts` (signed URLs, bucket helpers, `uploadVehicleOutline`) + schema/RLS/migrations + `provision-storage.ts` / `migrate-local-assets.ts`; `services/parse` worker (queue seam, converters, rembg, processor) + unit tests; `apps/web` editor route + Server Actions (`project.ts`, `asset.ts`) + editor components + project CRUD + upload UI; `next.config.ts` externals; 16 shadcn components; ADR-0006/0007/0009; integration + Playwright specs.
 - **Hard scope (NOT in this PR)**: AI generation (GH-006/007), print paneling (GH-010), export (GH-011), real-time co-edit; the two open Phase-4 follow-ons (fail-closed `DATABASE_URL_APP`, ESLint `withSystem` restriction) — untouched (`eslint.config.mjs` not modified).
+
 ---
 
 ## 2026-05-21 — Archer + Claude (PR #39 review fixup: Sentry PII scrubber)
