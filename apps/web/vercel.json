@@ -1,0 +1,11 @@
+{
+  "regions": ["sfo1"],
+  "functions": {
+    "app/(public)/health/route.ts": {
+      "maxDuration": 5
+    },
+    "app/**/*.ts": {
+      "maxDuration": 15
+    }
+  }
+}

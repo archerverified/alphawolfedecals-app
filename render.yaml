@@ -1,0 +1,119 @@
+# Render deployment configuration — Alpha Wolf Wrap Studio (Phase 1)
+# https://render.com/docs/yaml-spec
+#
+# Three services, all in Oregon (us-west) to align with Supabase (aws-1-us-west-1)
+# and Upstash Redis (aws-us-west-2). See ADR-0012.
+#
+# SECRETS: env vars with sync: false must be set manually in the Render dashboard
+# (Dashboard → Service → Environment). Never commit real values here.
+#
+# BUILD NOTE (pnpm monorepo): Render's managed Node environment ships npm and Node.
+# We install pnpm via corepack in the build command. All three Node services build
+# from the monorepo root so workspace dependencies resolve correctly.
+#
+# INKSCAPE NOTE: inkscape and pdf2svg are NOT installed in this Phase 1 config.
+# The parse service degrades gracefully: AI/EPS/PDF uploads get
+# parse_status='queued_missing_cli' rather than failing. PNG/JPEG/SVG and rembg
+# all work. Phase 4 will migrate to a Docker-based service with inkscape pre-installed.
+
+services:
+  # ---------------------------------------------------------------------------
+  # alphawolf-api — REST API service
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: alphawolf-api
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: >-
+      corepack enable &&
+      pnpm install --frozen-lockfile &&
+      pnpm --filter @alphawolf/db prisma:generate &&
+      pnpm --filter @alphawolf/api build
+    startCommand: node apps/api/dist/index.js
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_APP
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: PII_ENCRYPTION_KEY
+        sync: false
+      - key: AUTH_SECRET
+        sync: false
+
+  # ---------------------------------------------------------------------------
+  # alphawolf-parse — Asset parse BullMQ worker
+  #
+  # Primary function: consume jobs from Upstash Redis via BullMQ.
+  # Secondary: Express HTTP server for internal health endpoint on $PORT.
+  # type: worker because the service is not publicly routable; process liveness
+  # is the health signal on Render's worker type.
+  # ---------------------------------------------------------------------------
+  - type: worker
+    name: alphawolf-parse
+    env: node
+    region: oregon
+    plan: free
+    buildCommand: >-
+      corepack enable &&
+      pnpm install --frozen-lockfile &&
+      pnpm --filter @alphawolf/db prisma:generate &&
+      pnpm --filter @alphawolf/parse build
+    startCommand: node services/parse/dist/index.js
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: REDIS_URL
+        sync: false
+      - key: SENTRY_DSN
+        sync: false
+      - key: SENTRY_ENVIRONMENT
+        value: production
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_URL_APP
+        sync: false
+      - key: DIRECT_URL
+        sync: false
+      - key: PII_ENCRYPTION_KEY
+        sync: false
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: REPLICATE_API_TOKEN
+        sync: false
+
+  # ---------------------------------------------------------------------------
+  # alphawolf-ai — Python FastAPI AI service
+  #
+  # Managed by uv (pyproject.toml at services/ai/). rootDir scopes the build
+  # and start commands to the services/ai directory.
+  # Phase 1: only PostHog analytics + /health. AI generation is Phase 2.
+  # ---------------------------------------------------------------------------
+  - type: web
+    name: alphawolf-ai
+    env: python
+    pythonVersion: '3.12'
+    region: oregon
+    plan: free
+    rootDir: services/ai
+    buildCommand: pip install uv && uv sync
+    startCommand: uv run uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: POSTHOG_API_KEY
+        sync: false
+      - key: POSTHOG_HOST
+        # US cloud: https://us.i.posthog.com
+        # EU cloud: https://eu.i.posthog.com
+        value: https://us.i.posthog.com

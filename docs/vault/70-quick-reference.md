@@ -2,7 +2,7 @@
 title: Quick reference
 type: reference
 status: current
-last_updated: 2026-05-21 (web vitest now discovers colocated components/** tests)
+last_updated: 2026-05-22 (Step 6: production deploy section added)
 tags:
   - reference
   - daily-driver
@@ -276,6 +276,61 @@ SELECT current_setting('app.current_user_id', true), current_setting('app.pii_ke
 SET app.current_user_id = '';
 SELECT * FROM users;  -- should return empty
 ```
+
+## Production deploy
+
+> [!info] Step 6 reference
+> Full env var matrix, rotation procedures, and host setup instructions: `/docs/deployment/`.
+
+| Resource                    | URL / Path                                                  |
+| --------------------------- | ----------------------------------------------------------- |
+| **Vercel project**          | Vercel Dashboard → alphawolf-wrap-studio                    |
+| **Demo URL**                | _Fill in after first Vercel deploy_                         |
+| **Render dashboard**        | render.com → alphawolf-api / alphawolf-parse / alphawolf-ai |
+| **Render api health**       | `https://<render-api-url>/health`                           |
+| **Render ai health**        | `https://<render-ai-url>/health`                            |
+| **Sentry dashboard**        | sentry.io → alphawolfdecals / node project                  |
+| **PostHog dashboard**       | posthog.com → alphawolfdecals project                       |
+| **Upstash Redis dashboard** | upstash.com → alphawolfedecals-app database                 |
+
+### Quick rollback (Vercel)
+
+```bash
+# Roll back to the previous production deployment (instant, no rebuild)
+vercel rollback
+
+# Roll back to a specific deployment URL
+vercel rollback https://alpha-wolf-wrap-studio-<hash>.vercel.app
+
+# Zero-downtime alias swap
+vercel alias set <deployment-url> <your-domain>
+```
+
+### Env var matrix
+
+Full matrix (source, rotation procedure, owner): `/docs/deployment/env-matrix.md`
+
+Vercel-specific setup checklist: `/docs/deployment/vercel-env.md`
+
+Render-specific setup checklist: `/docs/deployment/render-env.md`
+
+### Demo script
+
+Phase 1 two-minute demo walkthrough: `/docs/deployment/phase-1-demo-script.md`
+
+### Cost projection (Phase 1 demo scale)
+
+All-in ~$0–2/month. Cap = $50/month. See ADR-0012 §Cost projection for the full breakdown.
+
+Upstash free tier: 500k commands/month, 256 MB. Projected usage: ~30k commands/month at demo scale.
+
+Sentry free tier: 5k errors/month. Ratchet `tracesSampleRate` 1.0 → 0.1 before public launch (issue logged).
+
+### ADR
+
+See ADR-0012 for the full deployment architecture, region choices, cost projection, and rollback procedures.
+
+---
 
 ## Update this file when...
 
