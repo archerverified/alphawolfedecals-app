@@ -30,11 +30,18 @@ services:
     # required to compile TypeScript at build time. NODE_ENV=production still
     # applies at RUNTIME via the envVars block below — so Sentry's instrument.ts
     # and Express both still see NODE_ENV=production correctly.
+    #
+    # `turbo run build --filter=@alphawolf/api` uses Turbo's `^build` dependency
+    # graph (turbo.json `dependsOn: ["^build"]`) to build every workspace package
+    # api depends on FIRST (observability, db, auth) — each compiles its src/
+    # into dist/. Without this, the api's dist would `import '@alphawolf/observability'`
+    # at runtime, Node would resolve the package's exports.node condition to
+    # `./dist/index.js`, and that file wouldn't exist → ERR_MODULE_NOT_FOUND.
     buildCommand: >-
       corepack enable &&
       pnpm install --frozen-lockfile --prod=false &&
       pnpm --filter @alphawolf/db prisma:generate &&
-      pnpm --filter @alphawolf/api build
+      pnpm turbo run build --filter=@alphawolf/api
     startCommand: node apps/api/dist/index.js
     healthCheckPath: /health
     envVars:
@@ -80,12 +87,14 @@ services:
     healthCheckPath: /health
     # See alphawolf-api notes — `--prod=false` is required so typescript/tsx
     # are installed for the build step. NODE_ENV=production still applies at
-    # runtime via the envVars block below.
+    # runtime via the envVars block below. Turbo handles the workspace dep build
+    # order via `dependsOn: ['^build']` (turbo.json) — observability + db build
+    # first, then parse.
     buildCommand: >-
       corepack enable &&
       pnpm install --frozen-lockfile --prod=false &&
       pnpm --filter @alphawolf/db prisma:generate &&
-      pnpm --filter @alphawolf/parse build
+      pnpm turbo run build --filter=@alphawolf/parse
     startCommand: node services/parse/dist/index.js
     envVars:
       - key: NODE_ENV
