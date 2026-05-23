@@ -7,11 +7,11 @@
 // with the error captured in parse_metadata (never leaves a row stuck in 'processing').
 
 import { projects, storage } from '@alphawolf/db';
-import { classifyMime, sourceExtFor, MAX_FILE_SIZE_BYTES } from './mime';
-import { bytesMatchKind, describeSignature } from './sniff';
-import { commandExists } from './cli';
-import { aiToSvg, pdfToSvg, sanitizeSvg, rasterToPng } from './converters';
-import type { ParseAssetPayload, ParseOutcome } from './types';
+import { classifyMime, sourceExtFor, MAX_FILE_SIZE_BYTES } from './mime.js';
+import { bytesMatchKind, describeSignature } from './sniff.js';
+import { commandExists } from './cli.js';
+import { aiToSvg, pdfToSvg, sanitizeSvg, rasterToPng } from './converters.js';
+import type { ParseAssetPayload, ParseOutcome } from './types.js';
 
 export async function processParseAsset(payload: ParseAssetPayload): Promise<ParseOutcome> {
   const { assetId, ownerUserId, projectId, sourceKey, mimeType, options } = payload;

@@ -9,8 +9,8 @@
 
 import type { Queue as BullQueue, Worker as BullWorker } from 'bullmq';
 import type IORedisClient from 'ioredis';
-import { PARSE_QUEUE_NAME, type ParseAssetPayload } from './types';
-import { processParseAsset } from './process';
+import { PARSE_QUEUE_NAME, type ParseAssetPayload } from './types.js';
+import { processParseAsset } from './process.js';
 
 export function isQueueEnabled(): boolean {
   return Boolean(process.env.REDIS_URL);

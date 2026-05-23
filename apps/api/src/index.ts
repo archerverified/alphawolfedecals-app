@@ -1,5 +1,5 @@
 // IMPORTANT: ./instrument must be the first import so Sentry instruments the rest.
-import './instrument';
+import './instrument.js';
 import * as Sentry from '@sentry/node';
 import express from 'express';
 

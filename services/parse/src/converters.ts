@@ -1,8 +1,8 @@
 // Format converters for the parse pipeline (GH-005).
 
 import sharp from 'sharp';
-import { convertViaCli } from './cli';
-import { removeBackground } from './rembg';
+import { convertViaCli } from './cli.js';
+import { removeBackground } from './rembg.js';
 
 export interface RasterResult {
   buffer: Buffer; // normalised PNG

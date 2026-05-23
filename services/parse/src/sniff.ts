@@ -10,7 +10,7 @@
 // exact MIME, because PNG-vs-JPEG both legitimately route to the raster path and
 // modern Illustrator files are PDF-compatible.
 
-import type { ParseKind } from './mime';
+import type { ParseKind } from './mime.js';
 
 /** A coarse byte-signature category we can detect from a file header.
  *  'html' is tracked separately so an HTML document smuggled in as an SVG is a

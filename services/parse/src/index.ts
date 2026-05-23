@@ -1,5 +1,5 @@
 // IMPORTANT: ./instrument must be the first import so Sentry instruments the rest.
-import './instrument';
+import './instrument.js';
 import * as Sentry from '@sentry/node';
 
 // @alphawolf/parse — asset parse worker (GH-005).
@@ -11,12 +11,12 @@ import * as Sentry from '@sentry/node';
 //      which exposes a /health endpoint and boots the BullMQ worker when REDIS_URL
 //      is set, so a separate process drains the queue in production.
 import express from 'express';
-import { isQueueEnabled, startWorker } from './queue';
+import { isQueueEnabled, startWorker } from './queue.js';
 
-export { enqueue, isQueueEnabled, startWorker, closeQueue } from './queue';
-export { processParseAsset } from './process';
-export type { ParseAssetPayload, ParseAssetOptions, ParseOutcome } from './types';
-export { classifyMime, isAllowedMime, MAX_FILE_SIZE_BYTES } from './mime';
+export { enqueue, isQueueEnabled, startWorker, closeQueue } from './queue.js';
+export { processParseAsset } from './process.js';
+export type { ParseAssetPayload, ParseAssetOptions, ParseOutcome } from './types.js';
+export { classifyMime, isAllowedMime, MAX_FILE_SIZE_BYTES } from './mime.js';
 
 const app = express();
 
