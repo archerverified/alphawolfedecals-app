@@ -66,6 +66,20 @@ const nextConfig: NextConfig = {
   ],
 
   webpack: (config, { isServer }) => {
+    // NodeNext interop: workspace TS sources (services/parse, packages/auth, etc.)
+    // use `.js` extensions in their relative imports (TypeScript NodeNext convention,
+    // required by Node 22 ESM resolver at runtime). Next.js webpack with
+    // `transpilePackages` reads those .ts sources directly and would otherwise look
+    // for literal `.js` files and fail with "Module not found: Can't resolve './foo.js'".
+    // This alias tells webpack to try `.ts`/`.tsx` before `.js` so the same source
+    // works for raw Node (Render services) and webpack (apps/web on Vercel).
+    config.resolve = config.resolve ?? {};
+    config.resolve.extensionAlias = {
+      ...(config.resolve.extensionAlias ?? {}),
+      '.js': ['.ts', '.tsx', '.js'],
+      '.mjs': ['.mts', '.mjs'],
+    };
+
     if (isServer) {
       // Externalize any @node-rs/* package on the server. These ship .node
       // binaries via platform-specific sub-packages (e.g.
