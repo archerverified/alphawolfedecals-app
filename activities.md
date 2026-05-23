@@ -6,6 +6,16 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-05-23 — Archer + Claude (Hotfix: Prisma client generation on every install)
+
+- **Type**: Infra hotfix, direct-to-`main`, single-file change (`packages/db/package.json`). No PR.
+- **Symptom**: Vercel build failing at `packages/db/src/client.ts:61:25` — `Type error: Namespace '...Prisma' has no exported member 'LogLevel'.`
+- **Root cause**: `@prisma/client` postinstall logs `prisma:warn We could not find your Prisma schema in the default locations`. Prisma's default postinstall looks for `./prisma/schema.prisma` in the cwd, but our schema lives at `packages/db/prisma/schema.prisma`. So on a clean install (Vercel/CI) the client installs **without** being generated — the bare stub has no generated `Prisma` namespace (no `LogLevel`, no model types). Local builds masked this because `node_modules/.prisma/client` was already populated from a prior local `prisma generate`.
+- **Fix**: Added `"postinstall": "prisma generate"` to `packages/db/package.json` scripts. Bare form (no `dotenv -e .env --` wrapper) on purpose — Vercel/CI have no `.env` and `prisma generate` only reads the schema. Runs everywhere (Vercel, Render, local, CI) via npm lifecycle with no host-specific config. `prisma:generate` script already existed (Render's `render.yaml` buildCommand still uses `pnpm --filter @alphawolf/db prisma:generate`); left untouched.
+- **Verified locally**: `rm -rf node_modules/.prisma` then `pnpm install --frozen-lockfile` → postinstall fired, `Prisma schema loaded from prisma/schema.prisma`, `✔ Generated Prisma Client (v5.22.0)`. `pnpm turbo run lint typecheck test` → 26/26 tasks pass. `pnpm --filter @alphawolf/web build` → all 21 routes built, no `LogLevel` type error.
+
+---
+
 ## 2026-05-22 — Archer + Claude (Step 6: Phase 1 demo + staging deploy)
 
 - **Branch**: `feat/step-6-demo-and-deploy` → PR opened off `main`.
