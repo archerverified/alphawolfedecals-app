@@ -9,7 +9,7 @@
 // without depending on Upstash being wired (Upstash is in env.example but
 // not provisioned yet).
 
-import { withSystem } from '../client';
+import { withSystem } from '../client.js';
 
 export type RateLimitStatus = {
   attempts: number;

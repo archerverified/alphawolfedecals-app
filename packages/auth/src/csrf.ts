@@ -13,7 +13,7 @@ import { randomBytes, timingSafeEqual } from 'node:crypto';
 
 // Re-exported for backwards compatibility within this package. New code should
 // import these directly from ./csrf-constants.
-export { CSRF_COOKIE_NAME, CSRF_FIELD_NAME } from './csrf-constants';
+export { CSRF_COOKIE_NAME, CSRF_FIELD_NAME } from './csrf-constants.js';
 
 const TOKEN_BYTES = 32;
 

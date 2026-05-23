@@ -9,7 +9,7 @@
 // So creates/own-reads run on withUser(userId) and the admin queue runs on
 // withUser(adminId). Never expose the Prisma client.
 
-import { withUser } from '../client';
+import { withUser } from '../client.js';
 
 // pending -> in_progress -> shipped | rejected. Stored as text per spec §2.
 export const REQUEST_STATUSES = ['pending', 'in_progress', 'shipped', 'rejected'] as const;

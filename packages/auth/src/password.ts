@@ -22,7 +22,7 @@ import { hash as argonHash, verify as argonVerify } from '@node-rs/argon2';
 
 // Re-exported for backwards compatibility within this package. New code should
 // import these directly from ./password-policy.
-export { validatePasswordPolicy, passwordStrength } from './password-policy';
+export { validatePasswordPolicy, passwordStrength } from './password-policy.js';
 
 // Argon2id is @node-rs/argon2's default algorithm — we don't pass `algorithm`
 // explicitly because Algorithm is a `const enum` that TypeScript refuses to

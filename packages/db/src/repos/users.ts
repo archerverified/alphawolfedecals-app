@@ -2,8 +2,8 @@
 // helpers and the rest of the codebase never sees the raw Bytes columns.
 
 import { Prisma } from '@prisma/client';
-import { decryptPii, emailLookupHash, encryptPii } from '../crypto';
-import { withSystem, withUser, type TxClient } from '../client';
+import { decryptPii, emailLookupHash, encryptPii } from '../crypto.js';
+import { withSystem, withUser, type TxClient } from '../client.js';
 
 export type AccountType = 'customer' | 'shop_user';
 export type AccountStatus = 'pending_verification' | 'active' | 'locked' | 'deleted';

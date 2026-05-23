@@ -6,7 +6,7 @@
 
 import type { NextAuthConfig } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
-import { login } from './login';
+import { login } from './login.js';
 
 const THIRTY_DAYS_SEC = 60 * 60 * 24 * 30;
 

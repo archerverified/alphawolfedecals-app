@@ -1,7 +1,7 @@
 // OTP code repository. The OTP itself is hashed before storage; lookup is by
 // (userId, purpose) for the most recent unconsumed unexpired row.
 
-import { withSystem } from '../client';
+import { withSystem } from '../client.js';
 
 export type OtpPurpose = 'signup_verification' | 'password_reset';
 

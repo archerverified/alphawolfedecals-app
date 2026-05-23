@@ -5,4 +5,4 @@
 // anywhere) because apps/web imports it from the Sentry edge config. Today the
 // only dependency is a TYPE-ONLY import of @sentry/core, which TypeScript erases
 // at compile time — the emitted JS is pure ECMAScript (regexes, Sets, functions).
-export { scrubSentryEvent } from './sentry-scrub';
+export { scrubSentryEvent } from './sentry-scrub.js';

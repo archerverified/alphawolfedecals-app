@@ -2,8 +2,8 @@
 // in a single transaction (PRD §10.2 AC).
 
 import { randomBytes } from 'node:crypto';
-import { encryptPii } from '../crypto';
-import { withSystem, withUser, type TxClient } from '../client';
+import { encryptPii } from '../crypto.js';
+import { withSystem, withUser, type TxClient } from '../client.js';
 
 export type MembershipRole = 'shop_admin' | 'shop_designer';
 

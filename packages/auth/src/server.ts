@@ -10,7 +10,7 @@
 
 import NextAuth from 'next-auth';
 import type { NextAuthResult } from 'next-auth';
-import { authConfig } from './auth-config';
+import { authConfig } from './auth-config.js';
 
 // Re-exported so apps/web can distinguish a failed credentials sign-in (catch)
 // from the success redirect (rethrow) without taking a direct next-auth dep.
@@ -26,16 +26,16 @@ export const auth: NextAuthResult['auth'] = nextAuth.auth;
 export const signIn: NextAuthResult['signIn'] = nextAuth.signIn;
 export const signOut: NextAuthResult['signOut'] = nextAuth.signOut;
 
-export { authConfig } from './auth-config';
+export { authConfig } from './auth-config.js';
 
 // Password hashing / verification (argon2).
-export { hashPassword, verifyPassword } from './password';
+export { hashPassword, verifyPassword } from './password.js';
 
 // OTP generation / hashing / verification (argon2 + node:crypto).
-export { generateOtpCode, hashOtp, verifyOtp, otpExpiry } from './otp';
+export { generateOtpCode, hashOtp, verifyOtp, otpExpiry } from './otp.js';
 
 // CSRF token generation / verification (node:crypto).
-export { generateCsrfToken, verifyCsrf } from './csrf';
+export { generateCsrfToken, verifyCsrf } from './csrf.js';
 
 // Signup, login, lockout, email dispatch.
 export {
@@ -50,9 +50,9 @@ export {
   type SignupResult,
   type ResendResult,
   type VerifyResult,
-} from './signup';
+} from './signup.js';
 
-export { login, type LoginResult } from './login';
+export { login, type LoginResult } from './login.js';
 
 export {
   checkLoginGuards,
@@ -64,9 +64,9 @@ export {
   ACCOUNT_LOCKOUT_MS,
   type LockoutGuard,
   type FailureOutcome,
-} from './lockout';
+} from './lockout.js';
 
-export { sendOtpEmail, sendEmail, _getDevOtp, _stashDevOtp } from './email';
+export { sendOtpEmail, sendEmail, _getDevOtp, _stashDevOtp } from './email.js';
 
 // Re-export the client-safe surface from here too, so server code only needs
 // one import path. Bundlers will resolve these straight from ./index.
@@ -80,4 +80,4 @@ export {
   OTP_HOURLY_RESEND_LIMIT,
   validatePasswordPolicy,
   passwordStrength,
-} from './index';
+} from './index.js';

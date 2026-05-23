@@ -2,8 +2,8 @@
 // log every attempt to auth_events.
 
 import { authEvents, users as userRepo } from '@alphawolf/db';
-import { verifyPassword } from './password';
-import { checkLoginGuards, clearLoginFailures, recordLoginFailure } from './lockout';
+import { verifyPassword } from './password.js';
+import { checkLoginGuards, clearLoginFailures, recordLoginFailure } from './lockout.js';
 
 export type LoginResult =
   | { ok: true; userId: string; accountType: 'customer' | 'shop_user' }

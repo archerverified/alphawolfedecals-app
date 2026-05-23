@@ -13,7 +13,7 @@
 
 import type { Prisma } from '@prisma/client';
 import type { BodyType, FinishHint, SourceAuthority, TemplateStatus } from '@prisma/client';
-import { pgQuoteLiteral, withSystem, withUser } from '../client';
+import { pgQuoteLiteral, withSystem, withUser } from '../client.js';
 
 export type { BodyType, FinishHint, SourceAuthority, TemplateStatus };
 

@@ -18,7 +18,7 @@
 
 import { Prisma } from '@prisma/client';
 import type { ProjectStatus, ApprovalState, AssetParseStatus } from '@prisma/client';
-import { withUser } from '../client';
+import { withUser } from '../client.js';
 
 export type { ProjectStatus, ApprovalState, AssetParseStatus };
 

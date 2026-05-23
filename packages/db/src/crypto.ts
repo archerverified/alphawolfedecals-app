@@ -5,7 +5,7 @@
 // app.pii_key session var (set in client.ts), so the key never crosses the
 // wire as a query parameter.
 
-import type { TxClient } from './client';
+import type { TxClient } from './client.js';
 
 // Lowercase + trim before hashing. Email matching is case-insensitive.
 function normalizeEmail(email: string): string {

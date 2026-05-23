@@ -20,9 +20,9 @@ export {
   OTP_MAX_ATTEMPTS,
   OTP_RESEND_MIN_INTERVAL_MS,
   OTP_HOURLY_RESEND_LIMIT,
-} from './otp-constants';
+} from './otp-constants.js';
 
-import { OTP_LENGTH, OTP_TTL_MS } from './otp-constants';
+import { OTP_LENGTH, OTP_TTL_MS } from './otp-constants.js';
 
 // Argon2id is @node-rs/argon2's default algorithm — see password.ts for the
 // const-enum rationale.

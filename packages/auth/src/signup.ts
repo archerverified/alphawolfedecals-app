@@ -19,9 +19,9 @@ import {
   OTP_MAX_ATTEMPTS,
   OTP_RESEND_MIN_INTERVAL_MS,
   verifyOtp,
-} from './otp';
-import { hashPassword, validatePasswordPolicy } from './password';
-import { sendOtpEmail } from './email';
+} from './otp.js';
+import { hashPassword, validatePasswordPolicy } from './password.js';
+import { sendOtpEmail } from './email.js';
 import { otp as otpRepo } from '@alphawolf/db';
 
 const NAME_MIN = 1;

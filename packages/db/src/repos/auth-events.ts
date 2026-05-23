@@ -1,6 +1,6 @@
 // Audit log of all auth events (PRD §10.20 AC).
 
-import { withSystem } from '../client';
+import { withSystem } from '../client.js';
 
 export type AuthEventType =
   | 'signup'

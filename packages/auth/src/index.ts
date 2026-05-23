@@ -6,7 +6,7 @@
 //
 // Importing this file from a "use client" component is safe.
 
-export { CSRF_COOKIE_NAME, CSRF_FIELD_NAME } from './csrf-constants';
+export { CSRF_COOKIE_NAME, CSRF_FIELD_NAME } from './csrf-constants.js';
 
 export {
   OTP_LENGTH,
@@ -14,6 +14,6 @@ export {
   OTP_MAX_ATTEMPTS,
   OTP_RESEND_MIN_INTERVAL_MS,
   OTP_HOURLY_RESEND_LIMIT,
-} from './otp-constants';
+} from './otp-constants.js';
 
-export { validatePasswordPolicy, passwordStrength } from './password-policy';
+export { validatePasswordPolicy, passwordStrength } from './password-policy.js';
