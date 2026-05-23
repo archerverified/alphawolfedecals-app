@@ -25,9 +25,14 @@ services:
     env: node
     region: oregon
     plan: free
+    # `--prod=false` overrides NODE_ENV=production at install time so pnpm
+    # installs devDependencies (typescript, tsx, @types/*, vitest). These are
+    # required to compile TypeScript at build time. NODE_ENV=production still
+    # applies at RUNTIME via the envVars block below — so Sentry's instrument.ts
+    # and Express both still see NODE_ENV=production correctly.
     buildCommand: >-
       corepack enable &&
-      pnpm install --frozen-lockfile &&
+      pnpm install --frozen-lockfile --prod=false &&
       pnpm --filter @alphawolf/db prisma:generate &&
       pnpm --filter @alphawolf/api build
     startCommand: node apps/api/dist/index.js
@@ -73,9 +78,12 @@ services:
     region: oregon
     plan: free
     healthCheckPath: /health
+    # See alphawolf-api notes — `--prod=false` is required so typescript/tsx
+    # are installed for the build step. NODE_ENV=production still applies at
+    # runtime via the envVars block below.
     buildCommand: >-
       corepack enable &&
-      pnpm install --frozen-lockfile &&
+      pnpm install --frozen-lockfile --prod=false &&
       pnpm --filter @alphawolf/db prisma:generate &&
       pnpm --filter @alphawolf/parse build
     startCommand: node services/parse/dist/index.js
