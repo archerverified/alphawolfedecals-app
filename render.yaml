@@ -54,15 +54,25 @@ services:
   # alphawolf-parse — Asset parse BullMQ worker
   #
   # Primary function: consume jobs from Upstash Redis via BullMQ.
-  # Secondary: Express HTTP server for internal health endpoint on $PORT.
-  # type: worker because the service is not publicly routable; process liveness
-  # is the health signal on Render's worker type.
+  # Secondary: Express HTTP server on $PORT — serves /health for Render's
+  # health-check ping AND keeps the service awake on Render's free tier.
+  #
+  # NOTE: type=web (not worker) is required for Render's free plan, which
+  # does NOT support Background Worker services. The existing services/parse
+  # code already runs the Express server + BullMQ worker in a single process,
+  # so a web service is a clean fit. Trade-off: free-tier web services spin
+  # down after 15 min idle — during a cold-start, queued parse jobs sit in
+  # Upstash until the first HTTP request wakes the service (or the Render
+  # platform pings /health). For the Phase 1 demo this is acceptable.
+  # Phase 4 should upgrade to Starter ($7/mo) for always-on or migrate
+  # to a real Background Worker on a paid plan.
   # ---------------------------------------------------------------------------
-  - type: worker
+  - type: web
     name: alphawolf-parse
     env: node
     region: oregon
     plan: free
+    healthCheckPath: /health
     buildCommand: >-
       corepack enable &&
       pnpm install --frozen-lockfile &&
