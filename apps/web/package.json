@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "prebuild": "cd ../.. && pnpm turbo run build --filter='@alphawolf/web^...'",
     "build": "next build",
     "start": "next start",
     "lint": "eslint .",
