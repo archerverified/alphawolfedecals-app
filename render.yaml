@@ -103,7 +103,10 @@ services:
   - type: web
     name: alphawolf-ai
     env: python
-    pythonVersion: '3.12'
+    # Python version is read from services/ai/pyproject.toml (`requires-python = ">=3.12"`)
+    # by `uv sync` during build. The `pythonVersion` top-level field does NOT exist in
+    # Render's Blueprint spec (validator rejects it). If we ever need to override the
+    # uv-resolved version, set PYTHON_VERSION as an env var instead.
     region: oregon
     plan: free
     rootDir: services/ai
