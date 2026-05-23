@@ -65,6 +65,43 @@ const nextConfig: NextConfig = {
     '@sentry/profiling-node',
   ],
 
+  // pnpm monorepo nft (Node File Tracer) fix: when an external is reached
+  // transitively through a workspace package (e.g. @alphawolf/db → svgo),
+  // Vercel's nft sometimes fails to follow the .pnpm symlink chain and the
+  // external is omitted from the lambda bundle. At runtime the bundled
+  // `require('svgo')` then throws "Cannot find module 'svgo'" and every
+  // /vehicles/* route (server component + API) returns 500.
+  //
+  // Force-include every serverExternalPackage's physical files in the lambda.
+  // Both the symlinked path (./node_modules/<pkg>) and the .pnpm physical path
+  // (../../node_modules/.pnpm/<pkg>@*) are listed because nft walks symlinks
+  // for some patterns and physical paths for others. Vercel auto-detects the
+  // monorepo root from turbo.json so outputFileTracingRoot is not needed.
+  outputFileTracingIncludes: {
+    '/**/*': [
+      './node_modules/svgo/**/*',
+      './node_modules/svgson/**/*',
+      './node_modules/sharp/**/*',
+      './node_modules/@node-rs/argon2*/**/*',
+      './node_modules/bullmq/**/*',
+      './node_modules/ioredis/**/*',
+      './node_modules/replicate/**/*',
+      './node_modules/@sentry/profiling-node/**/*',
+      './node_modules/@sentry-internal/node-cpu-profiler/**/*',
+      // .pnpm physical paths (workspace root). Globs catch all installed versions.
+      '../../node_modules/.pnpm/svgo@*/node_modules/svgo/**/*',
+      '../../node_modules/.pnpm/svgson@*/node_modules/svgson/**/*',
+      '../../node_modules/.pnpm/sharp@*/node_modules/sharp/**/*',
+      '../../node_modules/.pnpm/@node-rs+argon2@*/node_modules/@node-rs/argon2/**/*',
+      '../../node_modules/.pnpm/@node-rs+argon2-*@*/**/*',
+      '../../node_modules/.pnpm/bullmq@*/node_modules/bullmq/**/*',
+      '../../node_modules/.pnpm/ioredis@*/node_modules/ioredis/**/*',
+      '../../node_modules/.pnpm/replicate@*/node_modules/replicate/**/*',
+      '../../node_modules/.pnpm/@sentry+profiling-node@*/node_modules/@sentry/profiling-node/**/*',
+      '../../node_modules/.pnpm/@sentry-internal+node-cpu-profiler@*/**/*',
+    ],
+  },
+
   webpack: (config, { isServer }) => {
     // NodeNext interop: workspace TS sources (services/parse, packages/auth, etc.)
     // use `.js` extensions in their relative imports (TypeScript NodeNext convention,
