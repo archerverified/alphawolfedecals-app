@@ -37,11 +37,10 @@ services:
     # into dist/. Without this, the api's dist would `import '@alphawolf/observability'`
     # at runtime, Node would resolve the package's exports.node condition to
     # `./dist/index.js`, and that file wouldn't exist → ERR_MODULE_NOT_FOUND.
-    buildCommand: >-
-      corepack enable &&
-      pnpm install --frozen-lockfile --prod=false &&
-      pnpm --filter @alphawolf/db prisma:generate &&
-      pnpm turbo run build --filter=@alphawolf/api
+    # Consolidated into root package.json scripts so renderyaml stays terse and
+    # the install chain stays in sync across services. Per CodeRabbit review on
+    # the deploy-fix audit PR (see ADR-0013).
+    buildCommand: pnpm render:install && pnpm render:build:api
     startCommand: node apps/api/dist/index.js
     healthCheckPath: /health
     envVars:
@@ -90,11 +89,9 @@ services:
     # runtime via the envVars block below. Turbo handles the workspace dep build
     # order via `dependsOn: ['^build']` (turbo.json) — observability + db build
     # first, then parse.
-    buildCommand: >-
-      corepack enable &&
-      pnpm install --frozen-lockfile --prod=false &&
-      pnpm --filter @alphawolf/db prisma:generate &&
-      pnpm turbo run build --filter=@alphawolf/parse
+    # Same consolidated install + filtered build pattern as alphawolf-api above.
+    # See root package.json and ADR-0013.
+    buildCommand: pnpm render:install && pnpm render:build:parse
     startCommand: node services/parse/dist/index.js
     envVars:
       - key: NODE_ENV
