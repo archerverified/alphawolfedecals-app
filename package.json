@@ -16,7 +16,10 @@
     "typecheck": "turbo run typecheck",
     "format": "prettier --write \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\" --ignore-path .gitignore",
     "format:check": "prettier --check \"**/*.{ts,tsx,js,jsx,json,md,yml,yaml}\" --ignore-path .gitignore",
-    "prepare": "husky || true"
+    "prepare": "husky || true",
+    "render:install": "corepack enable && pnpm install --frozen-lockfile --prod=false && pnpm --filter @alphawolf/db prisma:generate",
+    "render:build:api": "pnpm turbo run build --filter=@alphawolf/api",
+    "render:build:parse": "pnpm turbo run build --filter=@alphawolf/parse"
   },
   "devDependencies": {
     "@commitlint/cli": "^19.5.0",
