@@ -86,27 +86,13 @@ const nextConfig: NextConfig = {
   // reason, even though apps/web doesn't import them directly.
   outputFileTracingRoot: path.join(__dirname, '../..'),
 
-  // Prisma engines: the generated query_engine-*.node binaries live in
-  // node_modules/.prisma/client/ (sibling to @prisma/client). nft can't
-  // statically discover them because Prisma loads them via runtime path
-  // construction (engineType = "library" → dlopen the right binary for
-  // the current OS at request time). Without explicit inclusion, the
-  // lambda gets @prisma/client JS but no .node engine and crashes with
-  // PrismaClientInitializationError: "couldn't find a query engine binary
-  // for the current operating system".
-  //
-  // The schema's binaryTargets (see packages/db/prisma/schema.prisma)
-  // generates: query_engine-darwin-arm64.dylib.node (native),
-  // query_engine-rhel-openssl-3.0.x.so.node (Vercel lambda),
-  // query_engine-debian-openssl-3.0.x.so.node (Render). We include the
-  // whole .prisma/client dir so all targets ship together.
-  outputFileTracingIncludes: {
-    '/**/*': [
-      'node_modules/.pnpm/@prisma+client@*/node_modules/.prisma/client/**/*',
-      'node_modules/.pnpm/@prisma+client@*/node_modules/@prisma/client/**/*',
-      'node_modules/.pnpm/@prisma+engines@*/**/*',
-    ],
-  },
+  // Prisma engines: @prisma/client is a direct dep of apps/web (see
+  // package.json) so pnpm hoists it into apps/web/node_modules/@prisma/client
+  // and generates the engine binaries into apps/web/node_modules/.prisma/client.
+  // nft picks both up through standard resolution; no explicit Includes needed.
+  // The schema (packages/db/prisma/schema.prisma) sets binaryTargets to
+  // generate engines for native + rhel-openssl-3.0.x (Vercel) + debian-openssl-3.0.x
+  // (Render) up front so the runtimes always find a matching binary.
 
   webpack: (config, { isServer }) => {
     // NodeNext interop: workspace TS sources (services/parse, packages/auth, etc.)
