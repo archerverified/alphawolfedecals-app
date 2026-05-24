@@ -8,7 +8,7 @@
 
 ## Context
 
-ADR-0012 picked the Phase 1 deploy topology (Vercel sfo1 + Render Oregon + Supabase + Upstash). Shipping the actual infrastructure on top of a pnpm + Turborepo monorepo took **18 commits** because the toolchain has three independent failure modes that all surface as runtime `Cannot find module` errors, and each fix only unblocks the next layer. The fixes are now load-bearing — silently unwinding any of them re-breaks the deploy.
+ADR-0012 picked the Phase 1 deploy topology (Vercel sfo1 + Render Oregon + Supabase + Upstash). Shipping the actual infrastructure on top of a pnpm + Turborepo monorepo took **18 commits** (`e2459f0..1339c0e`, the explicit Render+Vercel fix chain; 19 if you also count `e2b4a6a`, the prior Prisma postinstall fix that surfaced the chain) because the toolchain has three independent failure modes that all surface as runtime `Cannot find module` errors, and each fix only unblocks the next layer. The fixes are now load-bearing — silently unwinding any of them re-breaks the deploy.
 
 This ADR documents the contract so the next maintainer can change it intentionally rather than by accident.
 
@@ -98,7 +98,7 @@ Without this, `prisma generate` only produces the build-machine's binary. The ru
 - ADR-0012 (production deployment architecture — picks the topology this ADR makes deployable)
 - PR #73 (initial Phase 1 deploy infrastructure)
 - PR #75 (audit + CodeRabbit/Greptile review of the fix chain)
-- Commit chain: `e2459f0..1339c0e` (19 commits resolving the deploy)
+- Commit chain: `e2459f0..1339c0e` (18 commits resolving the deploy; 19 with the prior `e2b4a6a` Prisma postinstall fix)
 - /apps/web/next.config.ts (extensionAlias + outputFileTracingRoot live here)
 - /apps/web/package.json (hoisted externals)
 - /packages/db/prisma/schema.prisma (binaryTargets)
