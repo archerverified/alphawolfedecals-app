@@ -72,49 +72,19 @@ const nextConfig: NextConfig = {
     '@sentry/profiling-node',
   ],
 
-  // pnpm monorepo nft (Node File Tracer) fix: when an external is reached
-  // transitively through a workspace package (e.g. @alphawolf/db → svgo),
-  // Vercels nft fails to bundle the external into the lambda. Result at
-  // runtime: "Cannot find module svgo" on every /vehicles/* route.
+  // pnpm monorepo nft fix: outputFileTracingRoot widens Vercel's nft trace
+  // boundary to the workspace root so it can follow the .pnpm symlink chain.
+  // Required when workspace packages (e.g. @alphawolf/db) bring transitive
+  // serverExternalPackages (e.g. svgo). Without this, nft only sees
+  // apps/web/node_modules and misses everything else.
   //
-  // Two-part fix:
-  //
-  // 1. outputFileTracingRoot — point nft at the monorepo root (not apps/web)
-  //    so its trace boundary spans the entire workspace including
-  //    node_modules/.pnpm/.
-  //
-  // 2. outputFileTracingIncludes — explicitly include every
-  //    serverExternalPackage. Paths are relative to the workspace root
-  //    (outputFileTracingRoot above), so they stay INSIDE the trace
-  //    boundary and dont get packaged as symlink-escapes. Without these,
-  //    nft cant statically resolve dynamic requires (svgo loads its
-  //    config via dynamic require) and the deps go missing.
-  //
-  // Why both pnpm symlink path (node_modules/.pnpm/<pkg>@*) AND the flat path
-  // (node_modules/<pkg>) — pnpm sets up node_modules/<pkg> as a symlink to
-  // the physical package under .pnpm/. Vercel resolves both during nft tracing.
+  // Note: even with this set, nft can't trace deps that are ONLY reachable
+  // through other workspace packages — those need to be listed as direct
+  // dependencies of apps/web so pnpm hoists them into apps/web/node_modules.
+  // See package.json — svgo, svgson, bullmq, ioredis, replicate,
+  // @node-rs/argon2, @sentry/profiling-node are all direct deps for this
+  // reason, even though apps/web doesn't import them directly.
   outputFileTracingRoot: path.join(__dirname, '../..'),
-  outputFileTracingIncludes: {
-    '/**/*': [
-      // svgo + svgson — vehicle SVG validation in @alphawolf/db
-      'node_modules/.pnpm/svgo@*/node_modules/svgo/**/*',
-      'node_modules/.pnpm/svgson@*/node_modules/svgson/**/*',
-      // sharp — raster pipeline (used by parse worker + asset thumbs)
-      'node_modules/.pnpm/sharp@*/node_modules/sharp/**/*',
-      'node_modules/.pnpm/@img+sharp-*@*/**/*',
-      // @node-rs/argon2 — password hashing (auth)
-      'node_modules/.pnpm/@node-rs+argon2@*/node_modules/@node-rs/argon2/**/*',
-      'node_modules/.pnpm/@node-rs+argon2-*@*/**/*',
-      // bullmq + ioredis — enqueue() in @alphawolf/parse called from web
-      'node_modules/.pnpm/bullmq@*/node_modules/bullmq/**/*',
-      'node_modules/.pnpm/ioredis@*/node_modules/ioredis/**/*',
-      // replicate — AI client (parse worker dep transitively reachable)
-      'node_modules/.pnpm/replicate@*/node_modules/replicate/**/*',
-      // @sentry/profiling-node — instrument-first via @alphawolf/observability
-      'node_modules/.pnpm/@sentry+profiling-node@*/node_modules/@sentry/profiling-node/**/*',
-      'node_modules/.pnpm/@sentry-internal+node-cpu-profiler@*/**/*',
-    ],
-  },
 
   webpack: (config, { isServer }) => {
     // NodeNext interop: workspace TS sources (services/parse, packages/auth, etc.)
