@@ -5,7 +5,14 @@
 
 generator client {
   provider      = "prisma-client-js"
-  binaryTargets = ["native"]
+  // native     — local dev (macOS arm64 / linux x64)
+  // rhel-openssl-3.0.x — Vercel serverless lambda runtime (Amazon Linux 2023, OpenSSL 3)
+  // debian-openssl-3.0.x — Render web services (Debian 12 / Ubuntu 22.04, OpenSSL 3)
+  // Listing all three ensures `prisma generate` produces a binary for every
+  // deploy target up front; without these explicit targets, the lambda crashes
+  // at runtime with PrismaClientInitializationError "couldn't find a query engine"
+  // because the build machines binary doesn't match the lambdas libc/openssl.
+  binaryTargets = ["native", "rhel-openssl-3.0.x", "debian-openssl-3.0.x"]
 }
 
 datasource db {
