@@ -1,5 +1,12 @@
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 import type { NextConfig } from 'next';
 import { withSentryConfig } from '@sentry/nextjs';
+
+// ESM equivalent of __dirname — needed for an absolute outputFileTracingRoot,
+// which Next.js requires to be a real filesystem path (relative or
+// import.meta.url derived) so nft can resolve the monorepo workspace correctly.
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
@@ -67,40 +74,20 @@ const nextConfig: NextConfig = {
 
   // pnpm monorepo nft (Node File Tracer) fix: when an external is reached
   // transitively through a workspace package (e.g. @alphawolf/db → svgo),
-  // Vercel's nft sometimes fails to follow the .pnpm symlink chain and the
-  // external is omitted from the lambda bundle. At runtime the bundled
-  // `require('svgo')` then throws "Cannot find module 'svgo'" and every
-  // /vehicles/* route (server component + API) returns 500.
+  // Vercels nft trace fails to follow the .pnpm symlink chain unless its
+  // root is set to the workspace root (not the apps/web project root). Without
+  // this, svgo is omitted from the lambda and /vehicles/* throws
+  // "Cannot find module svgo" at runtime.
   //
-  // Force-include every serverExternalPackage's physical files in the lambda.
-  // Both the symlinked path (./node_modules/<pkg>) and the .pnpm physical path
-  // (../../node_modules/.pnpm/<pkg>@*) are listed because nft walks symlinks
-  // for some patterns and physical paths for others. Vercel auto-detects the
-  // monorepo root from turbo.json so outputFileTracingRoot is not needed.
-  outputFileTracingIncludes: {
-    '/**/*': [
-      './node_modules/svgo/**/*',
-      './node_modules/svgson/**/*',
-      './node_modules/sharp/**/*',
-      './node_modules/@node-rs/argon2*/**/*',
-      './node_modules/bullmq/**/*',
-      './node_modules/ioredis/**/*',
-      './node_modules/replicate/**/*',
-      './node_modules/@sentry/profiling-node/**/*',
-      './node_modules/@sentry-internal/node-cpu-profiler/**/*',
-      // .pnpm physical paths (workspace root). Globs catch all installed versions.
-      '../../node_modules/.pnpm/svgo@*/node_modules/svgo/**/*',
-      '../../node_modules/.pnpm/svgson@*/node_modules/svgson/**/*',
-      '../../node_modules/.pnpm/sharp@*/node_modules/sharp/**/*',
-      '../../node_modules/.pnpm/@node-rs+argon2@*/node_modules/@node-rs/argon2/**/*',
-      '../../node_modules/.pnpm/@node-rs+argon2-*@*/**/*',
-      '../../node_modules/.pnpm/bullmq@*/node_modules/bullmq/**/*',
-      '../../node_modules/.pnpm/ioredis@*/node_modules/ioredis/**/*',
-      '../../node_modules/.pnpm/replicate@*/node_modules/replicate/**/*',
-      '../../node_modules/.pnpm/@sentry+profiling-node@*/node_modules/@sentry/profiling-node/**/*',
-      '../../node_modules/.pnpm/@sentry-internal+node-cpu-profiler@*/**/*',
-    ],
-  },
+  // A previous attempt added explicit outputFileTracingIncludes pointing at
+  // ../../node_modules/.pnpm/* paths, which Vercel rejected with "invalid
+  // deployment package … files in symlinked directories" because those paths
+  // escape the project root and get packaged as raw symlinks.
+  //
+  // Setting outputFileTracingRoot to the workspace root keeps everything
+  // inside one trace boundary and lets nft resolve transitive deps through
+  // the .pnpm symlinks without needing explicit Includes globs.
+  outputFileTracingRoot: path.join(__dirname, '../..'),
 
   webpack: (config, { isServer }) => {
     // NodeNext interop: workspace TS sources (services/parse, packages/auth, etc.)
