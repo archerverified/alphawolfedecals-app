@@ -6,6 +6,36 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-05-24 — Archer + Claude (Deploy-infra cleanup cycle closed + Greptile sunset)
+
+- **Type**: Cleanup cycle close-out — PR #76 squash-merged to `main` (merge SHA `a97676e`), review-tooling consolidation, and post-merge production verification. Worked through the deployment-engineer + devops-engineer + code-reviewer personas (safety gates, audit trail, verify-don't-assume).
+
+- **Arc context — the deploy resolution this closes out** (PR #75, the 19-commit chain `e2b4a6a` → `1339c0e`; 18 in the explicit Render+Vercel fix chain plus the prior Prisma postinstall fix that exposed it): Vercel + Render deploys were broken across stacked layers, each fix only unblocking the next. Root causes, in the order they surfaced:
+  1. **Node ESM strict resolver** — workspace packages + node services used extensionless relative imports; Node 22 ESM requires explicit `.js`. Added `.js` extensions across `apps/api`, `services/parse`, and `packages/{observability,db,auth}` source (TS NodeNext convention: write `.js` in `.ts`, TS preserves it).
+  2. **TS-source-at-runtime** — every workspace package had `main: ./src/index.ts`, so Node tried to execute TypeScript (`ERR_MODULE_NOT_FOUND`). Fixed by compiling each package `src/ → dist/` via `tsc -p tsconfig.build.json` and adding a `node` exports condition (`types→src, node→dist, default→src`); turbo `dependsOn` enforces build order.
+  3. **Next webpack vs NodeNext** — `transpilePackages` made webpack read workspace `.ts` source and fail to resolve `./x.js`. Fixed with `resolve.extensionAlias` (try `.ts/.tsx` before `.js`).
+  4. **Vercel nft + pnpm symlinks** — nft couldn't trace externals reached transitively through workspace packages across the `.pnpm` symlink chain → runtime `Cannot find module svgo`. Three `outputFileTracingIncludes` attempts failed (symlink-escape: "invalid deployment package … symlinked directories"). **Working pattern = hoisting**: list every transitively-reached external (`svgo`, `svgson`, `sharp`, `@node-rs/argon2`, `bullmq`, `ioredis`, `replicate`, `@sentry/profiling-node`, `@prisma/client`) as a **direct dep of `apps/web`** so pnpm hoists them where nft natively resolves them; pair with `outputFileTracingRoot` = workspace root.
+  5. **Prisma engines per-OS** — `binaryTargets = [native, rhel-openssl-3.0.x, debian-openssl-3.0.x]` so `prisma generate` emits engines for Vercel (RHEL/AL2023) and Render (Debian 12).
+  - **Load-bearing takeaway**: for a pnpm monorepo + Vercel nft, hoist-transitive-external-to-direct-dep beats `outputFileTracingIncludes` globs. Silently unwinding any of these five re-breaks the deploy — hence ADR-0013.
+
+- **Cleanup PR #76** (`cleanup/deploy-infra-followups`, the post-#75 audit follow-ups):
+  - `fix(web): drop redundant prebuild hook` — removed the `prebuild` hook from `apps/web/package.json`; workspace compile order is now owned by turbo `dependsOn`, so the hook was duplicative.
+  - `fix(render): consolidate duplicated build chains into root scripts` — single source of truth for the build invocation in `render.yaml`.
+  - `docs: ADR-0013 deploy infrastructure contract` (`/docs/adr/0013-deploy-infrastructure-contract.md`) — documents the three coordinated invariants (dist/ + `node` exports condition; `.js` extensions + `extensionAlias`; Vercel `outputFileTracingRoot` + hoisted externals + Prisma `binaryTargets`) so the next person changes the deploy stack intentionally, not by accident. Augments ADR-0012. (svgo `^3.3.2 → ^3.3.3`, CVE-2026-29074 Billion-Laughs DoS, a CodeRabbit security finding, landed earlier as `1339c0e`.)
+  - All checks green at merge: Vercel deploy, Node lint/typecheck/test, Python lint/test ×2, CodeRabbit (Supabase Preview skipped — no DB changes). Squash-merged, remote + local branch deleted.
+
+- **Greptile sunset** (consolidating on CodeRabbit, which now covers the same surface):
+  - Repo config: **already clean** — no `.greptileignore` / `.greptile.yaml` / `.yml` anywhere in the tree; the only `greptile` strings are historical mentions inside ADR-0013 (left intact — ADRs are immutable records). No config commit was needed.
+  - GitHub App uninstall: **manual org-owner action — PENDING as of this entry.** Cannot be automated: GitHub exposes no user-token endpoint to uninstall an app (only `DELETE /app/installations/{id}` via the app's *own* JWT), and this session's `gh` token lacks `admin:org` even to list installations. Removal path for Archer: `https://github.com/organizations/archerverified/settings/installations` → Greptile → Configure → Uninstall.
+
+- **Production verified post-merge**:
+  - Vercel MCP: deployment `dpl_GcSv9NkZJAhjDV2F776NMP8woZjV` reached **READY** (region `sfo1`, build ~2 min, `buildingAt`→`ready` = 125s), commit `a97676e`.
+  - **11/11 routes return HTTP 200**: `/`, `/health`, `/signup`, `/signup-shop`, `/signin`, `/vehicles/select`, `/api/vehicles/{makes,search,models,by-model,results}`.
+  - `/health` → `{"status":"ok","commit":"a97676ef1f4b742907a02fe95d5672c0e811456c"}` — exact match to the merge SHA.
+  - **Ops flag**: production `*.vercel.app` domains sit behind **Vercel Deployment Protection (Vercel Authentication)** — anonymous `curl` returns 401, so verification used a `_vercel_share` bypass token minted via the Vercel MCP. No public custom domain is attached yet; production is currently auth-gated.
+
+---
+
 ## 2026-05-23 — Archer + Claude (Hotfix: Prisma client generation on every install)
 
 - **Type**: Infra hotfix, direct-to-`main`, single-file change (`packages/db/package.json`). No PR.
