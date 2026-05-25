@@ -135,6 +135,14 @@ const CSRF_ROUTES = new Set(['/signup', '/signup-shop', '/verify', '/vehicles/re
 function needsCsrfBootstrap(pathname: string): boolean {
   if (CSRF_ROUTES.has(pathname)) return true;
   if (pathname.startsWith('/admin')) return true;
+  // Dynamic /vehicles/<id> detail page renders <StartProjectButton>, which
+  // submits a CSRF-protected Server Action. The only static child route under
+  // /vehicles/ is /vehicles/select (the browse index — no forms), so exclude
+  // it explicitly and treat everything else under /vehicles/ as a dynamic
+  // detail route that needs the CSRF cookie.
+  if (pathname.startsWith('/vehicles/') && pathname !== '/vehicles/select') {
+    return true;
+  }
   return false;
 }
 
