@@ -19,6 +19,7 @@ const DEPLOY_URL = process.env.DEPLOY_URL ?? 'http://127.0.0.1:3000';
 const TEST_EMAIL = `smoke-${Date.now()}@example.com`;
 const TEST_PASSWORD = 'SmokeT3st!Pass';
 const TEST_SHOP = `Smoke Shop ${Date.now()}`;
+const TEST_PHONE = '5555550199'; // 555 prefix is reserved for fictional use
 const TINY_SVG = path.resolve(__dirname, 'fixtures/tiny-logo.svg');
 
 test.describe('Deploy smoke — golden path', () => {
@@ -44,13 +45,19 @@ test.describe('Deploy smoke — golden path', () => {
   test('full golden path: sign up → browse → create project → upload → place → save → reload', async ({
     page,
   }) => {
-    // 1. Sign up as shop owner
+    // 1. Sign up as shop owner.
+    // The shop variant of SignupForm has 6 required fields. Use exact label
+    // matches because "First name" and "Last name" both contain "name" — a
+    // /name/i regex matches both and .first() leaves the second empty.
     await page.goto('/signup-shop');
-    await page.getByLabel(/name/i).first().fill('Smoke Tester');
-    await page.getByLabel(/email/i).fill(TEST_EMAIL);
-    await page.getByLabel(/shop/i).fill(TEST_SHOP);
-    await page.getByLabel(/password/i).fill(TEST_PASSWORD);
-    await page.getByRole('button', { name: /create/i }).click();
+    await page.getByLabel('First name', { exact: true }).fill('Smoke');
+    await page.getByLabel('Last name', { exact: true }).fill('Tester');
+    await page.getByLabel('Email', { exact: true }).fill(TEST_EMAIL);
+    await page.getByLabel('Password', { exact: true }).fill(TEST_PASSWORD);
+    await page.getByLabel('Company name', { exact: true }).fill(TEST_SHOP);
+    await page.getByLabel('Phone', { exact: true }).fill(TEST_PHONE);
+    // Button text varies by variant: "Create shop account" vs "Create account".
+    await page.getByRole('button', { name: /create shop account/i }).click();
 
     // 2. Verify OTP (dev-only ring buffer peek)
     await page.waitForURL(/verify/);
