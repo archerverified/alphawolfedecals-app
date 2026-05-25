@@ -18,7 +18,8 @@ const parsedDeployUrl = deployUrl ? new URL(deployUrl) : null;
 const isLocalTarget =
   !parsedDeployUrl ||
   parsedDeployUrl.hostname === 'localhost' ||
-  parsedDeployUrl.hostname === '127.0.0.1';
+  parsedDeployUrl.hostname === '127.0.0.1' ||
+  parsedDeployUrl.hostname === '::1'; // IPv6 localhost (Node sometimes binds v6 first)
 const isRemoteTarget = !isLocalTarget;
 // Single source of truth for both baseURL and the local webServer URL,
 // so a custom local port (e.g. DEPLOY_URL=http://127.0.0.1:8080) stays
