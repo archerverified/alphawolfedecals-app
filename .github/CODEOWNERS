@@ -1,0 +1,41 @@
+# Alpha Wolf Wrap Studio — CODEOWNERS
+#
+# Path-scoped ownership protecting ADR-0013 deploy-infrastructure invariants
+# and security-critical auth primitives. A PR touching any path below REQUIRES
+# @archerverified's review before merge — even when CodeRabbit reports clean.
+#
+# Why path-scoped (no global `*` catch-all):
+#   The autonomous /goal chain (Goals 1-4) opens and auto-merges many PRs after
+#   CI passes. A global catch-all would gate EVERY PR on a human review and stall
+#   the chain. Scoping ownership to the load-bearing + security paths keeps the
+#   chain moving while still forcing a human (Archer) onto the changes that can
+#   silently re-break the deploy or weaken auth.
+#
+# This file supersedes the prior root /CODEOWNERS (which only set `* @archerverified`
+# but was never enforced — branch protection had require_code_owner_reviews=false).
+# GitHub resolves a single CODEOWNERS file by precedence (.github/ > / > docs/), so
+# the root copy is removed to avoid a misleading dead file.
+#
+# Re-apply / audit references:
+#   /docs/adr/0013-deploy-infrastructure-contract.md  (the invariants protected here)
+#   /docs/setup/github-branch-protection.json         (the protection payload that enforces this)
+#   /docs/setup/manual-steps.md                       (operator runbook)
+# Docs: https://docs.github.com/articles/about-code-owners
+
+# ── ADR-0013 deploy-infrastructure invariants ──────────────────────────────
+/apps/web/next.config.ts                   @archerverified
+/render.yaml                               @archerverified
+/packages/db/prisma/schema.prisma          @archerverified
+/packages/db/prisma/sql/*.sql              @archerverified
+/.coderabbit.yaml                          @archerverified
+/docs/adr/0013-*                           @archerverified
+/apps/web/package.json                     @archerverified
+
+# ── Security-critical auth primitives ──────────────────────────────────────
+/packages/auth/src/csrf*                   @archerverified
+/packages/auth/src/password*               @archerverified
+/packages/auth/src/otp*                    @archerverified
+/apps/web/middleware.ts                    @archerverified
+
+# ── This ownership policy guards itself ────────────────────────────────────
+/.github/CODEOWNERS                        @archerverified
