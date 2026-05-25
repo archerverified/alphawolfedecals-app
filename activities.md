@@ -6,6 +6,24 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-05-25 — Archer + Claude (Goal 1 — single-vehicle scrape PoC → HALTED at license gate)
+
+- **Type**: PoC for the autonomous vehicle-DB ingest chain (STEP C of `mvp-execution-playbook.md`). Intended to scrape one vehicle (2024 Ford Transit 250) from Pro Vehicle Outlines, parse the SVG into panels, insert one published `db.vehicle` + panels, and verify `/vehicles/[id]` on local dev. **Outcome: halted at STEP 1, the license gate — by design.** No scrape, no parser, no DB write, no render. Worked the security-auditor + documentation-expert personas. Worktree `../alphawolf-goal-1` on `goal/1-single-vehicle-poc`.
+
+- **STEP 1 — license check (the gate)** → `docs/legal/template-source-license.md`. Read the public PVO EULA (`/pvo-eula/`), subscription/cancellation terms, and FAQ on 2026-05-25 (no login, no scrape — STEP 1 needs only the legal terms, which are public). **Verdict: ⛔ RESTRICTIVE.** The EULA (licensor named: FIERY) grants only a "limited, non-exclusive license ... solely as specified in the product documentation," and (1) prohibits "otherwise distribute," (2) prohibits "create derivative works of, or in any way change any part," and (3) retains "all intellectual property rights ... and all ... derivative works thereof" with FIERY. No commercial-redistribution grant exists; attribution cannot cure a distribution/derivative prohibition; the FIERY-vs-PVO licensor scope and whether "the Software" covers the outline files are flagged as ambiguities — and either reading still blocks the ingest. → conservative STOP.
+
+- **Per the goal's own STEP 1 rule** ("if unclear or restrictive: STOP and report; do NOT proceed to STEP 2") and the playbook's STEP D mandatory human checkpoint: **STEPs 2–5 were not executed.** No outline files were downloaded; `apps/web/scripts/parse-vehicle-svg.ts` was not written; no `db.vehicle` row was created.
+
+- **Cross-reference — the prompt conflicts with the project's own spec, the gate reconciles them**: `docs/vehicle-database-spec.md` §1 names ProVehicleOutlines as a competitor, §5.1 requires in-house tracing "NOT scraped from copyrighted competitor SVGs," and §5.3 is a "strict prohibition" on unlicensed competitor outlines because "the DB's defensibility depends on a clean chain of title." The 2026-05-18 PRD entry logged "Build > license for moat." The gate firing is therefore the **correct** outcome — it caught a spec-prohibited action before the multi-day Goal 2 ingest could run against a prohibited source.
+
+- **Note**: `mcp__Control_Chrome__*` was unavailable in this session (Goal 0 MCP smoke recorded FAIL — desktop-only); a permissive verdict could not have been scraped from here regardless. Moot given RESTRICTIVE.
+
+- **Decisions made**: License verdict RESTRICTIVE → STOP at STEP 1. No "permissive/attribution" path available.
+
+- **Unresolved for Archer (playbook STEP D — human)**: pick a sourcing path before Goal 2 / STEP E fires — (a) build in-house per spec §5.1/§5.2 (recommended; it's the moat), (b) negotiate an explicit commercial-redistribution + derivative-works license with the provider (clarify FIERY vs PVO licensor first), or (c) neutral data (NHTSA/OEM dims + in-house tracing). **Until decided, do NOT fire the Goal 2 catalog-ingest prompt against PVO.**
+
+- **Closeout**: session handoff at `docs/vault/sessions/2026-05-25-goal-1-poc.md`, mermaid pipeline flowchart (gate firing) at `docs/vault/diagrams/goal-1-poc-flow.md`, this entry. Committed on `goal/1-single-vehicle-poc`; **not pushed to main** pending Archer's review of the license verdict (STEP D is a human checkpoint).
+
 ## 2026-05-25 — Archer + Claude (Goal 0 — autonomous goal-chain foundation setup)
 
 - **Type**: Infrastructure / process guardrails for the autonomous `/goal` MVP build (STEP B of `mvp-execution-playbook.md`). No product code changed — CODEOWNERS, branch protection, vault scaffolding, MCP probes, and operator docs only. Worked the devops-engineer + deployment-engineer + git-flow-manager + security-auditor + mcp-expert + documentation-expert personas. 6 deliverables, all shipped direct to `main`.
