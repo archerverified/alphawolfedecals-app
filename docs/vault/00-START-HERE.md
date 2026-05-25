@@ -2,7 +2,7 @@
 title: Alpha Wolf Wrap Studio — Start Here
 type: project-index
 status: phase-1-in-progress
-last_updated: 2026-05-22
+last_updated: 2026-05-25
 owner: archer
 tags:
   - project-root
@@ -229,6 +229,15 @@ SORT file.name ASC
 ```
 
 (Replace this Dataview query with a static list if the Dataview plugin isn't installed.)
+
+### Subdirectories (added in Goal 0, 2026-05-25)
+
+The autonomous /goal chain (Goals 1-4) writes its closeout artifacts into two vault subdirectories:
+
+- **`sessions/`** — one Markdown handoff per goal, named `<date>-goal-N-topic.md`, created from `_templates/Session-handoff.md`. The narrative "what shipped / what's in flight / what the next session needs" log for each autonomous run. Start: [[2026-05-25-goal-0-foundation-setup]].
+- **`diagrams/`** — one Mermaid diagram per goal, named `goal-N-*.md` (C4-context, sequence, flowchart, or state-machine depending on what the goal shipped). Start: [[goal-0-foundation-state]] (C4-context of the system at the start of the chain).
+
+Foundation/setup artifacts (not in the vault) live under `/docs/setup/` — branch-protection payload, MCP smoke checklist, manual steps, and Figma file URLs. See [[../setup/manual-steps]].
 
 ## Conventions in this vault
 
