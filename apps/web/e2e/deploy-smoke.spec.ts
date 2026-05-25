@@ -15,7 +15,9 @@
 import { test, expect } from '@playwright/test';
 import * as path from 'path';
 
-const DEPLOY_URL = process.env.DEPLOY_URL ?? 'http://127.0.0.1:3000';
+// baseURL is set in playwright.config.ts from a parsed URL.origin so a path
+// suffix like DEPLOY_URL=https://host.com/subpath gets stripped to the bare
+// origin. Don't override here — the config is the single source of truth.
 const TEST_EMAIL = `smoke-${Date.now()}@example.com`;
 const TEST_PASSWORD = 'SmokeT3st!Pass';
 const TEST_SHOP = `Smoke Shop ${Date.now()}`;
@@ -23,8 +25,6 @@ const TEST_PHONE = '5555550199'; // 555 prefix is reserved for fictional use
 const TINY_SVG = path.resolve(__dirname, 'fixtures/tiny-logo.svg');
 
 test.describe('Deploy smoke — golden path', () => {
-  test.use({ baseURL: DEPLOY_URL });
-
   test('health endpoint returns ok', async ({ request }) => {
     const res = await request.get('/health');
     expect(res.status()).toBe(200);
