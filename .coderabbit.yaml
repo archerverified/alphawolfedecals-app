@@ -108,15 +108,17 @@ reviews:
         5 sends per email per hour), and never be logged. Flag predictable code
         generation, missing expiry, or missing send rate limits.
     # ── Security-sensitive: RLS data boundary (PRD §8.2, ADR-0002) ────────────
-    - path: "packages/db/prisma/sql/auth_rls.sql"
+    - path: "packages/db/prisma/sql/*.sql"
       instructions: >-
         RLS policy source (ADR-0002; PRD §8.2 requires cross-account/cross-shop
-        row visibility be impossible at the query layer). Review thoroughly:
-        every policy must read `current_setting('app.current_user_id', true)::uuid`
-        with the trailing `true` so it fails CLOSED (NULL -> no rows) when the
-        session variable is unset. Flag any new table left without an RLS policy,
-        any policy using `USING (true)`, any grant to `app_user` beyond
-        least-privilege, and confirm `app_user` stays `nobypassrls`.
+        row visibility be impossible at the query layer). Glob covers every SQL
+        file in this directory so a new policy file (e.g. shop_rls.sql) is held
+        to the same bar as auth_rls.sql. Review thoroughly: every policy must read
+        `current_setting('app.current_user_id', true)::uuid` with the trailing
+        `true` so it fails CLOSED (NULL -> no rows) when the session variable is
+        unset. Flag any new table left without an RLS policy, any policy using
+        `USING (true)`, any grant to `app_user` beyond least-privilege, and
+        confirm `app_user` stays `nobypassrls`.
     - path: "packages/db/src/client.ts"
       instructions: >-
         Request-scoped Prisma client and the RLS enforcement boundary (ADR-0002).
@@ -139,6 +141,18 @@ reviews:
         HSTS or frame-deny; and flag any change that lets the rate limiter fail
         OPEN silently or removes rate limiting from state-changing/auth routes
         (PRD §10.20: 5 failed logins per IP per 15 minutes).
+    - path: "apps/web/app/**/route.ts"
+      instructions: >-
+        Next.js API route handlers — the request-level enforcement point for the
+        security invariants above. The path_instructions for client.ts and
+        csrf*.ts only fire when those files change, so apply this guardrail when
+        a handler is added or changed: any authenticated or user-data path must
+        run its DB access inside `withUser` (RLS-enforcing), never `withSystem`
+        (RLS-bypass — see packages/db/src/client.ts / ADR-0002); confirm
+        `withSystem` is reserved for genuinely unauthenticated bootstrap; and
+        confirm every state-changing handler is CSRF-protected (PRD §10.20).
+        Flag a new `withSystem` call or a missing CSRF/auth check on an
+        authenticated route.
 
   tools:
     # Secret scanning on every PR.
