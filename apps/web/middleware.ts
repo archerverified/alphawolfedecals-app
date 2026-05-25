@@ -47,11 +47,13 @@ const SECURITY_HEADERS: [string, string][] = [
         // Sentry error ingestion — CSP wildcards only match ONE subdomain level
         // per spec, so the bare *.ingest.sentry.io pattern does NOT match the
         // regional hosts Sentry actually uses (e.g.
-        // o4511425978630144.ingest.us.sentry.io). List each regional ingest
-        // host explicitly so client errors actually reach Sentry.
+        // o4511425978630144.ingest.us.sentry.io). Sentry SaaS only supports US
+        // and EU data storage regions; EU is *.ingest.de.sentry.io (Germany),
+        // NOT *.ingest.eu.sentry.io.
+        // Source: https://docs.sentry.io/security-legal-pii/security/ip-ranges/
         'https://*.ingest.sentry.io',
         'https://*.ingest.us.sentry.io',
-        'https://*.ingest.eu.sentry.io',
+        'https://*.ingest.de.sentry.io',
         // PostHog analytics (services/ai events, Phase 2 web events)
         'https://us.i.posthog.com',
         'https://eu.i.posthog.com',
