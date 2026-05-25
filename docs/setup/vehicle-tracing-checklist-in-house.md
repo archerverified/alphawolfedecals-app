@@ -52,7 +52,7 @@ Follow these steps in order. Each one should be checked off in your `notes.md` f
 - [ ] Open manufacturer technical drawing in Illustrator/Inkscape as a tracing reference
 - [ ] Set up SVG with viewBox `0 0 4800 1200` (mm × 10 coordinate system)
 - [ ] Create 4 view groups: `view-front`, `view-driver`, `view-back`, `view-passenger` (each translated horizontally so they fit side-by-side)
-- [ ] For each view, trace the body outline as a single `<path>` per body line. Use bezier curves; vehicles have very few hard angles.
+- [ ] For each view, trace the body outline as a single `<path>` per body line. Use Bézier curves; vehicles have very few hard angles.
 - [ ] Confirm viewBox aspect ratio is within ±5% of `(length_mm × 4 / height_mm × 2)`
 
 ### 3. Panel decomposition (~1-2 hours per vehicle)
@@ -130,11 +130,12 @@ If timeline is tight, hire a contractor using `vehicle-tracing-contractor-brief.
 
 ## When you're done with 3-5 vehicles
 
-Fire `prompts/02-goal-2-catalog-ingest.md` in a fresh Claude Code session. It'll:
+Fire the revised Goal 2 prompt in a fresh Claude Code session. The prompt lives **outside this repo** in Archer's Claude Projects orchestration folder at `/Users/ashton/Documents/Claude/Projects/alphawolf-decals-app/prompts/02-goal-2-catalog-ingest.md` (project artifacts are kept out of the repo so they don't conflate with versioned product docs). The goal will:
+
 1. Build the validator + import pipeline + admin UI
 2. Run the seed script that imports your traced files
 3. Create Obsidian notes per spec §7
 4. Open 4 PRs (each CodeRabbit-reviewed)
-5. Closeout with mermaid diagram of the revised pipeline
+5. Close out with a mermaid diagram of the revised pipeline
 
 After Goal 2 lands, proceed to Goal 3a (canvas) per the playbook.

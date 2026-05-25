@@ -128,7 +128,7 @@ Per vehicle:
    - Any quirks you noticed (compound curves at the A-pillar, etc.)
 
 Place all three files in a folder named `<year>/<make>/<model>/<trim-slug>/`. Example:
-```
+```text
 2024/ford/transit-250/148wb-highroof/
   ├── outline.svg
   ├── reference.jpg
