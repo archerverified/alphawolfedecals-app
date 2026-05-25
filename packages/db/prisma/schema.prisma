@@ -12,7 +12,7 @@ generator client {
   // deploy target up front; without these explicit targets, the lambda crashes
   // at runtime with PrismaClientInitializationError "couldn't find a query engine"
   // because the build machines binary doesn't match the lambdas libc/openssl.
-  binaryTargets = ["native", "rhel-openssl-3.0.x", "debian-openssl-3.0.x"]
+  binaryTargets = ["native", "rhel-openssl-3.0.x"]
 }
 
 datasource db {
