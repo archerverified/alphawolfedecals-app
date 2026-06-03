@@ -8,8 +8,14 @@
 
 import posthog from 'posthog-js';
 
+// The project provisions the publishable PostHog token as
+// NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN in Vercel; NEXT_PUBLIC_POSTHOG_KEY is a
+// fallback alias. Both are static literals so Next inlines them at build time.
+export const POSTHOG_TOKEN =
+  process.env.NEXT_PUBLIC_POSTHOG_PROJECT_TOKEN ?? process.env.NEXT_PUBLIC_POSTHOG_KEY;
+
 export function isAnalyticsEnabled(): boolean {
-  return typeof window !== 'undefined' && Boolean(process.env.NEXT_PUBLIC_POSTHOG_KEY);
+  return typeof window !== 'undefined' && Boolean(POSTHOG_TOKEN);
 }
 
 export function capture(event: string, properties?: Record<string, unknown>): void {

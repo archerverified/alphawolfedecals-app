@@ -9,15 +9,15 @@
 
 import { useEffect } from 'react';
 import posthog from 'posthog-js';
+import { POSTHOG_TOKEN } from '../../lib/analytics';
 
 let initialised = false;
 
 export function AnalyticsProvider(): null {
   useEffect(() => {
     if (initialised) return;
-    const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-    if (!key) return;
-    posthog.init(key, {
+    if (!POSTHOG_TOKEN) return;
+    posthog.init(POSTHOG_TOKEN, {
       api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST ?? 'https://us.i.posthog.com',
       capture_pageview: true,
       capture_pageleave: true,
