@@ -47,21 +47,46 @@ export type PanelInput = {
 
 export type PanelRecord = PanelInput & { id: string };
 
-export type VehicleDetail = VehicleSummary & {
-  variant: string | null;
-  wheelbaseMm: number | null;
-  cabSize: string | null;
-  bedSize: string | null;
-  roofHeight: string | null;
-  doorCount: number | null;
-  topviewSvgUrl: string | null;
-  sourceAuthority: SourceAuthority;
-  sourceNotes: string | null;
-  verifiedAt: Date | null;
-  supersedesId: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-  panels: PanelRecord[];
+// Alpha Wolf wrapped-template metadata (Goal 2a). Null on non-AW rows.
+export type AlphaWolfTemplateFields = {
+  svgStorageKey: string | null;
+  viewCount: number | null;
+  dimensionsText: string | null;
+  scaleDenom: number;
+  alphaWolfTplId: string | null;
+};
+
+export type VehicleDetail = VehicleSummary &
+  AlphaWolfTemplateFields & {
+    variant: string | null;
+    wheelbaseMm: number | null;
+    cabSize: string | null;
+    bedSize: string | null;
+    roofHeight: string | null;
+    doorCount: number | null;
+    topviewSvgUrl: string | null;
+    sourceAuthority: SourceAuthority;
+    sourceNotes: string | null;
+    verifiedAt: Date | null;
+    supersedesId: string | null;
+    createdAt: Date;
+    updatedAt: Date;
+    panels: PanelRecord[];
+  };
+
+// Curated catalogue card for the /vehicles browse grid. AW rows only.
+export type AlphaWolfTemplateCard = {
+  id: string;
+  year: number;
+  make: string;
+  model: string;
+  trim: string | null;
+  bodyType: BodyType;
+  thumbPngUrl: string;
+  viewCount: number | null;
+  scaleDenom: number;
+  dimensionsText: string | null;
+  alphaWolfTplId: string;
 };
 
 export type CreateVehicleInput = {
@@ -296,6 +321,34 @@ export async function getPublishedDetail(id: string): Promise<VehicleDetail | nu
   });
 }
 
+// Curated Alpha Wolf catalogue for the /vehicles browse grid (Goal 2a). Returns
+// only published rows that carry an AW-TPL id, newest-catalogued first
+// (alpha_wolf_tpl_id ascending keeps AW-TPL-0001..0003 in a stable order). Runs
+// on withSystem (public, non-PII catalogue data) — so it filters status itself.
+export async function listAlphaWolfTemplates(): Promise<AlphaWolfTemplateCard[]> {
+  return withSystem(async (db) => {
+    const rows = await db.vehicle.findMany({
+      where: { status: 'published', alphaWolfTplId: { not: null } },
+      select: {
+        id: true,
+        year: true,
+        make: true,
+        model: true,
+        trim: true,
+        bodyType: true,
+        thumbPngUrl: true,
+        viewCount: true,
+        scaleDenom: true,
+        dimensionsText: true,
+        alphaWolfTplId: true,
+      },
+      orderBy: { alphaWolfTplId: 'asc' },
+    });
+    // alphaWolfTplId is non-null by the where filter; narrow the type for callers.
+    return rows.map((r) => ({ ...r, alphaWolfTplId: r.alphaWolfTplId as string }));
+  });
+}
+
 // ----------------------------------------------------------------------------
 // Admin path (withUser(adminId); RLS enforces admin-only writes).
 // ----------------------------------------------------------------------------
@@ -476,6 +529,11 @@ function toDetail(v: Prisma.VehicleGetPayload<{ include: { panels: true } }>): V
     thumbPngUrl: v.thumbPngUrl,
     status: v.status,
     version: v.version,
+    svgStorageKey: v.svgStorageKey,
+    viewCount: v.viewCount,
+    dimensionsText: v.dimensionsText,
+    scaleDenom: v.scaleDenom,
+    alphaWolfTplId: v.alphaWolfTplId,
     wheelbaseMm: v.wheelbaseMm,
     cabSize: v.cabSize,
     bedSize: v.bedSize,

@@ -17,6 +17,13 @@ out/
 # is GH-005). Written at runtime by the admin upload + the seed loader.
 .vehicle-assets/
 
+# License-restricted vehicle template TEST inputs (ProVehicleOutlines .ai files
+# + their derived SVG/PDF outputs). PVO EULA forbids derivative works for
+# unlicensed catalog use — these files exist locally for prototype testing only
+# and MUST NOT be committed. Real catalog seeds come from licensed/owned sources
+# per spec §5.3.
+apps/web/public/vehicle-templates/test-only/
+
 # Testing
 coverage/
 playwright-report/
