@@ -29,6 +29,8 @@ export type {
   CreateVehicleInput,
   PanelInput,
   PanelRecord,
+  AlphaWolfTemplateFields,
+  AlphaWolfTemplateCard,
   BodyType,
   TemplateStatus,
   SourceAuthority,

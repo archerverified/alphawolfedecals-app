@@ -11,6 +11,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # License gate (Goal 2a). The ProVehicleOutlines .ai inputs and their derived
+  # SVG/PDF outputs under apps/web/public/vehicle-templates/test-only/ are
+  # license-restricted (PVO EULA forbids derivative works for unlicensed catalog
+  # use — spec §5.3). They are gitignored, but a `git add -f` or a stale clone
+  # could still land them. This job FAILS the build if any such file is tracked,
+  # codifying the boundary so a future contributor can't accidentally leak it.
+  license-guard:
+    name: Guard — no license-restricted template inputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject committed test-only template inputs
+        run: |
+          tracked="$(git ls-files 'apps/web/public/vehicle-templates/test-only/')"
+          if [ -n "$tracked" ]; then
+            echo "::error::License-restricted template inputs are committed to the repo:"
+            echo "$tracked"
+            echo "These files are gitignored for a reason (PVO EULA — spec §5.3)."
+            echo "Remove them with: git rm -r --cached apps/web/public/vehicle-templates/test-only/"
+            exit 1
+          fi
+          echo "OK — no license-restricted test-only inputs are tracked."
+
   node:
     name: Node — lint + typecheck + test
     runs-on: ubuntu-latest

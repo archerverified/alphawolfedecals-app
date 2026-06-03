@@ -258,6 +258,19 @@ model Vehicle {
   // ends the mismatch. Do not build anything that assumes the bytes are PNG yet.
   thumbPngUrl   String  @map("thumb_png_url")
 
+  // Alpha Wolf wrapped-template fields (Goal 2a). Nullable because this table is
+  // heterogeneous — it also holds non-AW rows with no wrap. The seed populates
+  // all of these for AW rows; CHECK constraints (view_count 1..4, tpl-id format)
+  // live in the migration since Prisma can't express them. svgStorageKey is the
+  // bucket-relative key of the wrapped SVG in the public vehicle-templates bucket
+  // (rendered via storage.templatePublicUrl). The AW frame is baked in by
+  // wrap_template.py — do NOT wrap again at render time.
+  svgStorageKey  String? @unique @map("svg_storage_key")
+  viewCount      Int?    @map("view_count") @db.SmallInt
+  dimensionsText String? @map("dimensions_text")
+  scaleDenom     Int     @default(20) @map("scale_denom") @db.SmallInt
+  alphaWolfTplId String? @unique @map("alpha_wolf_tpl_id")
+
   // Provenance.
   sourceAuthority SourceAuthority @map("source_authority")
   sourceNotes     String?         @map("source_notes")
