@@ -33,6 +33,7 @@
     "db:migrate": "pnpm prisma:migrate:deploy && pnpm db:apply-sql",
     "db:apply-sql": "dotenv -e .env -- sh -c 'psql \"$DIRECT_URL\" -v ON_ERROR_STOP=1 -f prisma/sql/auth_rls.sql'",
     "db:seed": "dotenv -e .env -- tsx seeds/index.ts",
+    "db:seed-aw": "dotenv -e .env -- tsx scripts/seed-vehicle-templates.ts",
     "db:make-admin": "dotenv -e .env -- tsx scripts/make-admin.ts",
     "storage:provision": "dotenv -e .env -- tsx scripts/provision-storage.ts",
     "storage:migrate-local": "dotenv -e .env -- tsx scripts/migrate-local-assets.ts"
