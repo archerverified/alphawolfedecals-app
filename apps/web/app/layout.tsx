@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { Analytics } from '@vercel/analytics/react';
 import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Toaster } from '@alphawolf/ui/components/ui/sonner';
+import { AnalyticsProvider } from '../components/analytics/AnalyticsProvider';
 import './globals.css';
 
 export const metadata: Metadata = {
@@ -14,6 +15,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en">
       <body>
+        {/* PostHog bootstrap (env-gated, no-op without NEXT_PUBLIC_POSTHOG_KEY). */}
+        <AnalyticsProvider />
         {children}
         {/* Sonner toast host (upload success/failure, parse-complete — GH-005). */}
         <Toaster richColors closeButton position="top-right" />

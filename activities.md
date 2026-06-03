@@ -6,6 +6,20 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-03 — Goal 2a — 3-vehicle catalogue seed (Option A manual import) — IN PROGRESS
+
+- **PRs opened (stacked, not yet merged):** [#83](https://github.com/archerverified/alphawolfedecals-app/pull/83) `feat/vehicle-template-storage-schema` → [#84](https://github.com/archerverified/alphawolfedecals-app/pull/84) `feat/vehicle-template-seed-3vehicle` → [#85](https://github.com/archerverified/alphawolfedecals-app/pull/85) `feat/vehicles-browse-detail-render` (commits `1525328`, `1ca9271`, `f5a94bd`).
+- **What now works (data layer, verified live):** migration `20260603120000_vehicle_template_aw_fields` applied to prod; 3 AW templates seeded `published` (AW-TPL-0001 BMW X3 4-view · AW-TPL-0002 Contender 36.5' Bass Boat 2-view · AW-TPL-0003 1973 Crown Super Coach 3-view, all 1:20). Wrapped-SVG + thumb public URLs all return `200`.
+- **Verification:** `SELECT` on `vehicles` shows the 3 rows; `curl` on `…/storage/v1/object/public/vehicle-templates/<id>/wrapped.svg` → `200 image/svg+xml`. PR1 CI: 4 checks green (Node lint/typecheck/test, license-guard, 2× Python), CodeRabbit clean. `typecheck` + `lint` clean across PR3.
+- **Schema/migrations:** `20260603120000_vehicle_template_aw_fields` — adds `svg_storage_key` (unique), `view_count` (CHECK 1..4), `dimensions_text`, `scale_denom` (NOT NULL DEFAULT 20), `alpha_wolf_tpl_id` (unique, CHECK `^AW-TPL-\d{4}$`); 4 nullable (heterogeneous table); widened `vehicles_year_check` 1990→1900 for the vintage coach.
+- **Deviations from spec (deliberate, documented in PRs):** columns nullable not NOT NULL (existing non-AW Ford Transit row); **public** `vehicle-templates` bucket + public URL via `uploadTemplateObject`/`templatePublicUrl` per ADR-0007 (spec's `uploadAssetObject` targets the private bucket); CSP `img-src` **already** allow-lists the Storage origin — no change needed.
+- **ADR updates:** 0. ADR-0013 deploy invariants untouched. (Year-check widening is not an ADR-0013 invariant.)
+- **Diagram:** `docs/vault/diagrams/goal-2a-catalog-seed.md` — mermaid sequence (browse → detail → editor).
+- **BLOCKERS to goal completion (next session):** (1) **Vercel `BUILD_ERROR: "Resource provisioning failed"` — account/platform-level, NOT the code.** Every Goal-2a deploy ERRORs in ≈640 ms with zero build logs; two fresh `vercel deploy --force` CLI rebuilds return the same error. Proven independent of the code: every historical deploy (PR #79/#80/#82 previews + all prod) is READY, and both the DB-only PR1 and the **docs-only closeout commit (2 markdown files, zero code)** fail identically — no markdown change can break a Next build. Vercel can't provision a build container for this project, almost certainly a Hobby/free-plan build-resource/quota or billing issue. **Requires Archer in the Vercel dashboard (plan/billing/usage); no repo change fixes it.** Prod stays on the 2026-05-27 deploy (`4635f78`), so `/vehicles` is 404 on prod until builds provision again and PR3 reaches main. (2) **Node CI doesn't run on the stacked PRs** — `ci.yml` triggers on `pull_request.base = main`, so #84/#85 only get Node CI once retargeted to main (after #83 merges). (3) `NEXT_PUBLIC_POSTHOG_KEY` must be set in Vercel for the 3 events to fire in prod (publishable `phc_…` key is in root `.env.local`).
+- **Followups:** merge #83→#84→#85 in order (retarget each to main as the prior merges); resolve the Vercel preview ERROR; set `NEXT_PUBLIC_POSTHOG_KEY` in Vercel; post-deploy: design-review on the preview, PostHog funnel + Sentry screenshots → `docs/deployment/screenshots/2026-06-03/`.
+
+---
+
 ## 2026-05-27 — Archer + Claude (Goal 1 closeout pushed; worktree cleanup; aitmpl overwrite parked in stash)
 
 - **Type**: Release/cleanup session. No new code, no scope work.
