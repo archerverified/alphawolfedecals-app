@@ -23,6 +23,7 @@ import {
 import { Input } from '@alphawolf/ui/components/ui/input';
 import { Label } from '@alphawolf/ui/components/ui/label';
 import { createProjectAction } from '../../lib/actions/project';
+import { capture } from '../../lib/analytics';
 
 type Props = {
   vehicleId: string;
@@ -55,7 +56,7 @@ export function StartProjectButton({ vehicleId, defaultName, csrfToken }: Props)
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button data-testid="start-project-cta">Start a project</Button>
+        <Button data-testid="start-project-cta">Start design</Button>
       </DialogTrigger>
       <DialogContent>
         <form
@@ -65,6 +66,9 @@ export function StartProjectButton({ vehicleId, defaultName, csrfToken }: Props)
               toast.error('Give your project a name.');
               return;
             }
+            // Fire before the action: it redirects on success (throws
+            // NEXT_REDIRECT), so post-call code never runs on the happy path.
+            capture('editor_opened_from_vehicle', { vehicle_id: vehicleId });
             try {
               await createProjectAction(formData);
               // createProjectAction redirects on success, so we only reach here

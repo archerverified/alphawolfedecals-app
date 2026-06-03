@@ -4,8 +4,9 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { vehicles } from '@alphawolf/db';
+import { vehicles, storage } from '@alphawolf/db';
 import { OutlinePreview } from '../../../components/vehicles/OutlinePreview';
+import { DetailViewTracker } from '../../../components/vehicles/DetailViewTracker';
 import { StartProjectButton } from '../../../components/projects/StartProjectButton';
 import { getOrCreateFormCsrfToken } from '../../../lib/csrf';
 import { bodyTypeLabel, formatDimensions, vehicleTitle } from '../../../lib/vehicles/format';
@@ -20,28 +21,57 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
   const title = vehicleTitle(vehicle);
   const csrfToken = await getOrCreateFormCsrfToken();
 
+  // Alpha Wolf rows carry a wrapped SVG in the public vehicle-templates bucket —
+  // render that (the AW frame is already baked in; do NOT wrap again). Non-AW
+  // rows fall back to their outline SVG. CSP img-src already allow-lists the
+  // Supabase Storage origin.
+  const isAwTemplate = vehicle.svgStorageKey != null;
+  const renderUrl = vehicle.svgStorageKey
+    ? storage.templatePublicUrl(vehicle.svgStorageKey)
+    : vehicle.outlineSvgUrl;
+  const awMeta = [
+    vehicle.viewCount != null ? `${vehicle.viewCount}-view` : null,
+    `Scale 1:${vehicle.scaleDenom}`,
+    vehicle.dimensionsText,
+  ].filter(Boolean) as string[];
+
   return (
     <main className="min-h-screen bg-zinc-50 px-4 py-12" data-testid="vehicle-detail">
+      <DetailViewTracker vehicleId={vehicle.id} alphaWolfTplId={vehicle.alphaWolfTplId} />
       <div className="mx-auto max-w-4xl">
-        <Link href="/vehicles/select" className="text-sm text-zinc-500 hover:text-zinc-800">
-          ← Back to browse
+        <Link href="/vehicles" className="text-sm text-zinc-500 hover:text-zinc-800">
+          ← Back to templates
         </Link>
 
         <header className="mt-4 flex flex-wrap items-start justify-between gap-3">
           <div>
             <h1 className="text-2xl font-semibold text-zinc-900">{title}</h1>
             <p className="mt-1 text-sm text-zinc-600">{formatDimensions(vehicle)}</p>
+            {isAwTemplate && awMeta.length > 0 ? (
+              <p className="mt-1 text-sm font-medium text-zinc-700" data-testid="aw-meta">
+                {awMeta.join(' · ')}
+              </p>
+            ) : null}
           </div>
           <span className="rounded-full bg-zinc-100 px-3 py-1 text-xs text-zinc-600">
             {bodyTypeLabel(vehicle.bodyType)}
           </span>
         </header>
 
-        <OutlinePreview
-          src={vehicle.outlineSvgUrl}
-          title={title}
-          className="mt-6 aspect-[4/1] bg-white"
-        />
+        {isAwTemplate ? (
+          <div
+            data-testid="wrapped-svg"
+            className="mt-6 flex items-center justify-center overflow-hidden rounded-md border border-zinc-200 bg-white p-4"
+          >
+            <img
+              src={renderUrl}
+              alt={`${title} — Alpha Wolf wrap template`}
+              className="max-h-[70vh] w-full object-contain"
+            />
+          </div>
+        ) : (
+          <OutlinePreview src={renderUrl} title={title} className="mt-6 aspect-[4/1] bg-white" />
+        )}
 
         <section className="mt-8">
           <h2 className="text-sm font-semibold uppercase tracking-wide text-zinc-500">
