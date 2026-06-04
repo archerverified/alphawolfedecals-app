@@ -6,6 +6,50 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-04 — Goal 3a — Design canvas MVP closeout (PRs #90, #91, #92 merged to main)
+
+**Summary.** Goal 3a delivered the customer design canvas end-to-end. Audit-first
+finding: the 5-PR plan was mostly **pre-delivered by PR #38** (base editor: route
+`/projects/[id]/editor`, canvas mount, upload+place, undo/redo, autosave engine +
+indicator). So this session shipped the **remaining** 3 PRs on top — color, save UX
+
+- analytics, and the submit→order flow — not a from-scratch rebuild. Customer
+  journey (signup → submit) diagrammed at
+  [`docs/vault/diagrams/goal-3a-canvas.md`](docs/vault/diagrams/goal-3a-canvas.md);
+  session note at
+  [`docs/vault/sessions/2026-06-04-goal-3a-canvas.md`](docs/vault/sessions/2026-06-04-goal-3a-canvas.md).
+
+* **PR1 / PR2 (pre-delivered, #38):** route shell + canvas mount; asset upload +
+  place with autosave persistence. No new PR needed — verified present on `main`.
+* **PR3 — color picker (#90, merged `cef587e`):** `ColorField` inspector control
+  (preset wrap swatches + OS picker + validated hex) for text `fill` and shape
+  `fill`/`stroke`; each change is an undoable `updateElements` Command. Built from
+  existing shadcn primitives — no new dep (ADR-0013). Enabled vitest automatic JSX
+  runtime. CodeRabbit: no actionable comments.
+* **PR4 — save UX + analytics (#91, merged `5b13354`):** manual **Save** button
+  (flushes the debounced autosave queue) + instrumented `editor_opened`,
+  `asset_placed`, `design_saved` via the env-gated `capture` helper. CodeRabbit
+  clean.
+* **PR5 — submit-for-production + `db.order` (#92, merged `00ab33d`):** new `Order`
+  model + `order_status` enum + migration `20260604120000_orders` + owner-scoped
+  RLS (`orders_owner_all`) and a forward-looking `orders_shop_read` for Goal 3b.
+  `orders.submitForProduction` freezes the working version → `submitted`, clones a
+  fresh working row forward, flips the project `active`, and INSERTs the order — one
+  `withUser` transaction. RPC-style `submitForProductionAction` (Next origin check +
+  `requireUser` + RLS, Sentry-auto) validates input server-side; `SubmitDialog`
+  fires `submit_clicked`; new `/projects/[id]/order-confirmed` page. The 4th funnel
+  event completes the PostHog set.
+* **Goal condition status:** 5 PRs resolved (2 pre-existing + 3 merged this
+  session), each CodeRabbit-clean / all 4 required CI checks green at merge. Editor
+  loads + renders + persists across reload (pre-existing) and now **accepts
+  submit-for-production that creates a `db.order` row**. Per-PR Vercel previews
+  deployed READY.
+* **Out-of-band / honest gaps:** (1) the `orders` migration must be applied to prod
+  via `prisma migrate deploy` + `db:apply-sql` (CI only runs `prisma generate`); (2)
+  PostHog "events firing on production" requires a real authenticated prod session
+  to emit them — the events are wired + env-gated but this session can't drive a
+  signed-in prod browser to populate the dashboard. Both flagged in the session note.
+
 ## 2026-06-04 — Goal 2a — CORRECTED CLOSEOUT: deployed, verified live on prod (corrects 2026-06-03 entry below)
 
 This entry **corrects** the 2026-06-03 entry. Per the append-only rule, that entry is preserved untouched — but its diagnosis ("Vercel BUILD_ERROR account/platform-level, requires billing/plan action") was **wrong**. The real cause and the actual fix path are recorded here.
