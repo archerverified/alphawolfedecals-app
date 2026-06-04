@@ -21,6 +21,7 @@ import {
   Magnet,
   Check,
   Loader2,
+  Save,
 } from 'lucide-react';
 import { Button } from '@alphawolf/ui/components/ui/button';
 import {
@@ -64,6 +65,7 @@ import { usePanelClips } from './useKonvaClip';
 import { CanvasStage } from './CanvasStage';
 import { UploadPanel } from './UploadPanel';
 import { ColorField } from './ColorField';
+import { capture } from '@/lib/analytics';
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -169,6 +171,8 @@ export default function CanvasEditor(props: EditorProps) {
 
   useEffect(() => {
     setMounted(true);
+    // Analytics: editor session started (best-effort, env-gated no-op in CI/local).
+    capture('editor_opened', { projectId, vehicleId: vehicle.id });
     const host = canvasHostRef.current;
     if (!host) return;
     const update = () => setSize({ width: host.clientWidth, height: host.clientHeight });
@@ -265,7 +269,14 @@ export default function CanvasEditor(props: EditorProps) {
     addElement(el);
   }, [targetPanel, shapeKind, addElement, mintId, placementFor]);
 
-  const onPlaceImage = useCallback((el: ImageElement) => addElement(el), [addElement]);
+  const onPlaceImage = useCallback(
+    (el: ImageElement) => {
+      addElement(el);
+      // Analytics: artwork placed onto a panel (best-effort, env-gated no-op).
+      capture('asset_placed', { projectId, assetId: el.assetId });
+    },
+    [addElement, projectId],
+  );
 
   const onSelect = useCallback(
     (id: ElementId) => {
@@ -497,6 +508,24 @@ export default function CanvasEditor(props: EditorProps) {
             </Popover>
 
             <Separator orientation="vertical" className="mx-1 h-6" />
+
+            {/* Manual save: a redundant confirm for users who don't trust autosave.
+                It just flushes the debounced queue (no separate write path). */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  data-testid="save-now"
+                  size="sm"
+                  variant="ghost"
+                  className="gap-1.5"
+                  disabled={autosave.status === 'saving'}
+                  onClick={() => autosave.flushNow()}
+                >
+                  <Save className="size-4" /> Save
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Save now — autosave is always on</TooltipContent>
+            </Tooltip>
 
             <span className="flex min-w-20 items-center gap-1.5 text-xs text-zinc-500">
               {autosave.status === 'saving' || autosave.status === 'pending' ? (

@@ -12,15 +12,20 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { factory, serializeDocument } from '@alphawolf/canvas';
 import { useAutosave } from './useAutosave';
 
-const { saveMock } = vi.hoisted(() => ({ saveMock: vi.fn() }));
+const { saveMock, captureMock } = vi.hoisted(() => ({
+  saveMock: vi.fn(),
+  captureMock: vi.fn(),
+}));
 
 vi.mock('@/lib/actions/project', () => ({ saveCanvasAction: saveMock }));
+vi.mock('@/lib/analytics', () => ({ capture: captureMock }));
 vi.mock('sonner', () => ({
   toast: { error: vi.fn(), message: vi.fn(), success: vi.fn() },
 }));
 
 beforeEach(() => {
   saveMock.mockReset();
+  captureMock.mockReset();
 });
 
 describe('useAutosave re-entry race', () => {
@@ -74,5 +79,26 @@ describe('useAutosave re-entry race', () => {
     });
     expect(saveMock).toHaveBeenCalledTimes(2);
     expect(result.current.status).toBe('saved');
+  });
+
+  it('fires a design_saved analytics event on each successful save', async () => {
+    saveMock.mockResolvedValue({ ok: true, rev: 1 });
+    const d0 = factory.newDocument('veh-1');
+    const d1 = { ...d0, seq: 1 };
+
+    const { result, rerender } = renderHook(
+      ({ doc }) => useAutosave({ projectId: 'p1', versionId: 'v1', initialRev: 0, doc }),
+      { initialProps: { doc: d0 } },
+    );
+
+    // Separate acts: the rerender must commit (updating the doc ref) before the
+    // flush reads it — mirrors the re-entry test above.
+    act(() => rerender({ doc: d1 }));
+    await act(async () => {
+      result.current.flushNow();
+    });
+
+    expect(saveMock).toHaveBeenCalledTimes(1);
+    expect(captureMock).toHaveBeenCalledWith('design_saved', { projectId: 'p1', rev: 1 });
   });
 });
