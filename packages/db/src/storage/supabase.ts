@@ -63,10 +63,35 @@ export function assetKey(projectId: string, assetId: string, filename: string): 
   return `${projectId}/${assetId}/${filename}`;
 }
 
+// Base URL for constructing public Storage object URLs. Reads SUPABASE_URL (or
+// the client-equivalent NEXT_PUBLIC_SUPABASE_URL as a fallback — both point at
+// the same project, the latter is inlined at build time). Pure read; no client
+// instantiation. Keeps catalogue render alive when the service-role key is
+// stale or missing — only writes/signed-URL flows need the service role.
+function getStorageBaseUrl(): string {
+  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) {
+    throw new Error(
+      '[db/storage] missing required env var: SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL)',
+    );
+  }
+  return url.replace(/\/+$/, '');
+}
+
 // Public URL for a vehicle-templates object (bucket is public-read).
+//
+// Pure string formatter — does NOT instantiate the service-role client. The
+// catalogue render path (e.g. `/vehicles/[id]` rendering
+// `<img src={templatePublicUrl(svg_storage_key)}>`) therefore stays alive when
+// SUPABASE_SERVICE_ROLE_KEY is missing, empty, or rotated. Defence in depth: a
+// stale service-role key only breaks writes/signing, not the public catalogue.
+//
+// Prior implementation called `getServiceClient().storage.from(…).getPublicUrl(…)`,
+// which threw on missing service-role key even though that key is not needed to
+// format a public URL — see activities.md 2026-06-04 entry for the production
+// incident this refactor closes.
 export function templatePublicUrl(key: string): string {
-  const { data } = getServiceClient().storage.from(VEHICLE_TEMPLATES_BUCKET).getPublicUrl(key);
-  return data.publicUrl;
+  return `${getStorageBaseUrl()}/storage/v1/object/public/${VEHICLE_TEMPLATES_BUCKET}/${encodeURI(key)}`;
 }
 
 // Server-side upload into the public vehicle-templates bucket. `upsert` so

@@ -6,6 +6,28 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-04 — Goal 2a — CORRECTED CLOSEOUT: deployed, verified live on prod (corrects 2026-06-03 entry below)
+
+This entry **corrects** the 2026-06-03 entry. Per the append-only rule, that entry is preserved untouched — but its diagnosis ("Vercel BUILD_ERROR account/platform-level, requires billing/plan action") was **wrong**. The real cause and the actual fix path are recorded here.
+
+- **Status:** Goal 2a 100% live on production. Verified `2026-06-04T08:56Z`. Latest prod deploy: `36a121e9` → `dpl_G3zspfkpBUP8S9FEw8E4z5cGmk2J` · READY · 5 lambdas · region `sfo1`. Zero error/fatal runtime logs in the post-deploy window.
+- **Goal-condition matrix (all green):** `GET /vehicles` → 200 + 3 AW cards (BMW X3, Contender 36.5' Bass Boat, Crown Super Coach). Each of `GET /vehicles/aa00000{1,2,3}-…` → 200 + wrapped SVG `<img src>` resolves to the Supabase Storage public URL. `HEAD` on each Storage URL → 200 `image/svg+xml`. "Start design" CTA present on every detail page. CSP allowlists the Storage origin + Sentry regional ingest + PostHog hosts.
+- **Real diagnosis — three stacked issues, none of them billing:**
+  1. **Region mismatch.** `apps/web/vercel.json` requested `regions: ["sfo1"]`. Vercel silently migrated the project's allowed region from `sfo1` → `iad1` between 2026-05-26 and 2026-06-02 (no notice to the owner). Repo↔dashboard mismatch → preflight reject in ~640 ms with empty build logs (no container ever spawned). This is the failure mode the 2026-06-03 entry observed but mis-attributed to billing.
+  2. **Stuck Vercel-side state.** 15 rapid failed deploys after the region mismatch put the project into a cached-rejection state that survived even after the region was corrected. **Cleared by redeploying the last-known-green commit (`4635f78`, 2026-05-27 Goal 1 closeout)** via the dashboard's "Redeploy" button. The instant that READY landed, fresh deploys of current `main` also succeeded.
+  3. **Stale `SUPABASE_SERVICE_ROLE_KEY` env var.** Browse worked but detail pages 500'd with `Error: [db/storage] missing required env var` thrown from `packages/db/src/storage/supabase.ts:40`. The env-var row existed for production+preview but its value was empty/wrong, so `readEnv()` treated it as falsy. **Fix: edit-in-place (not add-new) with the current service_role key from Supabase project `dxwnzxlmggpdjyoxdybh`.** Deploy `36a121e9` picked up the corrected value.
+- **Action chain to recover this if it ever recurs:**
+  1. Vercel dashboard → Project Settings → Functions → set Function Region to **`sfo1`** (uncheck any other). Hobby = 1 region.
+  2. Vercel dashboard → Deployments → click the last `READY` deployment → "..." → **Redeploy** (no build cache). Clears the cached rejection state.
+  3. Push a fresh empty commit on main → confirm the new deploy goes READY in ~40 s with non-empty `lambdaRuntimeStats`.
+  4. Vercel dashboard → Project Settings → Environment Variables → **edit** `SUPABASE_SERVICE_ROLE_KEY` for Production, paste current key from Supabase. Push fresh commit. Verify `/vehicles/[id]` returns 200.
+- **Followup PR (filed separately):** `refactor/template-public-url-pure-string` — make `templatePublicUrl()` a pure string formatter (`${SUPABASE_URL}/storage/v1/object/public/${bucket}/${key}`) so the catalog render path no longer instantiates the service-role client at runtime. Defense in depth against env-var drift + smaller attack-surface footprint on every detail-page render.
+- **Hard data the previous diagnosis missed:** the empty-build-logs + sub-second time-to-error signature means **preflight rejection at Vercel's project-config validator**, NOT account-level billing. Billing failures produce a non-empty `errorMessage` field on the deployment record and typically a dashboard banner. Region/config mismatches produce exactly the symptoms we saw. The Vercel API exposes both signals; the CLI summary did not. **Future debugs of this error must pull `get_deployment` + `get_deployment_build_logs` via the Vercel MCP — do not trust the CLI message alone.**
+- **What did NOT cause it (all eliminated by inspection):** premium settings stuck on Hobby (Fluid Compute, Active CPU, functionTimeout 300s — all verified disabled or absent); PR1 schema migration — zero preflight-readable files changed (no `vercel.json` / `next.config` / `package.json` diff); Node 24 incompatibility — same `nodeVersion: "24.x"` ran green before and after; spending cap — no `errorMessage` cap signal on the deployment record; Vercel Authentication / Cron Jobs / Protected Sourcemaps — all eliminated.
+- **Memory written:** `vercel-preflight-vs-build-failure-signatures.md` — future sessions will not repeat the previous billing-block misdiagnosis.
+
+---
+
 ## 2026-06-03 — Goal 2a — 3-vehicle catalogue seed (Option A manual import) — MERGED; prod deploy blocked on Vercel platform
 
 - **PRs merged to main (in order, each CodeRabbit clean):** [#83](https://github.com/archerverified/alphawolfedecals-app/pull/83) `feat/vehicle-template-storage-schema` (`ff368cc`) → [#86](https://github.com/archerverified/alphawolfedecals-app/pull/86) `feat/vehicle-template-seed-3vehicle` (`8a980f0`) → [#87](https://github.com/archerverified/alphawolfedecals-app/pull/87) `feat/vehicles-browse-detail-render` (`c43f2da`). (PR2/PR3 were first opened as #84/#85; GitHub auto-closed those when each base branch was squash-merged + deleted, so they were rebased onto main and reopened as #86/#87 — same content.) All required CI green (Node lint/typecheck/test, license-guard, 2× Python, Vercel Preview Comments); full local `next build` passes with `/vehicles` + `/vehicles/[id]` in the route manifest.
