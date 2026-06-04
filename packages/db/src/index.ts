@@ -13,6 +13,7 @@ export * as rateLimit from './repos/rate-limit.js';
 export * as vehicles from './repos/vehicles.js';
 export * as vehicleRequests from './repos/vehicle-template-requests.js';
 export * as projects from './repos/projects.js';
+export * as orders from './repos/orders.js';
 export * as storage from './storage/supabase.js';
 export * as svg from './svg/validate.js';
 
@@ -50,6 +51,7 @@ export type {
   ApprovalState,
   AssetParseStatus,
 } from './repos/projects.js';
+export type { OrderRow, OrderStatus, SubmitResult } from './repos/orders.js';
 export type {
   SvgValidationResult,
   SvgValidationError,

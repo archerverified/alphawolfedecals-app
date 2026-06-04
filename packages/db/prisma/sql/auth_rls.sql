@@ -405,3 +405,29 @@ create policy project_assets_owner_all on project_assets
         and p.owner_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
     )
   );
+
+-- orders ---------------------------------------------------------------------
+-- Production orders (Goal 3a PR5). The customer owns their own orders (owner_user_id
+-- = session user) for the full lifecycle. A second SELECT policy lets members of the
+-- routing shop read orders routed to that shop — the read side of the shop dashboard
+-- (Goal 3b); status transitions there will add their own UPDATE policy.
+alter table orders enable row level security;
+alter table orders force row level security;
+
+drop policy if exists orders_owner_all on orders;
+create policy orders_owner_all on orders
+  for all
+  using (owner_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid)
+  with check (owner_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid);
+
+drop policy if exists orders_shop_read on orders;
+create policy orders_shop_read on orders
+  for select
+  using (
+    owner_shop_id is not null
+    and exists (
+      select 1 from memberships m
+      where m.shop_id = orders.owner_shop_id
+        and m.user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
+    )
+  );
