@@ -1,9 +1,11 @@
 // Supabase Storage helper (GH-005 / ADR-0007). Replaces the dev-only local file
 // store in ./vehicle-assets.ts.
 //
-// ⚠️ SERVER-ONLY. Uses the SERVICE ROLE key, which bypasses Storage RLS. Never
-// import this from a client component (the @alphawolf/db barrel is already
-// server-only via Prisma).
+// ⚠️ SERVER-ONLY. Most functions use the SERVICE ROLE key, which bypasses
+// Storage RLS. Exception: templatePublicUrl() is a pure string formatter that
+// works without the service role key — the catalogue render path is resilient
+// to a missing or stale SUPABASE_SERVICE_ROLE_KEY. Never import this module from
+// a client component (the @alphawolf/db barrel is already server-only via Prisma).
 //
 // Two buckets (provisioned by scripts/provision-storage.ts, documented in ADR-0007):
 //   * vehicle-templates — PUBLIC read. Published vehicle outline SVGs + generated
@@ -91,7 +93,12 @@ function getStorageBaseUrl(): string {
 // format a public URL — see activities.md 2026-06-04 entry for the production
 // incident this refactor closes.
 export function templatePublicUrl(key: string): string {
-  return `${getStorageBaseUrl()}/storage/v1/object/public/${VEHICLE_TEMPLATES_BUCKET}/${encodeURI(key)}`;
+  // Path-segment encode: encodeURIComponent per segment preserves `/` separators
+  // while escaping reserved URL chars like `?` and `#` that encodeURI leaves raw.
+  // Current keys are `${vehicleId}/<fixed-filename>` from UUIDs (safe), but
+  // hardens against future arbitrary keys.
+  const safeKey = key.split('/').map(encodeURIComponent).join('/');
+  return `${getStorageBaseUrl()}/storage/v1/object/public/${VEHICLE_TEMPLATES_BUCKET}/${safeKey}`;
 }
 
 // Server-side upload into the public vehicle-templates bucket. `upsert` so
