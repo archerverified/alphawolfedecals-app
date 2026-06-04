@@ -12,6 +12,7 @@ import { toast } from 'sonner';
 import { serializeDocument } from '@alphawolf/canvas';
 import type { CanvasDocument } from '@alphawolf/canvas';
 import { saveCanvasAction } from '@/lib/actions/project';
+import { capture } from '@/lib/analytics';
 
 const DEBOUNCE_MS = 1500;
 const MAX_WAIT_MS = 10_000;
@@ -101,6 +102,8 @@ export function useAutosave({ projectId, versionId, initialRev, doc }: Params): 
         revRef.current = res.rev;
         savedDocRef.current = snapshot;
         setLastSavedAt(Date.now());
+        // Analytics: a design state was persisted (best-effort, env-gated no-op).
+        capture('design_saved', { projectId, rev: res.rev });
         // If the doc moved on while saving, schedule another pass.
         setStatus(docRef.current === snapshot ? 'saved' : 'pending');
       } else if (res.reason === 'stale') {
