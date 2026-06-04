@@ -55,6 +55,7 @@ import type {
 } from '@alphawolf/canvas';
 
 type Command = history.Command;
+type ElementPatch = history.ElementPatch;
 import type { EditorProps } from './contract';
 import type { ShapeKind, SnapSettings, Tool } from './types';
 import { useEditorStore } from './useEditorStore';
@@ -62,6 +63,7 @@ import { useAutosave } from './useAutosave';
 import { usePanelClips } from './useKonvaClip';
 import { CanvasStage } from './CanvasStage';
 import { UploadPanel } from './UploadPanel';
+import { ColorField } from './ColorField';
 
 const IS_PROD = process.env.NODE_ENV === 'production';
 
@@ -309,6 +311,24 @@ export default function CanvasEditor(props: EditorProps) {
         after.push({ id, x: el.x + dx, y: el.y + dy });
       }
       if (after.length > 0) dispatch({ kind: 'updateElements', before, after });
+    },
+    [doc.selection, doc.elements, dispatch],
+  );
+
+  // Recolor the selected element's fill (text + shape) or stroke (shape) as one
+  // undoable Command. fill/stroke are type-specific and not on the common
+  // ElementPatch shape, so we widen the {id,[prop]} literal — applyCommand spreads
+  // it onto the live element, which already carries the field (ADR-0006 §3).
+  const updateSelectedColor = useCallback(
+    (prop: 'fill' | 'stroke', next: string | null) => {
+      const id = doc.selection[0];
+      const el = id ? doc.elements[id] : undefined;
+      if (!el) return;
+      const prev = (el as { fill?: string | null; stroke?: string | null })[prop] ?? null;
+      if (prev === next) return;
+      const before = { id: el.id, [prop]: prev } as ElementPatch;
+      const after = { id: el.id, [prop]: next } as ElementPatch;
+      dispatch({ kind: 'updateElements', before: [before], after: [after] });
     },
     [doc.selection, doc.elements, dispatch],
   );
@@ -682,6 +702,37 @@ export default function CanvasEditor(props: EditorProps) {
                         selectedEl.panelId}
                     </span>
                   </div>
+
+                  {selectedEl.type === 'text' ? (
+                    <div className="mt-1 flex flex-col gap-2 border-t border-zinc-100 pt-2">
+                      <ColorField
+                        label="Color"
+                        testId="color-fill"
+                        value={selectedEl.fill}
+                        onCommit={(v) => updateSelectedColor('fill', v ?? '#000000')}
+                      />
+                    </div>
+                  ) : null}
+
+                  {selectedEl.type === 'shape' ? (
+                    <div className="mt-1 flex flex-col gap-2 border-t border-zinc-100 pt-2">
+                      <ColorField
+                        label="Fill"
+                        testId="color-fill"
+                        value={selectedEl.fill}
+                        allowNone
+                        onCommit={(v) => updateSelectedColor('fill', v)}
+                      />
+                      <ColorField
+                        label="Stroke"
+                        testId="color-stroke"
+                        value={selectedEl.stroke}
+                        allowNone
+                        onCommit={(v) => updateSelectedColor('stroke', v)}
+                      />
+                    </div>
+                  ) : null}
+
                   <Button size="sm" variant="destructive" onClick={deleteSelected} className="mt-1">
                     Delete
                   </Button>
