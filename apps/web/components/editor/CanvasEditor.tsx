@@ -65,6 +65,7 @@ import { usePanelClips } from './useKonvaClip';
 import { CanvasStage } from './CanvasStage';
 import { UploadPanel } from './UploadPanel';
 import { ColorField } from './ColorField';
+import { SubmitDialog } from './SubmitDialog';
 import { capture } from '@/lib/analytics';
 
 const IS_PROD = process.env.NODE_ENV === 'production';
@@ -547,6 +548,13 @@ export default function CanvasEditor(props: EditorProps) {
                 </>
               ) : null}
             </span>
+
+            <Separator orientation="vertical" className="mx-1 h-6" />
+
+            {/* Submit for production: freezes the working version + creates an
+                order (no payment). Flush autosave on open so the frozen version
+                carries the latest canvas. */}
+            <SubmitDialog projectId={projectId} onOpen={() => autosave.flushNow()} />
           </div>
         </header>
 

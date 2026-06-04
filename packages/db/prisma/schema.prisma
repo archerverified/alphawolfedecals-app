@@ -392,6 +392,18 @@ enum AssetParseStatus {
   @@map("asset_parse_status")
 }
 
+// Production order lifecycle (Goal 3a PR5). MVP: a customer "submits for
+// production" with delivery details and no payment. The shop dashboard (Goal 3b)
+// drives the status transitions; email notifications land in Goal 3c.
+enum OrderStatus {
+  submitted
+  in_production
+  fulfilled
+  cancelled
+
+  @@map("order_status")
+}
+
 model Project {
   id            String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   ownerUserId   String        @map("owner_user_id") @db.Uuid
@@ -411,6 +423,7 @@ model Project {
   vehicle  Vehicle          @relation(fields: [vehicleId], references: [id])
   versions ProjectVersion[]
   assets   ProjectAsset[]
+  orders   Order[]
 
   @@index([ownerUserId, status])
   @@map("projects")
@@ -429,6 +442,7 @@ model ProjectVersion {
   updatedAt     DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
   project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  orders  Order[]
 
   @@unique([projectId, version])
   @@index([projectId, approvalState])
@@ -457,4 +471,31 @@ model ProjectAsset {
 
   @@index([projectId])
   @@map("project_assets")
+}
+
+// A submitted production order (Goal 3a PR5). Created when the customer clicks
+// "Submit for production": the working canvas version is frozen to `submitted`
+// and this row pins that frozen version + the delivery/contact details. No
+// payment in the MVP. `ownerShopId` is the routing shop the dashboard (Goal 3b)
+// reads; copied from the project at submit time.
+model Order {
+  id               String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId        String      @map("project_id") @db.Uuid
+  projectVersionId String      @map("project_version_id") @db.Uuid
+  ownerUserId      String      @map("owner_user_id") @db.Uuid
+  ownerShopId      String?     @map("owner_shop_id") @db.Uuid
+  status           OrderStatus @default(submitted)
+  contactName      String      @map("contact_name")
+  contactEmail     String      @map("contact_email")
+  contactPhone     String?     @map("contact_phone")
+  deliveryNotes    String?     @map("delivery_notes")
+  createdAt        DateTime    @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime    @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  project        Project        @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectVersion ProjectVersion @relation(fields: [projectVersionId], references: [id], onDelete: Cascade)
+
+  @@index([ownerUserId])
+  @@index([ownerShopId, status])
+  @@map("orders")
 }
