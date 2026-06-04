@@ -2,6 +2,9 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
+  // Use the automatic JSX runtime (matches Next's transform) so component tests
+  // can render JSX without a manual `import React`. esbuild defaults to classic.
+  esbuild: { jsx: 'automatic' },
   resolve: {
     // Mirror the tsconfig "@/*" path alias so colocated component tests can
     // import (and vi.mock) modules by their app-absolute specifier.
