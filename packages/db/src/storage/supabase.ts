@@ -1,9 +1,11 @@
 // Supabase Storage helper (GH-005 / ADR-0007). Replaces the dev-only local file
 // store in ./vehicle-assets.ts.
 //
-// ⚠️ SERVER-ONLY. Uses the SERVICE ROLE key, which bypasses Storage RLS. Never
-// import this from a client component (the @alphawolf/db barrel is already
-// server-only via Prisma).
+// ⚠️ SERVER-ONLY. Most functions use the SERVICE ROLE key, which bypasses
+// Storage RLS. Exception: templatePublicUrl() is a pure string formatter that
+// works without the service role key — the catalogue render path is resilient
+// to a missing or stale SUPABASE_SERVICE_ROLE_KEY. Never import this module from
+// a client component (the @alphawolf/db barrel is already server-only via Prisma).
 //
 // Two buckets (provisioned by scripts/provision-storage.ts, documented in ADR-0007):
 //   * vehicle-templates — PUBLIC read. Published vehicle outline SVGs + generated
@@ -63,10 +65,40 @@ export function assetKey(projectId: string, assetId: string, filename: string): 
   return `${projectId}/${assetId}/${filename}`;
 }
 
+// Base URL for constructing public Storage object URLs. Reads SUPABASE_URL (or
+// the client-equivalent NEXT_PUBLIC_SUPABASE_URL as a fallback — both point at
+// the same project, the latter is inlined at build time). Pure read; no client
+// instantiation. Keeps catalogue render alive when the service-role key is
+// stale or missing — only writes/signed-URL flows need the service role.
+function getStorageBaseUrl(): string {
+  const url = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!url) {
+    throw new Error(
+      '[db/storage] missing required env var: SUPABASE_URL (or NEXT_PUBLIC_SUPABASE_URL)',
+    );
+  }
+  return url.replace(/\/+$/, '');
+}
+
 // Public URL for a vehicle-templates object (bucket is public-read).
+//
+// Pure string formatter — does NOT instantiate the service-role client. The
+// catalogue render path (e.g. `/vehicles/[id]` rendering
+// `<img src={templatePublicUrl(svg_storage_key)}>`) therefore stays alive when
+// SUPABASE_SERVICE_ROLE_KEY is missing, empty, or rotated. Defence in depth: a
+// stale service-role key only breaks writes/signing, not the public catalogue.
+//
+// Prior implementation called `getServiceClient().storage.from(…).getPublicUrl(…)`,
+// which threw on missing service-role key even though that key is not needed to
+// format a public URL — see activities.md 2026-06-04 entry for the production
+// incident this refactor closes.
 export function templatePublicUrl(key: string): string {
-  const { data } = getServiceClient().storage.from(VEHICLE_TEMPLATES_BUCKET).getPublicUrl(key);
-  return data.publicUrl;
+  // Path-segment encode: encodeURIComponent per segment preserves `/` separators
+  // while escaping reserved URL chars like `?` and `#` that encodeURI leaves raw.
+  // Current keys are `${vehicleId}/<fixed-filename>` from UUIDs (safe), but
+  // hardens against future arbitrary keys.
+  const safeKey = key.split('/').map(encodeURIComponent).join('/');
+  return `${getStorageBaseUrl()}/storage/v1/object/public/${VEHICLE_TEMPLATES_BUCKET}/${safeKey}`;
 }
 
 // Server-side upload into the public vehicle-templates bucket. `upsert` so
