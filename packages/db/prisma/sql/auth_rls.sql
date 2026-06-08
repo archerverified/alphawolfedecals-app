@@ -408,9 +408,16 @@ create policy project_assets_owner_all on project_assets
 
 -- orders ---------------------------------------------------------------------
 -- Production orders (Goal 3a PR5). The customer owns their own orders (owner_user_id
--- = session user) for the full lifecycle. A second SELECT policy lets members of the
--- routing shop read orders routed to that shop — the read side of the shop dashboard
--- (Goal 3b); status transitions there will add their own UPDATE policy.
+-- = session user) for the full lifecycle (orders_owner_all, FOR ALL). Two further
+-- policies serve the shop dashboard (Goal 3b):
+--   * orders_shop_read   (PR1) — a member of the routing shop may READ the order.
+--   * orders_shop_update (PR3) — a member of the routing shop may UPDATE it
+--                                (the status-transition workflow).
+--
+-- RLS permissive policies are OR'd per command, so these add shop access WITHOUT
+-- weakening orders_owner_all: an UPDATE is allowed iff the session user owns the
+-- row OR is a member of its routing shop. A user who is neither sees nothing and
+-- can write nothing.
 alter table orders enable row level security;
 alter table orders force row level security;
 
@@ -424,6 +431,32 @@ drop policy if exists orders_shop_read on orders;
 create policy orders_shop_read on orders
   for select
   using (
+    owner_shop_id is not null
+    and exists (
+      select 1 from memberships m
+      where m.shop_id = orders.owner_shop_id
+        and m.user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
+    )
+  );
+
+-- Shop members transition the status of orders routed to their shop. USING gates
+-- which EXISTING rows are updatable (only the caller's shop's orders — a cross-shop
+-- UPDATE matches zero rows). WITH CHECK gates the POST-update row, so a member
+-- cannot re-route an order to a shop they don't belong to. owner_shop_id is never
+-- changed by the app's transition path (status only); the WITH CHECK is
+-- defence-in-depth against a hand-crafted UPDATE on the app_user connection.
+drop policy if exists orders_shop_update on orders;
+create policy orders_shop_update on orders
+  for update
+  using (
+    owner_shop_id is not null
+    and exists (
+      select 1 from memberships m
+      where m.shop_id = orders.owner_shop_id
+        and m.user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
+    )
+  )
+  with check (
     owner_shop_id is not null
     and exists (
       select 1 from memberships m
