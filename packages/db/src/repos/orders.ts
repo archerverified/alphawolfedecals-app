@@ -189,3 +189,82 @@ export function listShopOrders(userId: string, shopIds: string[]): Promise<ShopO
     return rows.map((r) => ({ ...r, ownerShopId: r.ownerShopId as string }));
   });
 }
+
+// Single order routed to one of the caller's shops (Goal 3b PR2). RLS
+// (orders_shop_read) already scopes the SELECT; the explicit ownerShopId ∈
+// shopIds check is defence-in-depth so the order can only be reached through
+// the shop path, never the owner path.
+export function getShopOrder(
+  userId: string,
+  orderId: string,
+  shopIds: string[],
+): Promise<OrderRow | null> {
+  if (shopIds.length === 0) return Promise.resolve(null);
+  return withUser(userId, async (db) => {
+    const order = await db.order.findUnique({ where: { id: orderId }, select: ORDER_SELECT });
+    if (!order || order.ownerShopId === null || !shopIds.includes(order.ownerShopId)) {
+      return null;
+    }
+    return order;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Order lifecycle state machine (Goal 3b PR2). Single source of truth for which
+// status transitions are legal; the shop dashboard's transition action enforces
+// it, and the UI's button map is kept in sync by a consistency test.
+//
+//   submitted ─▶ in_production ─▶ fulfilled        (forward production path)
+//       └──────▶ cancelled                          (only an un-started order
+//                                                     can be cancelled)
+//
+// fulfilled and cancelled are terminal.
+// ---------------------------------------------------------------------------
+export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
+  submitted: ['in_production', 'cancelled'],
+  in_production: ['fulfilled'],
+  fulfilled: [],
+  cancelled: [],
+};
+
+export function canTransitionOrder(from: OrderStatus, to: OrderStatus): boolean {
+  return ORDER_TRANSITIONS[from].includes(to);
+}
+
+export type TransitionResult =
+  | { ok: true; status: OrderStatus }
+  | { ok: false; reason: 'not_found' | 'invalid_transition' | 'conflict' };
+
+// Transition a shop order to `to`. Authorisation is layered:
+//   1. ownerShopId ∈ shopIds (the row belongs to one of the caller's shops),
+//   2. canTransitionOrder(current, to) (the move is legal),
+//   3. the UPDATE itself runs under RLS — the orders_shop_update policy (PR3) is
+//      what actually permits a shop member to write. Until that policy is live
+//      the UPDATE matches zero rows and this returns `conflict` rather than
+//      throwing, so PR2 can ship ahead of the policy without a 500.
+// The `status: current` guard on updateMany doubles as optimistic concurrency:
+// a status changed by someone else between read and write yields `conflict`.
+export function transitionOrderStatus(
+  userId: string,
+  input: { orderId: string; shopIds: string[]; to: OrderStatus },
+): Promise<TransitionResult> {
+  if (input.shopIds.length === 0) return Promise.resolve({ ok: false, reason: 'not_found' });
+  return withUser(userId, async (db) => {
+    const order = await db.order.findUnique({
+      where: { id: input.orderId },
+      select: { id: true, ownerShopId: true, status: true },
+    });
+    if (!order || order.ownerShopId === null || !input.shopIds.includes(order.ownerShopId)) {
+      return { ok: false, reason: 'not_found' };
+    }
+    if (!canTransitionOrder(order.status, input.to)) {
+      return { ok: false, reason: 'invalid_transition' };
+    }
+    const res = await db.order.updateMany({
+      where: { id: input.orderId, ownerShopId: { in: input.shopIds }, status: order.status },
+      data: { status: input.to },
+    });
+    if (res.count === 0) return { ok: false, reason: 'conflict' };
+    return { ok: true, status: input.to };
+  });
+}

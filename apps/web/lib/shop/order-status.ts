@@ -44,3 +44,26 @@ export const ORDER_STATUS_DISPLAY_ORDER: readonly OrderStatus[] = [
   'fulfilled',
   'cancelled',
 ] as const;
+
+export type OrderActionDescriptor = {
+  to: OrderStatus;
+  label: string;
+  variant: 'default' | 'outline';
+};
+
+// Which transitions the detail page surfaces as buttons, with operator-first
+// labels. This map decides PRESENTATION only — the legal-transition graph is
+// server-authoritative (orders.ORDER_TRANSITIONS, enforced in
+// transitionOrderStatus). A consistency unit test asserts the two never drift,
+// so the UI can never offer a move the server would reject (or hide a legal
+// one). Defined here rather than imported from @alphawolf/db so the client
+// bundle never pulls in Prisma.
+export const ORDER_ACTIONS: Record<OrderStatus, readonly OrderActionDescriptor[]> = {
+  submitted: [
+    { to: 'in_production', label: 'Start production', variant: 'default' },
+    { to: 'cancelled', label: 'Cancel order', variant: 'outline' },
+  ],
+  in_production: [{ to: 'fulfilled', label: 'Mark fulfilled', variant: 'default' }],
+  fulfilled: [],
+  cancelled: [],
+};
