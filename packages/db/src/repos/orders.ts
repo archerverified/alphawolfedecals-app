@@ -6,8 +6,14 @@
 // that version and creates the order atomically in one transaction so a reader
 // never sees a submitted order without its frozen version.
 //
-// No payment in the MVP. The shop dashboard (Goal 3b) drives status transitions;
-// email notifications land in Goal 3c.
+// No payment in the MVP. The shop dashboard (Goal 3b) drives status transitions.
+//
+// Order email notifications shipped in Goal 3c: submitForProduction's caller
+// (apps/web lib/actions/order.ts) fires the customer + shop "new order" emails.
+// SEAM for Goal 3b: after a status transition writes in_production / fulfilled,
+// call apps/web lib/notifications/order-emails.ts -> dispatchOrderStatusEmail()
+// to send the customer's "accepted" / "ready for pickup" email (best-effort, it
+// never throws, so it can't block the transition).
 
 import type { OrderStatus, Prisma } from '@prisma/client';
 import { withUser } from '../client.js';

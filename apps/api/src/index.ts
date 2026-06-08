@@ -2,6 +2,7 @@
 import './instrument.js';
 import * as Sentry from '@sentry/node';
 import express from 'express';
+import { startEmailRetryWorker } from './queue/email-worker.js';
 
 const app = express();
 app.use(express.json());
@@ -26,6 +27,13 @@ const port = Number(process.env.PORT ?? 4000);
 if (process.env.NODE_ENV !== 'test') {
   app.listen(port, () => {
     console.log(`[api] listening on :${port}`);
+  });
+
+  // Drain the order-notification retry queue (Goal 3c). No-op without a Redis URL.
+  // Failures here must not crash the API process — log + report to Sentry.
+  startEmailRetryWorker().catch((err: unknown) => {
+    console.error('[email] failed to start retry worker:', err);
+    Sentry.captureException(err);
   });
 }
 
