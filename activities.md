@@ -6,6 +6,57 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-08 — Goal 3c — Email notifications + MVP smoke (PRs #97, #98 open)
+
+**Status:** ✅ Code complete + locally verified — PRs #97/#98 **open, pending CodeRabbit + CI + merge**.
+**Duration:** ~1 session, single Claude Code run.
+**PRs opened:** #97 (feat/order-notifications), #98 (feat/mvp-smoke-spec, stacked on #97).
+
+**Scope note.** The spec assumes Goals 3a **and 3b** are merged before 3c. Only 3a is
+on `main` — 3b is open but unmerged (#94–#96). Per Archer's call, built
+**self-contained 3c + a Goal 3b seam**: the customer-side emails ship now; the
+shop-side ones are ready-to-call, unit-tested dispatch functions 3b wires in one line.
+
+**Key shipped.**
+
+- **PR #97 — notification layer.** New pure `@alphawolf/notifications` package: 4
+  PII-safe templates (`order_submitted`, `order_received`, `order_in_production`,
+  `order_fulfilled`) + a **non-throwing** dispatch (a flaky Resend must never block a
+  status transition). Templates track the `OrderStatus` enum (`submitted,
+in_production, fulfilled, cancelled`) — accepted→`in_production`,
+  completed→`fulfilled`. apps/web wiring **reuses `@alphawolf/auth`'s single Resend
+  client** (no second instance), server-side PostHog via the HTTP capture endpoint
+  (`email_sent`/`email_delivery_failed`, no `posthog-node` dep), and a BullMQ retry
+  producer (mirrors `@alphawolf/parse`). The submit-for-production action now
+  dispatches customer + shop emails (replaced the `TODO(Goal 3c)`). apps/api gains an
+  email retry worker that drains the queue and re-sends.
+- **PR #98 — canonical MVP smoke.** `apps/web/e2e/mvp-flow.spec.ts` drives the
+  customer loop (signin → browse → editor → upload → place → color → save → reload →
+  submit → order-confirmed); the shop accept→complete loop is gated behind
+  `SMOKE_INCLUDE_SHOP` until 3b lands. `.github/workflows/smoke.yml` runs it on every
+  Vercel `deployment_status`. **Auth-gate decision: Option (a) pre-seeded accounts +
+  password login** (no prod OTP backdoor; rejected the header-gated OTP and Resend-
+  webhook options). Dispatch sequence + smoke path diagrammed at
+  [`docs/vault/diagrams/goal-3c-notifications.md`](docs/vault/diagrams/goal-3c-notifications.md);
+  session note at
+  [`docs/vault/sessions/2026-06-08-goal-3c-notifications.md`](docs/vault/sessions/2026-06-08-goal-3c-notifications.md).
+
+**Surprises / lessons.** Goal 3b wasn't merged (the spec's stated prereq), so the
+accepted/completed emails + the full smoke loop have no call site on `main` — handled
+with a documented seam rather than absorbing 3b (which is a parallel worktree, #94–#96).
+The `OrderStatus` enum from 3a (`in_production`/`fulfilled`) doesn't match the spec's
+prose ("accepted"/"completed"); the enum won. Fresh worktree needs `prisma generate`
+before apps/web vitest resolves `@alphawolf/db` (CI does this).
+
+**Followups created.**
+
+- Merge order: #97 → retarget #98 to `main` → #98. Then wire the seam call in Goal
+  3b's status-transition action (`dispatchOrderStatusEmail`).
+- Operational (live verification): verify Resend domain (GH-016 / manual-steps 5) for
+  real 4-template delivery; add `SMOKE_CUSTOMER_EMAIL/PASSWORD` (+ shop) repo secrets;
+  set apps/api `RESEND_API_KEY` so the retry worker can send; confirm PostHog
+  `email_sent` fires on prod.
+
 ## 2026-06-04 — Goal 3a — Design canvas MVP closeout (PRs #90, #91, #92 merged to main)
 
 **Summary.** Goal 3a delivered the customer design canvas end-to-end. Audit-first
