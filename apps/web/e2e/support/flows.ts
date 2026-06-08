@@ -44,10 +44,17 @@ export async function makeAdmin(request: APIRequestContext, email: string): Prom
   expect(res.ok()).toBeTruthy();
 }
 
-export async function signIn(page: Page, email: string, next: string): Promise<void> {
+// password defaults to the shared E2E password (fresh dev signups); pass an
+// explicit one for pre-seeded production test accounts (mvp-flow smoke).
+export async function signIn(
+  page: Page,
+  email: string,
+  next: string,
+  password: string = PASSWORD,
+): Promise<void> {
   await page.goto(`/signin?next=${encodeURIComponent(next)}`);
   await page.locator('input[name="email"]').fill(email);
-  await page.locator('input[name="password"]').fill(PASSWORD);
+  await page.locator('input[name="password"]').fill(password);
   await page.getByRole('button', { name: /^sign in$/i }).click();
   await page.waitForURL(next);
 }
