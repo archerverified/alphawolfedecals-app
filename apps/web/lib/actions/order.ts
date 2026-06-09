@@ -10,6 +10,7 @@
 
 import { orders } from '@alphawolf/db';
 import { requireUser } from '../admin/guard';
+import { dispatchOrderSubmittedEmails } from '../notifications/order-emails';
 
 export type SubmitForProductionResult =
   | { ok: true; orderId: string }
@@ -42,8 +43,24 @@ export async function submitForProductionAction(input: {
     deliveryNotes: (input.deliveryNotes ?? '').trim() || null,
   });
 
-  // TODO(Goal 3c): enqueue an "order submitted" email to the customer + routing
-  // shop. Deferred — notifications are Goal 3c's scope.
   if (!res.ok) return { ok: false, reason: res.reason };
+
+  // Notify the customer ("we received your design") + the shop ("new order").
+  // Awaited so the send flushes before this serverless function can freeze, but
+  // it's best-effort end to end: dispatchOrderSubmittedEmails never throws, and
+  // this try/catch is a final backstop so a notification fault can never undo an
+  // order that was already created (spec: email failure must not block submit).
+  try {
+    await dispatchOrderSubmittedEmails({
+      orderId: res.orderId,
+      ownerUserId: user.id,
+      projectId: input.projectId,
+      customerEmail: contactEmail,
+      customerName: contactName,
+    });
+  } catch {
+    // swallowed — already reported inside dispatchOrderSubmittedEmails
+  }
+
   return { ok: true, orderId: res.orderId };
 }

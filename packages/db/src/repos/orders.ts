@@ -6,8 +6,14 @@
 // that version and creates the order atomically in one transaction so a reader
 // never sees a submitted order without its frozen version.
 //
-// No payment in the MVP. The shop dashboard (Goal 3b) drives status transitions;
-// email notifications land in Goal 3c.
+// No payment in the MVP. The shop dashboard (Goal 3b) drives status transitions.
+//
+// Order email notifications shipped in Goal 3c: submitForProduction's caller
+// (apps/web lib/actions/order.ts) fires the customer + shop "new order" emails.
+// SEAM for Goal 3b: after a status transition writes in_production / fulfilled,
+// call apps/web lib/notifications/order-emails.ts -> dispatchOrderStatusEmail()
+// to send the customer's "accepted" / "ready for pickup" email (best-effort, it
+// never throws, so it can't block the transition).
 
 import type { OrderStatus, Prisma } from '@prisma/client';
 import { withUser } from '../client.js';
@@ -130,5 +136,135 @@ export function listOrders(userId: string, projectId: string): Promise<OrderRow[
       select: ORDER_SELECT,
       orderBy: { createdAt: 'desc' },
     });
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Shop dashboard read path (Goal 3b PR1).
+//
+// A shop member reads orders routed to their shop through the orders_shop_read
+// SELECT policy. Crucially this path is ORDER-CENTRIC: the related project /
+// project_versions rows are owned by the CUSTOMER (projects_owner_all), so they
+// are invisible to a shop member on the withUser connection — we deliberately
+// never `include` them here. Everything the queue needs (contact, status,
+// delivery notes, timestamps) lives on the order row itself.
+//
+// The explicit ownerShopId filter is defence-in-depth on top of RLS: it keeps a
+// multi-shop member's list deterministic and makes the query intent legible
+// without relying solely on the policy (mirrors the published-only filter on
+// the vehicle browse path).
+// ---------------------------------------------------------------------------
+
+export type ShopOrderRow = {
+  id: string;
+  ownerShopId: string;
+  status: OrderStatus;
+  contactName: string;
+  contactEmail: string;
+  createdAt: Date;
+};
+
+const SHOP_ORDER_SELECT = {
+  id: true,
+  ownerShopId: true,
+  status: true,
+  contactName: true,
+  contactEmail: true,
+  createdAt: true,
+} satisfies Prisma.OrderSelect;
+
+// Orders routed to any shop the caller belongs to, newest first. `shopIds` are
+// the caller's membership shop ids (resolved by the route guard). RLS still
+// enforces the boundary; passing an empty list short-circuits before opening a
+// transaction.
+export function listShopOrders(userId: string, shopIds: string[]): Promise<ShopOrderRow[]> {
+  if (shopIds.length === 0) return Promise.resolve([]);
+  return withUser(userId, async (db) => {
+    const rows = await db.order.findMany({
+      where: { ownerShopId: { in: shopIds } },
+      select: SHOP_ORDER_SELECT,
+      orderBy: { createdAt: 'desc' },
+    });
+    // ownerShopId is non-null by the `in` filter; narrow the Prisma type.
+    return rows.map((r) => ({ ...r, ownerShopId: r.ownerShopId as string }));
+  });
+}
+
+// Single order routed to one of the caller's shops (Goal 3b PR2). RLS
+// (orders_shop_read) already scopes the SELECT; the explicit ownerShopId ∈
+// shopIds check is defence-in-depth so the order can only be reached through
+// the shop path, never the owner path.
+export function getShopOrder(
+  userId: string,
+  orderId: string,
+  shopIds: string[],
+): Promise<OrderRow | null> {
+  if (shopIds.length === 0) return Promise.resolve(null);
+  return withUser(userId, async (db) => {
+    const order = await db.order.findUnique({ where: { id: orderId }, select: ORDER_SELECT });
+    if (!order || order.ownerShopId === null || !shopIds.includes(order.ownerShopId)) {
+      return null;
+    }
+    return order;
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Order lifecycle state machine (Goal 3b PR2). Single source of truth for which
+// status transitions are legal; the shop dashboard's transition action enforces
+// it, and the UI's button map is kept in sync by a consistency test.
+//
+//   submitted ─▶ in_production ─▶ fulfilled        (forward production path)
+//       └──────▶ cancelled                          (only an un-started order
+//                                                     can be cancelled)
+//
+// fulfilled and cancelled are terminal.
+// ---------------------------------------------------------------------------
+export const ORDER_TRANSITIONS: Record<OrderStatus, readonly OrderStatus[]> = {
+  submitted: ['in_production', 'cancelled'],
+  in_production: ['fulfilled'],
+  fulfilled: [],
+  cancelled: [],
+};
+
+export function canTransitionOrder(from: OrderStatus, to: OrderStatus): boolean {
+  return ORDER_TRANSITIONS[from].includes(to);
+}
+
+export type TransitionResult =
+  | { ok: true; status: OrderStatus }
+  | { ok: false; reason: 'not_found' | 'invalid_transition' | 'conflict' };
+
+// Transition a shop order to `to`. Authorisation is layered:
+//   1. ownerShopId ∈ shopIds (the row belongs to one of the caller's shops),
+//   2. canTransitionOrder(current, to) (the move is legal),
+//   3. the UPDATE itself runs under RLS — the orders_shop_update policy (PR3) is
+//      what actually permits a shop member to write. Until that policy is live
+//      the UPDATE matches zero rows and this returns `conflict` rather than
+//      throwing, so PR2 can ship ahead of the policy without a 500.
+// The `status: current` guard on updateMany doubles as optimistic concurrency:
+// a status changed by someone else between read and write yields `conflict`.
+export function transitionOrderStatus(
+  userId: string,
+  input: { orderId: string; shopIds: string[]; to: OrderStatus },
+): Promise<TransitionResult> {
+  if (input.shopIds.length === 0) return Promise.resolve({ ok: false, reason: 'not_found' });
+  return withUser(userId, async (db) => {
+    const order = await db.order.findUnique({
+      where: { id: input.orderId },
+      select: { id: true, ownerShopId: true, status: true },
+    });
+    if (!order || order.ownerShopId === null || !input.shopIds.includes(order.ownerShopId)) {
+      return { ok: false, reason: 'not_found' };
+    }
+    if (!canTransitionOrder(order.status, input.to)) {
+      return { ok: false, reason: 'invalid_transition' };
+    }
+    const res = await db.order.updateMany({
+      where: { id: input.orderId, ownerShopId: { in: input.shopIds }, status: order.status },
+      data: { status: input.to },
+    });
+    if (res.count === 0) return { ok: false, reason: 'conflict' };
+    return { ok: true, status: input.to };
   });
 }

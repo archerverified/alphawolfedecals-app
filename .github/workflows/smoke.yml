@@ -1,0 +1,72 @@
+name: MVP smoke
+
+# Runs the canonical MVP smoke (apps/web/e2e/mvp-flow.spec.ts) against every
+# Vercel deployment — preview deploys on PRs to main, and production on push.
+# Vercel posts a `deployment_status` when a deploy finishes; we run the spec
+# against its URL. GitHub runs deployment_status workflows from the DEFAULT
+# branch, so this file only takes effect once merged to main.
+#
+# To exercise the auth-gated flow against a deployed (NODE_ENV=production) target,
+# set these repo secrets to a pre-seeded, already-verified throwaway account
+# (see the Goal 3c PR2 body / auth-gate decision):
+#   SMOKE_CUSTOMER_EMAIL, SMOKE_CUSTOMER_PASSWORD
+#   SMOKE_SHOP_EMAIL, SMOKE_SHOP_PASSWORD   (shop loop; also needs SMOKE_INCLUDE_SHOP)
+# Without them the spec green-skips on deployed targets (no prod backdoor).
+
+on: deployment_status
+
+concurrency:
+  group: smoke-${{ github.event.deployment_status.target_url }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    name: MVP flow (Playwright)
+    # Only for a successful deploy that exposed a URL.
+    if: >-
+      github.event.deployment_status.state == 'success' &&
+      github.event.deployment_status.environment_url != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9.12.3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # The Prisma schema lives at a non-default path; generate explicitly so the
+      # @alphawolf/db entry resolves (same as ci.yml).
+      - name: Generate Prisma client
+        run: pnpm --filter @alphawolf/db exec prisma generate
+
+      - name: Install Playwright (chromium)
+        run: pnpm --filter @alphawolf/web exec playwright install --with-deps chromium
+
+      - name: Run MVP smoke against the deployment
+        env:
+          DEPLOY_URL: ${{ github.event.deployment_status.environment_url }}
+          SMOKE_CUSTOMER_EMAIL: ${{ secrets.SMOKE_CUSTOMER_EMAIL }}
+          SMOKE_CUSTOMER_PASSWORD: ${{ secrets.SMOKE_CUSTOMER_PASSWORD }}
+          SMOKE_SHOP_EMAIL: ${{ secrets.SMOKE_SHOP_EMAIL }}
+          SMOKE_SHOP_PASSWORD: ${{ secrets.SMOKE_SHOP_PASSWORD }}
+          SMOKE_INCLUDE_SHOP: ${{ vars.SMOKE_INCLUDE_SHOP }}
+        run: pnpm --filter @alphawolf/web exec playwright test e2e/mvp-flow.spec.ts
+
+      - name: Upload Playwright report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: apps/web/playwright-report/
+          retention-days: 7

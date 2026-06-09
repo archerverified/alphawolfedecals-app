@@ -51,7 +51,13 @@ export type {
   ApprovalState,
   AssetParseStatus,
 } from './repos/projects.js';
-export type { OrderRow, OrderStatus, SubmitResult } from './repos/orders.js';
+export type {
+  OrderRow,
+  ShopOrderRow,
+  OrderStatus,
+  SubmitResult,
+  TransitionResult,
+} from './repos/orders.js';
 export type {
   SvgValidationResult,
   SvgValidationError,
