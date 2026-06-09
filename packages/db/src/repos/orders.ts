@@ -132,3 +132,54 @@ export function listOrders(userId: string, projectId: string): Promise<OrderRow[
     });
   });
 }
+
+// ---------------------------------------------------------------------------
+// Shop dashboard read path (Goal 3b PR1).
+//
+// A shop member reads orders routed to their shop through the orders_shop_read
+// SELECT policy. Crucially this path is ORDER-CENTRIC: the related project /
+// project_versions rows are owned by the CUSTOMER (projects_owner_all), so they
+// are invisible to a shop member on the withUser connection — we deliberately
+// never `include` them here. Everything the queue needs (contact, status,
+// delivery notes, timestamps) lives on the order row itself.
+//
+// The explicit ownerShopId filter is defence-in-depth on top of RLS: it keeps a
+// multi-shop member's list deterministic and makes the query intent legible
+// without relying solely on the policy (mirrors the published-only filter on
+// the vehicle browse path).
+// ---------------------------------------------------------------------------
+
+export type ShopOrderRow = {
+  id: string;
+  ownerShopId: string;
+  status: OrderStatus;
+  contactName: string;
+  contactEmail: string;
+  createdAt: Date;
+};
+
+const SHOP_ORDER_SELECT = {
+  id: true,
+  ownerShopId: true,
+  status: true,
+  contactName: true,
+  contactEmail: true,
+  createdAt: true,
+} satisfies Prisma.OrderSelect;
+
+// Orders routed to any shop the caller belongs to, newest first. `shopIds` are
+// the caller's membership shop ids (resolved by the route guard). RLS still
+// enforces the boundary; passing an empty list short-circuits before opening a
+// transaction.
+export function listShopOrders(userId: string, shopIds: string[]): Promise<ShopOrderRow[]> {
+  if (shopIds.length === 0) return Promise.resolve([]);
+  return withUser(userId, async (db) => {
+    const rows = await db.order.findMany({
+      where: { ownerShopId: { in: shopIds } },
+      select: SHOP_ORDER_SELECT,
+      orderBy: { createdAt: 'desc' },
+    });
+    // ownerShopId is non-null by the `in` filter; narrow the Prisma type.
+    return rows.map((r) => ({ ...r, ownerShopId: r.ownerShopId as string }));
+  });
+}
