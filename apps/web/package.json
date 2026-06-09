@@ -16,6 +16,7 @@
     "@alphawolf/auth": "workspace:*",
     "@alphawolf/canvas": "workspace:*",
     "@alphawolf/db": "workspace:*",
+    "@alphawolf/notifications": "workspace:*",
     "@alphawolf/observability": "workspace:*",
     "@alphawolf/parse": "workspace:^",
     "@alphawolf/ui": "workspace:*",

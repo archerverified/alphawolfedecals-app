@@ -15,6 +15,7 @@
   "dependencies": {
     "@alphawolf/auth": "workspace:*",
     "@alphawolf/db": "workspace:*",
+    "@alphawolf/notifications": "workspace:*",
     "@alphawolf/observability": "workspace:*",
     "@sentry/node": "^10.53.1",
     "@sentry/profiling-node": "^10.53.1",
