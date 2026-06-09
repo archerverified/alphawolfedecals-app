@@ -6,6 +6,83 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-08 — Goal 3b — Shop dashboard + order lifecycle (PRs #94, #95, #96 — stacked, open)
+
+**Summary.** Goal 3b built the **shop side**: a wrap shop sees the orders routed
+to it by Goal 3a's submit-for-production flow and transitions them through
+production, while RLS keeps one shop's orders invisible to another. Audit-first
+finding (the prompt's #1 constraint): the `orders` table, the `order_status`
+enum, and both `orders_owner_all` + `orders_shop_read` policies were **already on
+prod** from Goal 3a — so this session built reads/transitions on top and did
+**not** rebuild the schema or the read policy. Three **stacked** PRs
+(#94 → #95 → #96); the CODEOWNERS-gated RLS change is isolated as the final PR.
+Order lifecycle diagrammed at
+[`docs/vault/diagrams/goal-3b-shop-dashboard.md`](docs/vault/diagrams/goal-3b-shop-dashboard.md).
+
+**Key architectural finding — the dashboard is order-centric.** A shop member can
+read an order via `orders_shop_read`, but the order's `project` / `project_versions`
+rows are owned by the **customer** (`projects_owner_all`) and are therefore
+invisible on the shop member's `withUser` (app_user) connection. So the queue
+deliberately **never joins** the project — it shows only fields that live on the
+order row (contact, status, delivery notes, timestamps). This is both the
+RLS-correct choice and the right MVP scope ("transition them through statuses"),
+and it avoided widening `projects` RLS.
+
+- **PR1 — dashboard route + queue (#94, `feat/shop-dashboard-route`):** `/dashboard`
+  (shop-gated via `requireShopUser`; logged-in customers redirected to `/projects`)
+  - an order-centric list table & status-count summary. `orders.listShopOrders`
+    reads through `orders_shop_read` with an explicit `ownerShopId ∈ shopIds` filter
+    (defence-in-depth). `OrderStatusBadge` + a pure, unit-tested
+    `orderStatusPresentation` mapping. Fires `dashboard_loaded` (count only, PII-free).
+- **PR2 — order detail + transitions (#95, `feat/shop-order-detail`, stacked on #94):**
+  `/dashboard/orders/[orderId]` detail + status-transition Server Action. Order
+  lifecycle state machine (`ORDER_TRANSITIONS` / `canTransitionOrder`) is the
+  single source of truth in the orders repo; `submitted → in_production → fulfilled`,
+  `cancelled` only from `submitted`. `transitionOrderAction` = Next origin check +
+  `requireShopUser` + Sentry auto-instrumentation (same shape as
+  `submitForProductionAction`). Fires `order_viewed` + `order_status_changed`
+  (PII-free). The UI button map (`ORDER_ACTIONS`) is pinned to the server graph by
+  consistency tests in **both** packages so they can't drift.
+- **PR3 — `orders_shop_update` RLS + cross-shop proof (#96, `feat/shop-orders-rls-update`,
+  stacked on #95) — CODEOWNERS-gated:** the UPDATE policy that lets a shop member
+  transition only their shop's orders. `USING` blocks a cross-shop UPDATE (0 rows);
+  `WITH CHECK` blocks re-routing to a non-member shop. OR'd per-command with
+  `orders_owner_all`, so it adds shop access without widening owner access. Idempotent,
+  applied by `db:apply-sql`. `tests/orders-rls.integration.test.ts` proves all of this
+  **under `app_user`** (two shops, one customer order). Read the SQL directly rather
+  than rubber-stamping an automated review, per the playbook.
+
+**Deliberate cross-PR sequencing.** PR2 ships the transition action before PR3's
+UPDATE policy exists. Until the policy is applied the `withUser` UPDATE matches
+zero rows, so `transitionOrderStatus` returns `conflict` (a toast) rather than a
+500 — verified by the defensive `updateMany` count check. End-to-end transitions
+go green once #96 merges and `db:migrate` (→ `db:apply-sql`) runs.
+
+**Verification done this session.** `pnpm turbo run typecheck lint test` green across
+db + web at each PR. New unit tests: status presentation + badge render (web),
+state machine + `canTransitionOrder` (db), transition-action passthrough +
+`ORDER_ACTIONS`↔graph consistency (web). All three branches pushed; PRs opened.
+
+**Honest gaps / human-or-live-env steps (NOT done here):**
+
+1. **PRs are open, not merged.** Merge order is strict: #94 → #95 → #96. Each needs
+   its CodeRabbit pass + the 3 branch-protected CI contexts green first.
+2. **`orders_shop_update` must be applied to prod** via `db:migrate` / `db:apply-sql`
+   — CI only runs `prisma generate`. Until then PR2's transitions return `conflict`.
+3. **Cross-shop RLS proof not executed in this worktree** — no dev DB env (`.env` is
+   gitignored; integration tests are excluded from CI by design). Run
+   `pnpm --filter @alphawolf/db db:apply-sql && pnpm --filter @alphawolf/db test:integration`
+   against the dev DB to go green. (Phrased as "Playwright" in the prompt, but the
+   meaningful "cross-shop UPDATE blocked" proof is the Vitest test under `app_user`,
+   matching the existing `projects-rls` / `vehicles-rls` convention.)
+4. **PostHog prod firing** (`dashboard_loaded` / `order_viewed` / `order_status_changed`)
+   needs a real authenticated shop session on prod — wired + env-gated, but this
+   session can't drive a prod browser to emit them.
+5. **Vercel-preview design-review** (the prompt's per-merge `/design-review`) is a
+   preview/human step once the stack deploys.
+
+---
+
 ## 2026-06-04 — Goal 3a — Design canvas MVP closeout (PRs #90, #91, #92 merged to main)
 
 **Summary.** Goal 3a delivered the customer design canvas end-to-end. Audit-first
