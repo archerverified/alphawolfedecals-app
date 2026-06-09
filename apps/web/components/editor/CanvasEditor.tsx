@@ -274,9 +274,9 @@ export default function CanvasEditor(props: EditorProps) {
     (el: ImageElement) => {
       addElement(el);
       // Analytics: artwork placed onto a panel (best-effort, env-gated no-op).
-      capture('asset_placed', { projectId, assetId: el.assetId });
+      capture('asset_placed', { projectId, vehicleId: vehicle.id, assetId: el.assetId });
     },
-    [addElement, projectId],
+    [addElement, projectId, vehicle.id],
   );
 
   const onSelect = useCallback(
