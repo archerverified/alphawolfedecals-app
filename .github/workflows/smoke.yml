@@ -1,10 +1,20 @@
 name: MVP smoke
 
-# Runs the canonical MVP smoke (apps/web/e2e/mvp-flow.spec.ts) against every
-# Vercel deployment — preview deploys on PRs to main, and production on push.
-# Vercel posts a `deployment_status` when a deploy finishes; we run the spec
-# against its URL. GitHub runs deployment_status workflows from the DEFAULT
-# branch, so this file only takes effect once merged to main.
+# Runs the canonical MVP smoke (apps/web/e2e/mvp-flow.spec.ts) against the
+# Vercel PRODUCTION deployment. Vercel posts a `deployment_status` when a deploy
+# finishes; we run the spec against the public production domain.
+#
+# Gating rationale (2026-06-10, post-Goal-4 verification):
+# - Render (alphawolf-api / alphawolf-parse) ALSO emits deployment_status events;
+#   ungated, this workflow ran Playwright against onrender.com health endpoints
+#   and painted false-red failures. Hence environment == 'Production' + .vercel.app.
+# - Vercel deployment-specific URLs (…-<hash>-….vercel.app) are SSO-protected;
+#   Playwright sees the auth wall, not the app. We therefore target the public
+#   prod domain, not environment_url. To re-enable PREVIEW smoke later, add a
+#   VERCEL_AUTOMATION_BYPASS_SECRET and pass it as the x-vercel-protection-bypass
+#   header — until then previews are intentionally not smoked in CI.
+# GitHub runs deployment_status workflows from the DEFAULT branch, so changes
+# here only take effect once merged to main.
 #
 # To exercise the auth-gated flow against a deployed (NODE_ENV=production) target,
 # set these repo secrets to a pre-seeded, already-verified throwaway account
@@ -22,10 +32,11 @@ concurrency:
 jobs:
   smoke:
     name: MVP flow (Playwright)
-    # Only for a successful deploy that exposed a URL.
+    # Only the successful Vercel PRODUCTION deploy (see gating rationale above).
     if: >-
       github.event.deployment_status.state == 'success' &&
-      github.event.deployment_status.environment_url != ''
+      github.event.deployment_status.environment == 'Production' &&
+      contains(github.event.deployment_status.environment_url, '.vercel.app')
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -55,7 +66,8 @@ jobs:
 
       - name: Run MVP smoke against the deployment
         env:
-          DEPLOY_URL: ${{ github.event.deployment_status.environment_url }}
+          # Public prod domain — NOT environment_url (deployment-specific URLs are SSO-protected).
+          DEPLOY_URL: https://alphawolfedecals-app-web.vercel.app
           SMOKE_CUSTOMER_EMAIL: ${{ secrets.SMOKE_CUSTOMER_EMAIL }}
           SMOKE_CUSTOMER_PASSWORD: ${{ secrets.SMOKE_CUSTOMER_PASSWORD }}
           SMOKE_SHOP_EMAIL: ${{ secrets.SMOKE_SHOP_EMAIL }}
