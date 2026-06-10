@@ -7,6 +7,7 @@
 
 import type { ReactNode } from 'react';
 import { Button } from '@alphawolf/ui/components/ui/button';
+import { ZoneDiagram } from './ZoneDiagram';
 import {
   BRIEF_STYLE_PRESETS,
   MATERIAL_TIERS,
@@ -18,6 +19,8 @@ export interface BriefPanel {
   id: string;
   name: string;
   view: string;
+  /** SVG path of the panel outline (template space). Absent → list-only UI. */
+  outlinePath?: string;
 }
 
 interface StepProps {
@@ -46,7 +49,7 @@ function StepShell({
 const textareaClass =
   'w-full rounded-md border border-zinc-200 p-3 text-sm focus:outline-none focus:ring-2 focus:ring-zinc-400';
 
-// --- Zones (baseline; B2C-003 swaps in the clickable SVG) -------------------
+// --- Zones (B2C-003: clickable panel diagram + accessible checklist) ---------
 
 export function ZonesStep({ data, patch, panels }: StepProps & { panels: BriefPanel[] }) {
   const included = data.zones?.includedPanelIds ?? null; // null = full wrap
@@ -74,32 +77,39 @@ export function ZonesStep({ data, patch, panels }: StepProps & { panels: BriefPa
           rest of your brief still applies to the whole vehicle.
         </p>
       ) : (
-        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-          {panels.map((p) => {
-            const on = isIncluded(p.id);
-            return (
-              <li key={p.id}>
-                <button
-                  type="button"
-                  onClick={() => toggle(p.id)}
-                  aria-pressed={on}
-                  data-testid={`zone-toggle-${p.id}`}
-                  className={
-                    'flex w-full items-center justify-between rounded-md border p-3 text-left text-sm transition-colors ' +
-                    (on
-                      ? 'border-zinc-900 bg-zinc-900 text-white'
-                      : 'border-zinc-200 bg-white text-zinc-500 hover:border-zinc-400')
-                  }
-                >
-                  <span>{p.name}</span>
-                  <span className="text-xs opacity-70">{p.view}</span>
-                </button>
-              </li>
-            );
-          })}
-        </ul>
+        <>
+          {panels.some((p) => p.outlinePath) ? (
+            <div className="mb-4 rounded-md border border-zinc-200 bg-white p-4">
+              <ZoneDiagram panels={panels} includedPanelIds={included} onToggle={toggle} />
+            </div>
+          ) : null}
+          <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {panels.map((p) => {
+              const on = isIncluded(p.id);
+              return (
+                <li key={p.id}>
+                  <button
+                    type="button"
+                    onClick={() => toggle(p.id)}
+                    aria-pressed={on}
+                    data-testid={`zone-toggle-${p.id}`}
+                    className={
+                      'flex w-full items-center justify-between rounded-md border p-3 text-left text-sm transition-colors ' +
+                      (on
+                        ? 'border-zinc-900 bg-zinc-900 text-white'
+                        : 'border-zinc-200 bg-white text-zinc-500 hover:border-zinc-400')
+                    }
+                  >
+                    <span>{p.name}</span>
+                    <span className="text-xs opacity-70">{p.view}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </>
       )}
-      <p className="mt-3 text-xs text-zinc-400">
+      <p className="mt-3 text-xs text-zinc-400" data-testid="zone-summary">
         {included === null
           ? 'Full wrap — every panel included.'
           : `${included.length} of ${panels.length} panels included.`}

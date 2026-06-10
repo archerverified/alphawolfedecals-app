@@ -43,7 +43,12 @@ export default async function BriefPage({ params }: { params: Promise<{ id: stri
         initialData={initialData}
         initialStep={brief.currentStep}
         vehicleLabel={label}
-        panels={vehicle.panels.map((p) => ({ id: p.id, name: p.name, view: p.view }))}
+        panels={vehicle.panels.map((p) => ({
+          id: p.id,
+          name: p.name,
+          view: p.view,
+          outlinePath: p.svgPath,
+        }))}
       />
     </main>
   );
