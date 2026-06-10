@@ -13,6 +13,12 @@ name: MVP smoke
 #   prod domain, not environment_url. To re-enable PREVIEW smoke later, add a
 #   VERCEL_AUTOMATION_BYPASS_SECRET and pass it as the x-vercel-protection-bypass
 #   header — until then previews are intentionally not smoked in CI.
+# - startsWith('Production') (not ==): Vercel renames environments to
+#   'Production – <project>' if a second Vercel project is ever linked to this repo.
+# - If a CUSTOM production domain is ever attached, environment_url may stop
+#   containing '.vercel.app' and this gate will silently skip — update the gate
+#   (or switch to a `github.event.deployment.creator.login == 'vercel[bot]'` check)
+#   when a custom domain lands.
 # GitHub runs deployment_status workflows from the DEFAULT branch, so changes
 # here only take effect once merged to main.
 #
@@ -25,8 +31,10 @@ name: MVP smoke
 
 on: deployment_status
 
+# Static group: all matching runs target the one public prod domain, and
+# overlapping runs would collide on the same seeded SMOKE_* account.
 concurrency:
-  group: smoke-${{ github.event.deployment_status.target_url }}
+  group: smoke-production
   cancel-in-progress: true
 
 jobs:
@@ -35,7 +43,7 @@ jobs:
     # Only the successful Vercel PRODUCTION deploy (see gating rationale above).
     if: >-
       github.event.deployment_status.state == 'success' &&
-      github.event.deployment_status.environment == 'Production' &&
+      startsWith(github.event.deployment_status.environment, 'Production') &&
       contains(github.event.deployment_status.environment_url, '.vercel.app')
     runs-on: ubuntu-latest
     timeout-minutes: 20
