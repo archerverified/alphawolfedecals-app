@@ -565,3 +565,64 @@ drop policy if exists credit_ledger_owner_read on credit_ledger;
 create policy credit_ledger_owner_read on credit_ledger
   for select
   using (user_id = nullif(current_setting('app.current_user_id', true), '')::uuid);
+
+-- design_briefs + brief_snapshots ---------------------------------------------
+-- Guided-design brief (Goal 5 / B2C-002). Customers fully own their brief: the
+-- wizard reads, autosaves, and snapshots it on the withUser connection, so
+-- unlike credit_ledger these tables carry owner WRITE policies. Ownership is
+-- anchored on the parent project (same pattern as project_assets) — a brief for
+-- a project you don't own is invisible and unwritable, and the WITH CHECK stops
+-- re-pointing a brief at someone else's project. owner_user_id is denormalized
+-- for indexing; the project join is the authz truth.
+alter table design_briefs enable row level security;
+alter table design_briefs force row level security;
+
+drop policy if exists design_briefs_owner_all on design_briefs;
+create policy design_briefs_owner_all on design_briefs
+  for all
+  using (
+    exists (
+      select 1 from projects p
+      where p.id = design_briefs.project_id
+        and p.owner_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
+    )
+  )
+  with check (
+    owner_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
+    and exists (
+      select 1 from projects p
+      where p.id = design_briefs.project_id
+        and p.owner_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
+    )
+  );
+
+alter table brief_snapshots enable row level security;
+alter table brief_snapshots force row level security;
+
+-- Snapshots are append-only by design: INSERT + SELECT for the brief owner, no
+-- UPDATE/DELETE policy — a saved brief version can never be silently rewritten.
+drop policy if exists brief_snapshots_owner_read on brief_snapshots;
+create policy brief_snapshots_owner_read on brief_snapshots
+  for select
+  using (
+    exists (
+      select 1 from design_briefs b
+      join projects p on p.id = b.project_id
+      where b.id = brief_snapshots.brief_id
+        and p.owner_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
+    )
+  );
+
+drop policy if exists brief_snapshots_owner_insert on brief_snapshots;
+create policy brief_snapshots_owner_insert on brief_snapshots
+  for insert
+  with check (
+    exists (
+      select 1 from design_briefs b
+      join projects p on p.id = b.project_id
+      where b.id = brief_snapshots.brief_id
+        and p.owner_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
+    )
+  );
+
+revoke update, delete on brief_snapshots from app_user;

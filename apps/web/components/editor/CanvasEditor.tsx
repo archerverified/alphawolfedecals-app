@@ -436,6 +436,13 @@ export default function CanvasEditor(props: EditorProps) {
         <header className="flex h-12 shrink-0 items-center justify-between border-b border-zinc-200 bg-white px-4">
           <div className="flex items-center gap-2">
             <span className="text-sm font-semibold text-zinc-900">{vehicle.label}</span>
+            {/* Guided-brief entry point (Goal 5 / B2C-002). The wizard and the
+                canvas share the project; neither replaces the other. */}
+            <Button asChild size="sm" variant="ghost" className="text-zinc-500">
+              <a href={`/projects/${projectId}/brief`} data-testid="open-brief">
+                Design brief
+              </a>
+            </Button>
           </div>
           <div className="flex items-center gap-2">
             <Tooltip>

@@ -15,6 +15,7 @@ export * as vehicleRequests from './repos/vehicle-template-requests.js';
 export * as projects from './repos/projects.js';
 export * as orders from './repos/orders.js';
 export * as credits from './repos/credits.js';
+export * as briefs from './repos/briefs.js';
 export * as storage from './storage/supabase.js';
 export * as svg from './svg/validate.js';
 
@@ -60,6 +61,7 @@ export type {
   TransitionResult,
 } from './repos/orders.js';
 export type { CreditSource, CreditLedgerRow } from './repos/credits.js';
+export type { BriefRow, BriefSaveResult, BriefSnapshotResult } from './repos/briefs.js';
 export { CREDIT_CONFIG, PLAN_LIMITS } from './credit-config.js';
 export type { PlanName } from './credit-config.js';
 export type {
