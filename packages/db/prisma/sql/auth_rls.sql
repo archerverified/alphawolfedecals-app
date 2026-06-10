@@ -243,6 +243,36 @@ create trigger users_account_type_permanent
   for each row
   execute function users_block_account_type_change();
 
+-- plan (Goal 5 / B2C-001) is system-managed: users_self_update is column-blind,
+-- so without this guard a hand-crafted UPDATE on the withUser connection could
+-- self-escalate plan the day a paid value joins the user_plan enum. Today the
+-- enum has one value (inert), but the guard ships WITH the column so the
+-- invariant never depends on "the enum happens to be single-valued". Unlike
+-- account_type (permanent for everyone), plan changes ARE allowed for the
+-- system role: app.current_user_id is set only on withUser sessions, so an
+-- unset/empty GUC means a trusted system write (Stripe webhook in Phase 2).
+-- search_path pinned: keeps name resolution out of caller control (and keeps
+-- the Supabase function_search_path_mutable advisor quiet).
+create or replace function users_block_plan_change() returns trigger
+  language plpgsql
+  set search_path = public, pg_temp
+  as $$
+  begin
+    if new.plan is distinct from old.plan
+       and nullif(current_setting('app.current_user_id', true), '') is not null then
+      raise exception 'plan is system-managed and cannot be changed by the user'
+        using errcode = 'check_violation';
+    end if;
+    return new;
+  end;
+  $$;
+
+drop trigger if exists users_plan_system_managed on users;
+create trigger users_plan_system_managed
+  before update on users
+  for each row
+  execute function users_block_plan_change();
+
 -- ----------------------------------------------------------------------------
 -- Vehicle template library RLS (GH-003 / GH-004 / GH-017). See ADR-0005.
 --
@@ -526,6 +556,9 @@ create policy orders_shop_update on orders
 alter table credit_ledger enable row level security;
 alter table credit_ledger force row level security;
 
+-- ORDER MATTERS: this revoke must stay BELOW the blanket table grant at the top
+-- of the file -- each idempotent re-run re-grants there, then strips here. (RLS
+-- alone already blocks writes; the revoke is defense-in-depth.)
 revoke insert, update, delete on credit_ledger from app_user;
 
 drop policy if exists credit_ledger_owner_read on credit_ledger;

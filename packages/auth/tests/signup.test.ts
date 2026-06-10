@@ -28,6 +28,7 @@ const users = new Map<string, StoredUser>();
 const otps = new Map<string, StoredOtp>();
 const events: Array<{ userId: string | null; eventType: string }> = [];
 const shops: Array<{ id: string; ownerUserId: string }> = [];
+const grantedUserIds = new Set<string>();
 
 let uidCounter = 0;
 const uid = () => `id-${++uidCounter}`;
@@ -142,6 +143,14 @@ vi.mock('@alphawolf/db', () => ({
       events.push({ userId: input.userId ?? null, eventType: input.eventType });
     },
   },
+  credits: {
+    // Mirrors grantSignupCredits' idempotency: first call grants, retries no-op.
+    async grantSignupCredits(userId: string) {
+      if (grantedUserIds.has(userId)) return 0;
+      grantedUserIds.add(userId);
+      return 5;
+    },
+  },
 }));
 
 // Use console transport so Resend is never called from these tests.
@@ -150,6 +159,7 @@ beforeEach(() => {
   otps.clear();
   events.length = 0;
   shops.length = 0;
+  grantedUserIds.clear();
   uidCounter = 0;
   process.env.NODE_ENV = 'development';
   process.env.AUTH_EMAIL_TRANSPORT = 'console';
@@ -250,6 +260,7 @@ describe('verifySignupOtp', () => {
     expect(verify.ok).toBe(true);
     if (!verify.ok) return;
     expect(verify.accountType).toBe('customer');
+    expect(verify.creditsGranted).toBe(5);
     expect(users.get(signup.userId)?.status).toBe('active');
   });
 
@@ -264,6 +275,7 @@ describe('verifySignupOtp', () => {
     if (!verify.ok) return;
     expect(verify.accountType).toBe('shop_user');
     expect(verify.shopId).toBeDefined();
+    expect(verify.creditsGranted).toBe(5);
     expect(shops).toHaveLength(1);
   });
 
