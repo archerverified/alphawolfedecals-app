@@ -5,6 +5,7 @@
 - **Deciders**: Archer, Claude (deploy session)
 - **Related stories**: PR #73 (initial Phase 1 deploy), PR #75 (audit), commits `e2459f0..1339c0e`
 - **Supersedes**: n/a (augments ADR-0012)
+- **Amended by**: ADR-0014 (2026-06-10 — MVP-build locked invariants + review-stack swap)
 
 ## Context
 
@@ -77,17 +78,20 @@ Without this, `prisma generate` only produces the build-machine's binary. The ru
 ## Consequences
 
 **Positive**
+
 - Both `apps/web` (Vercel) and the three backend services (Render) deploy from the same monorepo source with no host-specific tooling. One `pnpm install` + one `pnpm turbo run build` works everywhere.
 - Workspace package source can be edited in `.ts` and consumed both as raw Node (Render runtime) and webpack-bundled (Vercel runtime) without per-consumer branching.
 - New transitive externals follow a known recipe — add as direct dep of `apps/web`, no Vercel UI configuration needed.
 
 **Negative**
+
 - `apps/web/package.json` lists ~9 dependencies the app doesn't import directly. This is acknowledged debt. CodeRabbit flagged it as P1 on PR #75; the trade-off was accepted because the alternative (nft includes) demonstrably did not work after 3 attempts.
 - Version skew risk: if a workspace package upgrades svgo to 4.x but `apps/web` still pins ^3.3.3, pnpm resolves one version per use-site and the runtime gets whatever the hoist arm points at. Mitigate by keeping the version ranges in sync across workspace + `apps/web`.
 - Coupling to webpack's resolution behavior via `extensionAlias`. Documented in Invariant 2 — search for `extensionAlias` if Next.js bundler changes.
 - Prisma CLI lives in `packages/db` dependencies (not devDependencies), adding ~5 MB to production node_modules so the `postinstall: prisma generate` hook works on Render's `NODE_ENV=production` install. CodeRabbit and Greptile both flagged this; alternative (moving back to devDeps + explicit Render `prisma generate` step) was deferred because the postinstall path is currently load-bearing across four deploy targets.
 
 **Follow-ups**
+
 - BullMQ queue-age + backlog monitoring on `services/parse` (CodeRabbit nit). Tied to ADR-0012's free-tier sleep behavior; revisit when migrating off free tier (Phase 4).
 - Open a tracking issue for the hoist-vs-nft-includes trade-off — if a future Vercel/nft release fixes the trace-through-symlinks-with-dynamic-require gap, the hoist list can shrink.
 - When upgrading Prisma, bump `binaryTargets` if the openssl version on Vercel or Render changes (currently both on OpenSSL 3 — covered).
