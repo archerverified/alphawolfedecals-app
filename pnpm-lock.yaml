@@ -11,6 +11,12 @@ importers:
 
   .:
     devDependencies:
+      '@alphawolf/auth':
+        specifier: workspace:*
+        version: link:packages/auth
+      '@alphawolf/db':
+        specifier: workspace:*
+        version: link:packages/db
       '@commitlint/cli':
         specifier: ^19.5.0
         version: 19.8.1(@types/node@22.19.19)(typescript@5.9.3)
