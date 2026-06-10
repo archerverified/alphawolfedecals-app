@@ -38,6 +38,27 @@ enum MembershipRole {
   shop_designer
 }
 
+// B2C plan attribution (Goal 5 / B2C-001). Separate from account_type (which is
+// permanent): plan is mutable and only meaningful for customers. Values beyond
+// `free` arrive with paid tiers; launch numbers (slots, caps, grant sizes) live
+// in src/credit-config.ts, not in the schema.
+enum UserPlan {
+  free
+
+  @@map("user_plan")
+}
+
+// Where a credit_ledger row came from. `purchase` is reserved for the Phase 2
+// Stripe credit-pack checkout; the enum ships purchase-ready per the PRD.
+enum CreditSource {
+  grant
+  purchase
+  referral
+  admin
+
+  @@map("credit_source")
+}
+
 enum AuthEventType {
   signup
   login
@@ -69,6 +90,9 @@ model User {
   // vehicle-template CRUD routes and is the subject the vehicle RLS policies
   // check via app_is_admin(). See ADR-0005.
   isAdmin            Boolean       @default(false) @map("is_admin")
+  // B2C plan attribution (B2C-001). Defaults to free at signup; gates live in
+  // credit-config.ts and are enforced server-side (B2C-011).
+  plan               UserPlan      @default(free)
   status             AccountStatus @default(pending_verification)
   failedLoginCount   Int           @default(0) @map("failed_login_count")
   lockedUntil        DateTime?     @map("locked_until")
@@ -81,6 +105,7 @@ model User {
   authEvents       AuthEvent[]
   verifiedVehicles Vehicle[]                @relation("VehicleVerifiedBy")
   templateRequests VehicleTemplateRequest[]
+  creditLedger     CreditLedger[]
 
   @@index([accountType])
   @@index([status])
@@ -498,4 +523,27 @@ model Order {
   @@index([ownerUserId])
   @@index([ownerShopId, status])
   @@map("orders")
+}
+
+// Append-only credit ledger (Goal 5 / B2C-001). The balance is the SUM(delta)
+// of a user's rows — there is no mutable balance column to race on. Writes
+// happen ONLY on the system connection (signup grant today; Stripe webhook
+// `purchase` rows in Phase 2): RLS gives app_user SELECT-only, so a hand-crafted
+// INSERT on the withUser connection cannot mint credits. The partial unique
+// index credit_ledger_signup_grant_once (raw SQL in the migration — Prisma can't
+// express partial indexes) makes the signup grant idempotent.
+model CreditLedger {
+  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId    String       @map("user_id") @db.Uuid
+  // Positive = credit (grant/purchase), negative = spend (Phase 2 generation runs).
+  delta     Int
+  source    CreditSource
+  // Structured discriminator within a source, e.g. grant/'signup', grant/'monthly_drip'.
+  reason    String?
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+  @@map("credit_ledger")
 }
