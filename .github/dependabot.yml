@@ -1,0 +1,33 @@
+# Dependabot — keeps the dependency CVE surface from rotting silently between
+# audits (closes production-readiness #25 / security-audit dependency-hygiene row).
+# pnpm monorepo: a single root manifest covers all workspaces.
+version: 2
+updates:
+  - package-ecosystem: 'npm'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    open-pull-requests-limit: 10
+    groups:
+      # Batch low-risk patch/minor bumps into one PR to cut review noise.
+      minor-and-patch:
+        update-types:
+          - 'minor'
+          - 'patch'
+    commit-message:
+      prefix: 'chore(deps)'
+      prefix-development: 'chore(deps-dev)'
+    labels:
+      - 'dependencies'
+
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+    commit-message:
+      prefix: 'chore(ci)'
+    labels:
+      - 'dependencies'
+      - 'ci'
