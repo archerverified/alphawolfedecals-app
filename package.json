@@ -27,6 +27,8 @@
     "render:build:parse": "pnpm turbo run build --filter=@alphawolf/parse"
   },
   "devDependencies": {
+    "@alphawolf/auth": "workspace:*",
+    "@alphawolf/db": "workspace:*",
     "@commitlint/cli": "^19.5.0",
     "@commitlint/config-conventional": "^19.5.0",
     "@types/node": "^22.9.0",
