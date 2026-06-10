@@ -70,10 +70,13 @@ function computeLayout(panels: BriefPanel[]): Layout {
     for (const p of vp) {
       placed.push({ panel: p, transform: `translate(${offsetX}, ${offsetY})` });
     }
-    viewLabels.push({ view, x: cursorX + w / 2, y: h + 260 });
+    viewLabels.push({ view, x: cursorX + w / 2, y: 0 });
     cursorX += w + VIEW_GUTTER;
     if (h > maxH) maxH = h;
   }
+  // Second pass: one shared label baseline below the TALLEST view — per-view
+  // heights vary (top vs side views) and per-view baselines render ragged.
+  for (const l of viewLabels) l.y = maxH + 260;
   return {
     placed,
     viewLabels,
@@ -116,7 +119,6 @@ export function ZoneDiagram({ panels, includedPanelIds, onToggle }: ZoneDiagramP
             role="button"
             tabIndex={0}
             aria-pressed={on}
-            aria-label={`${panel.name} — ${on ? 'included' : 'excluded'}`}
             data-testid={`zone-path-${panel.id}`}
             onClick={() => onToggle(panel.id)}
             onKeyDown={(e) => {
@@ -125,11 +127,16 @@ export function ZoneDiagram({ panels, includedPanelIds, onToggle }: ZoneDiagramP
                 onToggle(panel.id);
               }
             }}
-            className="cursor-pointer transition-[fill-opacity] focus:outline-none"
+            // Keyboard users need a visible focus ring (WCAG 2.4.7); the
+            // <title> doubles as hover tooltip and accessible name.
+            className="cursor-pointer transition-[fill-opacity] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
             fill={on ? '#18181b' : '#e4e4e7'}
             fillOpacity={on ? 0.85 : 0.6}
             stroke={on ? '#18181b' : '#a1a1aa'}
-            strokeWidth={8}
+            strokeWidth={1.5}
+            // viewBox scaling would shrink a doc-unit stroke to sub-pixel —
+            // keep panel borders readable at any rendered size.
+            vectorEffect="non-scaling-stroke"
           >
             <title>{`${panel.name} (${panel.view}) — tap to ${on ? 'exclude' : 'include'}`}</title>
           </path>
