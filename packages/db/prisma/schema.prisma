@@ -449,6 +449,7 @@ model Project {
   versions ProjectVersion[]
   assets   ProjectAsset[]
   orders   Order[]
+  brief    DesignBrief?
 
   @@index([ownerUserId, status])
   @@map("projects")
@@ -546,4 +547,44 @@ model CreditLedger {
 
   @@index([userId, createdAt])
   @@map("credit_ledger")
+}
+
+// Design brief (Goal 5 / B2C-002) — the guided wizard's persisted state. One
+// brief per project; `data` is an opaque JSONB document validated at the app
+// layer (apps/web/lib/brief/schema.ts), mirroring the canvas_state pattern.
+// `rev` is the optimistic-concurrency counter the per-step autosave checks.
+model DesignBrief {
+  id          String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId   String   @unique @map("project_id") @db.Uuid
+  ownerUserId String   @map("owner_user_id") @db.Uuid
+  data        Json     @default("{}")
+  rev         Int      @default(0)
+  // Wizard resume point (step key, e.g. "zones"). Display state, not authz.
+  currentStep String?  @map("current_step")
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt   DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  project   Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  snapshots BriefSnapshot[]
+
+  @@index([ownerUserId])
+  @@map("design_briefs")
+}
+
+// Immutable, versioned snapshots of a brief (B2C-002). Taken when the customer
+// completes Review ("Save brief") and, in Phase 2, before every generation run
+// so a concept can always be traced to the exact brief that produced it.
+model BriefSnapshot {
+  id        String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  briefId   String   @map("brief_id") @db.Uuid
+  version   Int
+  data      Json
+  // Why the snapshot exists: 'review_save' today; 'generation_run' in Phase 2.
+  label     String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  brief DesignBrief @relation(fields: [briefId], references: [id], onDelete: Cascade)
+
+  @@unique([briefId, version])
+  @@map("brief_snapshots")
 }
