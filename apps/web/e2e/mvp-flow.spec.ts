@@ -8,12 +8,15 @@
 // `use-template-cta`), an `open editor` link (start-project redirects straight to
 // the editor), and an uploaded-asset place flow keyed on testids that don't exist
 // (`asset-status-ready`, `asset-thumbnail`, `canvas-element`) plus `autosave-status`
-// and `order-row`. This rewrite drives the ACTUAL shipped instrumentation. It still
-// exercises place + color — via the *shape* tool (`tool-shape` + `color-fill`,
-// which DO exist) — and triggers an image upload (`upload-input`). The only thing
-// dropped is asserting the UPLOADED-IMAGE placement, which has no testids:
-//   v1.1 follow-up — add `asset-status-ready` / `asset-thumbnail` / `canvas-element`
-//   testids and restore the uploaded-image place/persist asserts.
+// and `order-row`. This rewrite drives the ACTUAL shipped instrumentation. The
+// customer loop runs on the Ford Transit (TRANSIT_ID) — the panel-bearing template —
+// because the 3 AW catalogue templates have no vehicle_panels, so the editor has no
+// design surface on them (launch blocker; ADR-0014 inv 12). It exercises real place +
+// color via the shape tool + inspector (`tool-shape` + `color-fill`). Artwork UPLOAD
+// is omitted (it currently 500s — Goal 4 finding #3). A separate "catalogue opens"
+// test guards that an AW template still browses + opens without crashing.
+//   v1.1 follow-ups — restore upload + the uploaded-image place/persist asserts
+//   (needs `asset-status-ready` / `asset-thumbnail` / `canvas-element` testids).
 //
 // ── Auth gate (Option (a), unchanged) ────────────────────────────────────────
 // Production: sign in PRE-SEEDED, already-verified accounts via PASSWORD
@@ -33,6 +36,12 @@ import * as path from 'path';
 import { signIn, signUpAndVerify, uniqueEmail } from './support/flows';
 
 const TINY_SVG = path.resolve(__dirname, 'fixtures/tiny-logo.svg');
+void TINY_SVG; // upload is omitted from the smoke (Goal 4 finding #3 — it 500s)
+
+// The Ford Transit is the panel-bearing template. The 3 curated AW catalogue
+// templates have no vehicle_panels, so the editor has no design surface on them
+// (launch blocker; ADR-0014 inv 12). The real place/color loop runs on the Transit.
+const TRANSIT_ID = 'a0000000-0000-4000-8000-000000000001';
 
 const HAS_SEEDED_CUSTOMER = Boolean(
   process.env.SMOKE_CUSTOMER_EMAIL && process.env.SMOKE_CUSTOMER_PASSWORD,
@@ -69,15 +78,9 @@ test.describe('MVP smoke — customer design → submit loop', () => {
   test('design a wrap and submit it for production', async ({ page, request }) => {
     await authenticateCustomer(page, request);
 
-    // Pick a template from the AW gallery → vehicle detail.
-    await page.goto('/vehicles');
-    await page
-      .getByRole('link', { name: /use template/i })
-      .first()
-      .click();
-    await expect(page).toHaveURL(/\/vehicles\/[0-9a-f-]{8,}/);
-
-    // Start a project from the detail page → redirects straight to the editor.
+    // Design on the panel-bearing Ford Transit (see TRANSIT_ID above). Start a
+    // project from its detail page → redirects straight to the editor.
+    await page.goto(`/vehicles/${TRANSIT_ID}`);
     await page.getByTestId('start-project-cta').click();
     await page.getByTestId('start-project-name').fill('Smoke MVP Wrap');
     await page.getByTestId('start-project-submit').click();
@@ -87,19 +90,18 @@ test.describe('MVP smoke — customer design → submit loop', () => {
     await canvasHost.waitFor({ state: 'visible', timeout: 20_000 });
     await page.getByTestId('canvas-ready').waitFor({ state: 'attached', timeout: 20_000 });
 
-    // Trigger an image upload (completion isn't asserted — no ready testid; v1.1).
-    await page.locator('[data-testid="upload-input"]').setInputFiles(TINY_SVG);
-
-    // Place content via the SHAPE tool (instrumented `tool-shape`). The color step
-    // is dropped: `color-fill` lives in the selection inspector and proved flaky to
-    // drive headlessly. v1.1 follow-up restores the color assert alongside the
-    // uploaded-image place asserts (asset-status-ready / asset-thumbnail / canvas-element).
+    // Place a shape on the auto-targeted front panel, then recolor it via the
+    // inspector — both work on a panel-bearing template. (Artwork UPLOAD is omitted:
+    // it currently 500s — Goal 4 finding #3; restoring upload + the uploaded-image
+    // place/persist asserts is a v1.1 follow-up.)
     await page.getByTestId('tool-shape').click();
+    const fill = page.getByTestId('color-fill').first();
+    await fill.waitFor({ state: 'visible', timeout: 10_000 });
+    await fill.click();
+    await page.getByRole('button', { name: '#ef4444', exact: true }).click();
+    await expect(fill).toHaveAttribute('aria-label', /#ef4444/i);
 
     // Save (flush autosave) then reload — confirms the editor reloads the project.
-    // (The "Saved" indicator + element-level persistence assert are a v1.1 follow-up;
-    // the autosave-status span proved flaky to assert headlessly. The submit dialog's
-    // onOpen flushes autosave regardless, so the frozen version carries the design.)
     await page.getByTestId('save-now').click();
     const editorUrl = page.url();
     await page.reload();
@@ -115,6 +117,23 @@ test.describe('MVP smoke — customer design → submit loop', () => {
 
     await expect(page).toHaveURL(/order-confirmed/);
     await expect(page.getByTestId('order-confirmed')).toBeVisible({ timeout: 15_000 });
+  });
+
+  // Catalogue regression guard — documents today's state honestly: the AW gallery
+  // browses and a curated template's detail page opens without crashing, even though
+  // the editor has no design surface on it yet (ADR-0014 inv 12 / launch blocker #1).
+  test('AW catalogue template browses and its detail opens (no crash)', async ({
+    page,
+    request,
+  }) => {
+    await authenticateCustomer(page, request);
+    await page.goto('/vehicles');
+    await page
+      .getByRole('link', { name: /use template/i })
+      .first()
+      .click();
+    await expect(page).toHaveURL(/\/vehicles\/[0-9a-f-]{8,}/);
+    await expect(page.getByTestId('start-project-cta')).toBeVisible({ timeout: 15_000 });
   });
 });
 
