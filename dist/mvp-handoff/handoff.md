@@ -130,7 +130,7 @@ were found; one was fixed under full review, one is a data gap flagged for launc
 | 3 | **Artwork-upload Server Action returns 500** | Med | A 500 on the upload path surfaced in testing (cause hidden by Next's prod error-digest). Resolve the digest in Sentry or repro locally; root-cause before relying on uploads in a demo. |
 | 4 | **Email deliverability** (GH-016) | Med | Resend domain verified 2026-06-09; do one real end-to-end send + confirm in the Resend dashboard. |
 | 5 | Legal: `/terms` + `/privacy` are stubs; no cookie consent | Med | Replace stub copy with reviewed legal text before public launch. |
-| 6 | No uptime monitor; Dependabot just added; no backup restore-drill | Med | Wire an uptime monitor on `/health`; let Dependabot run; perform one restore drill before the first real signup. |
+| 6 | ~~No uptime monitor~~ **Uptime monitor LIVE** (UptimeRobot watching `/vehicles`, 5-min interval, added 2026-06-10 — https://stats.uptimerobot.com/TBxIHNklCh); Dependabot just added; no backup restore-drill | Med | Let Dependabot run; perform one restore drill before the first real signup. |
 | 7 | Verify `DATABASE_URL_APP` is set on Vercel prod | Verify | A missing value silently disables RLS. The live cross-tenant test passed, which proves it is set today — re-confirm before launch. |
 
 **Deferred to v1.1 (tracked):** editor testids for the uploaded-image place/color
