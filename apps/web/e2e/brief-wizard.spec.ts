@@ -37,13 +37,22 @@ test.describe('Goal 5 brief wizard', () => {
     await page.waitForURL(`**/projects/${projectId}/brief`);
     await expect(page.getByTestId('brief-wizard')).toBeVisible();
 
-    // Zones: full wrap by default; exclude the first panel.
+    // Zones: full wrap by default; exclude the first panel VIA THE DIAGRAM
+    // (B2C-003) and confirm the accessible checklist mirrors it.
     await expect(page.getByTestId('brief-step-zones')).toBeVisible();
     await expect(page.getByText(/full wrap — every panel included/i)).toBeVisible();
-    const firstZone = page.locator('[data-testid^="zone-toggle-"]').first();
-    const zoneId = await firstZone.getAttribute('data-testid');
-    await firstZone.click();
-    await expect(page.getByText(/of \d+ panels included/i)).toBeVisible();
+    await expect(page.getByTestId('zone-diagram')).toBeVisible();
+    const firstPath = page.locator('[data-testid^="zone-path-"]').first();
+    const pathTestId = await firstPath.getAttribute('data-testid');
+    const panelId = pathTestId!.replace('zone-path-', '');
+    const zoneId = `zone-toggle-${panelId}`;
+    await firstPath.click();
+    await expect(firstPath).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator(`[data-testid="${zoneId}"]`)).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    await expect(page.getByTestId('zone-summary')).toHaveText(/of \d+ panels included/i);
 
     // Style: preset + prompt.
     await page.getByTestId('brief-step-tab-style').click();
@@ -64,6 +73,10 @@ test.describe('Goal 5 brief wizard', () => {
     );
     await page.getByTestId('brief-step-tab-zones').click();
     await expect(page.locator(`[data-testid="${zoneId}"]`)).toHaveAttribute(
+      'aria-pressed',
+      'false',
+    );
+    await expect(page.locator(`[data-testid="zone-path-${panelId}"]`)).toHaveAttribute(
       'aria-pressed',
       'false',
     );
