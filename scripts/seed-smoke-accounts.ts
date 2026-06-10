@@ -97,6 +97,10 @@ async function main(): Promise<void> {
   // (project.ownerShopId is never set), so we create the project with
   // ownerShopId pinned and submit it — the order inherits ownerShopId from the
   // project (orders.submitForProduction), making it visible via orders_shop_read.
+  // NB: unlike the user/shop creation above (withSystem → the promoted DIRECT
+  // DATABASE_URL), createProject + submitForProduction run via withUser
+  // (DATABASE_URL_APP, the pooled app_user). That's fine: they use the Prisma
+  // query builder, not the crypto.ts $queryRaw that collides on the txn pooler.
   const { projectId } = await projects.createProject(customer.id, {
     vehicleId: PUBLISHED_VEHICLE_ID,
     name: 'Smoke routed order',

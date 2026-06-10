@@ -108,6 +108,54 @@ create policy users_self_update on users
 -- No INSERT/DELETE policy: signup and account deletion run as the system role
 -- (BYPASSRLS) since they happen before/after a user is authenticated.
 
+-- SECURITY DEFINER membership check. Mirrors app_is_admin: it discloses only a
+-- boolean about the CURRENT session user (the app.current_user_id GUC), so a
+-- caller passing an arbitrary p_shop_id only learns whether THEY belong to it —
+-- never another tenant's membership. Being SECURITY DEFINER lets it read
+-- `memberships` WITHOUT re-entering memberships RLS, which is what breaks the
+-- infinite recursion a self-referential memberships policy caused (any read of a
+-- shop-routed order under app_user evaluated orders_shop_read -> EXISTS(memberships)
+-- -> memberships_member_select -> EXISTS(memberships) -> ... => 42P17). search_path
+-- is pinned per the SECURITY DEFINER hardening guideline. Fails closed: returns
+-- false when app.current_user_id is unset.
+--
+-- DEFINED HERE, ABOVE its first callers (the shops + memberships policies below):
+-- Postgres resolves a policy's function references at CREATE POLICY time, so a
+-- clean `db:apply-sql` (new dev / CI integration DB / DR rebuild) needs the
+-- function to already exist when those policies are created.
+create or replace function app_is_shop_member(p_shop_id uuid) returns boolean
+  language sql
+  stable
+  security definer
+  set search_path = public, pg_temp
+  as $$
+    select exists (
+      select 1 from memberships m
+      where m.shop_id = p_shop_id
+        and m.user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
+    );
+  $$;
+
+-- Lock down EXECUTE: this SECURITY DEFINER helper is only invoked inside RLS
+-- policies (evaluated as app_user, or the superuser bootstrap path which bypasses
+-- permission checks), so anon/authenticated must NOT call it via the PostgREST
+-- data API (Supabase linter 0028/0029). Revoke the default PUBLIC grant and grant
+-- EXECUTE to app_user only. Guarded on role existence so a fresh local DB (no
+-- Supabase roles) still applies.
+revoke all on function app_is_shop_member(uuid) from public;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'revoke all on function app_is_shop_member(uuid) from anon';
+  end if;
+  if exists (select 1 from pg_roles where rolname = 'authenticated') then
+    execute 'revoke all on function app_is_shop_member(uuid) from authenticated';
+  end if;
+  if exists (select 1 from pg_roles where rolname = 'app_user') then
+    execute 'grant execute on function app_is_shop_member(uuid) to app_user';
+  end if;
+end $$;
+
 -- shops: a user can read a shop if they are a member.
 alter table shops enable row level security;
 alter table shops force row level security;
@@ -231,49 +279,21 @@ create or replace function app_is_admin() returns boolean
       false);
   $$;
 
--- SECURITY DEFINER membership check. Mirrors app_is_admin: it discloses only a
--- boolean about the CURRENT session user (the app.current_user_id GUC), so a
--- caller passing an arbitrary p_shop_id only learns whether THEY belong to it —
--- never another tenant's membership. Being SECURITY DEFINER lets it read
--- `memberships` WITHOUT re-entering memberships RLS, which is what breaks the
--- infinite recursion that a self-referential memberships policy caused (any read
--- of a shop-routed order under app_user evaluated orders_shop_read ->
--- EXISTS(memberships) -> memberships_member_select -> EXISTS(memberships) -> ...
--- => 42P17). search_path is pinned per the SECURITY DEFINER hardening guideline.
--- Fails closed: returns false when app.current_user_id is unset.
-create or replace function app_is_shop_member(p_shop_id uuid) returns boolean
-  language sql
-  stable
-  security definer
-  set search_path = public, pg_temp
-  as $$
-    select exists (
-      select 1 from memberships m
-      where m.shop_id = p_shop_id
-        and m.user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
-    );
-  $$;
-
--- Lock down EXECUTE on the SECURITY DEFINER helpers. They are only ever invoked
--- inside RLS policies evaluated as app_user (or the superuser bootstrap path,
--- which bypasses permission checks), so anon/authenticated must NOT be able to
--- call them via the PostgREST data API (Supabase linter 0028/0029). Revoke the
--- default PUBLIC grant and grant EXECUTE to app_user only. Idempotent + portable:
--- guarded on role existence so a fresh local DB (no Supabase roles) still applies.
-revoke all on function app_is_shop_member(uuid) from public;
+-- Lock down EXECUTE on app_is_admin (same rationale as app_is_shop_member, which
+-- is defined + locked down above the shops block): anon/authenticated must not be
+-- able to call it via the PostgREST data API (Supabase linter 0028/0029). Revoke
+-- the default PUBLIC grant and grant EXECUTE to app_user only. Guarded on role
+-- existence so a fresh local DB (no Supabase roles) still applies.
 revoke all on function app_is_admin() from public;
 do $$
 begin
   if exists (select 1 from pg_roles where rolname = 'anon') then
-    execute 'revoke all on function app_is_shop_member(uuid) from anon';
     execute 'revoke all on function app_is_admin() from anon';
   end if;
   if exists (select 1 from pg_roles where rolname = 'authenticated') then
-    execute 'revoke all on function app_is_shop_member(uuid) from authenticated';
     execute 'revoke all on function app_is_admin() from authenticated';
   end if;
   if exists (select 1 from pg_roles where rolname = 'app_user') then
-    execute 'grant execute on function app_is_shop_member(uuid) to app_user';
     execute 'grant execute on function app_is_admin() to app_user';
   end if;
 end $$;
