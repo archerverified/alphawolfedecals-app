@@ -24,6 +24,9 @@ async function createProject(page: Page): Promise<string> {
 
 test.describe('Goal 5 brief wizard', () => {
   test('brief: zones → style → materials → review → save → resume', async ({ page, request }) => {
+    // Dev-mode cold compiles + the full signup→wizard journey routinely add up
+    // past the default budget; production targets finish in a fraction of it.
+    test.slow();
     const email = uniqueEmail('brief');
     await signUpAndVerify(page, request, email);
     await signIn(page, email, '/vehicles/select');

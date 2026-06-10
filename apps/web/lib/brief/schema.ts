@@ -127,7 +127,10 @@ export const briefSchema = z
     tint: z
       .object({
         state: z.string().length(2).optional(),
-        perWindow: z.record(z.string().max(40), z.number().int().min(0).max(100)).optional(),
+        perWindow: z
+          .record(z.string().max(40), z.number().int().min(0).max(100))
+          .refine((obj) => Object.keys(obj).length <= 16, 'too many windows')
+          .optional(),
       })
       .optional(),
 
@@ -155,7 +158,11 @@ export type BriefParseResult = { ok: true; data: BriefData } | { ok: false };
 
 export function parseBriefData(input: unknown): BriefParseResult {
   try {
-    if (JSON.stringify(input).length > BRIEF_MAX_BYTES) return { ok: false };
+    // TextEncoder counts real UTF-8 bytes (string .length undercounts
+    // multibyte content) and works in both server and browser runtimes.
+    if (new TextEncoder().encode(JSON.stringify(input)).length > BRIEF_MAX_BYTES) {
+      return { ok: false };
+    }
   } catch {
     return { ok: false };
   }

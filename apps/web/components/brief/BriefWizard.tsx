@@ -78,10 +78,11 @@ export function BriefWizard({
       if (bounded > stepIndex) {
         capture('brief_step_completed', { projectId, step: step.key });
       }
+      // No flush here: useBriefAutosave saves the new step in an effect AFTER
+      // the render commits, so the resume point is the step being entered.
       setStepIndex(bounded);
-      autosave.flushNow();
     },
-    [stepIndex, steps.length, projectId, step.key, autosave],
+    [stepIndex, steps.length, projectId, step.key],
   );
 
   const saveBrief = useCallback(() => {

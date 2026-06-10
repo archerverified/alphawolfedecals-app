@@ -51,6 +51,7 @@ export function useBriefAutosave({
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const maxWaitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savedDataRef = useRef<BriefData>(data);
+  const savedStepRef = useRef<BriefStepKey>(currentStep);
   const inFlight = useRef(false);
   const pendingFlush = useRef(false);
   const reloadingRef = useRef(false);
@@ -70,7 +71,10 @@ export function useBriefAutosave({
   const doSave = useCallback(async () => {
     if (reloadingRef.current) return;
     const current = dataRef.current;
-    if (current === savedDataRef.current) {
+    // A step change with untouched data still saves: current_step is the
+    // resume point, so "navigated, edited nothing, closed the tab" must
+    // restore the step they were on (review finding, PR #120).
+    if (current === savedDataRef.current && stepRef.current === savedStepRef.current) {
       setStatus((s) => (s === 'pending' ? 'idle' : s));
       return;
     }
@@ -83,6 +87,7 @@ export function useBriefAutosave({
     setStatus('saving');
 
     const snapshot = current;
+    const stepSnapshot = stepRef.current;
     let saveOk = false;
     try {
       const res = await saveBriefAction({
@@ -90,12 +95,13 @@ export function useBriefAutosave({
         briefId,
         expectedRev: revRef.current,
         data: snapshot,
-        currentStep: stepRef.current,
+        currentStep: stepSnapshot,
       });
       if (res.ok) {
         saveOk = true;
         revRef.current = res.rev;
         savedDataRef.current = snapshot;
+        savedStepRef.current = stepSnapshot;
         setLastSavedAt(Date.now());
         setStatus(dataRef.current === snapshot ? 'saved' : 'pending');
       } else if (res.reason === 'stale') {
@@ -146,6 +152,14 @@ export function useBriefAutosave({
     if (data === savedDataRef.current) return;
     schedule();
   }, [data, schedule]);
+
+  // Persist step navigation AFTER the render commits (stepRef is current by
+  // then) — a synchronous flush inside the click handler would record the
+  // step being left, not the one being entered (review finding, PR #120).
+  useEffect(() => {
+    if (currentStep === savedStepRef.current) return;
+    void doSave();
+  }, [currentStep, doSave]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;

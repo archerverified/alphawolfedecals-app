@@ -110,16 +110,32 @@ export async function snapshotBrief(
     });
     if (!brief) return { ok: false, reason: 'not_found' };
 
-    const last = await db.briefSnapshot.findFirst({
-      where: { briefId },
-      orderBy: { version: 'desc' },
-      select: { version: true },
-    });
-    const version = (last?.version ?? 0) + 1;
-    await db.briefSnapshot.create({
-      data: { briefId, version, data: brief.data as Prisma.InputJsonValue, label },
-    });
-    return { ok: true, version };
+    // Two concurrent saves can compute the same next version; the
+    // (brief_id, version) unique constraint rejects the loser, who re-reads
+    // and retries once (review finding, PR #120 — single-editor model makes
+    // a second collision practically impossible).
+    for (let attempt = 0; attempt < 2; attempt++) {
+      const last = await db.briefSnapshot.findFirst({
+        where: { briefId },
+        orderBy: { version: 'desc' },
+        select: { version: true },
+      });
+      const version = (last?.version ?? 0) + 1;
+      try {
+        await db.briefSnapshot.create({
+          data: { briefId, version, data: brief.data as Prisma.InputJsonValue, label },
+        });
+        return { ok: true, version };
+      } catch (error) {
+        const isUniqueViolation =
+          typeof error === 'object' &&
+          error !== null &&
+          (error as { code?: string }).code === 'P2002';
+        if (!isUniqueViolation || attempt === 1) throw error;
+      }
+    }
+    // Unreachable: the loop either returns or throws.
+    return { ok: false, reason: 'not_found' };
   });
 }
 
