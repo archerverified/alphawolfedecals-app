@@ -33,13 +33,20 @@ on: deployment_status
 
 # Static group: all matching runs target the one public prod domain, and
 # overlapping runs would collide on the same seeded SMOKE_* account.
-concurrency:
-  group: smoke-production
-  cancel-in-progress: true
-
 jobs:
   smoke:
     name: MVP flow (Playwright)
+    # JOB-level concurrency (NOT workflow-level): every deployment_status event
+    # (Render services, Vercel previews, pending states) starts a run of this
+    # workflow, and workflow-level concurrency enters the group BEFORE the job
+    # `if` is evaluated — so a skipped Render event was cancelling the real
+    # in-flight prod smoke (observed 2026-06-10: run cancelled at 07:33:59 by a
+    # 07:34:00 event that itself skipped). At job level, only runs that pass
+    # the gate below join the group, and cancel-in-progress then only dedupes
+    # genuine back-to-back prod deploys colliding on the seeded SMOKE_* account.
+    concurrency:
+      group: smoke-production
+      cancel-in-progress: true
     # Only the successful Vercel PRODUCTION deploy (see gating rationale above).
     if: >-
       github.event.deployment_status.state == 'success' &&
