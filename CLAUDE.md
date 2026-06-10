@@ -1,0 +1,52 @@
+# ALPHA WOLF WRAP STUDIO — PROJECT RULES
+
+NEVER ASSUME OR TRUST — ALWAYS VERIFY REAL FILES, REAL DEPLOYS, REAL WORK. You have GitHub + connector access: verify, don't guess. Invoke `/superpowers` at the start of every substantive task.
+
+These rules govern all work in this repo (Cowork and Claude Code sessions alike). They override default behavior. Updated 2026-06-09.
+
+## 0. SKILL CHECK FIRST
+Before any substantive response, check whether a skill applies and read its current SKILL.md before acting. Process skills (planning, debugging) before implementation skills (format/domain). Never act from memory of a skill — read the current version. A direct request ("just do X") states the goal, not permission to skip the workflow.
+
+## 1. BEFORE EVERY TASK
+1. Read the top entries of `activities.md` — this is project memory. Read before starting; append your results after finishing.
+2. **AUDIT FIRST.** Check what's already shipped (search by SHA, not goal label) before suggesting or building anything. PR #38 was a 130-file MVP base that pre-delivered an entire goal's scope once.
+3. If a step's source is missing or ambiguous, STOP and ask — do not guess or fabricate.
+
+## 2. SECURITY BOUNDARIES (non-negotiable)
+- **Two-connection DB split:** `withUser(userId, fn)` → `app_user` role, RLS enforced — every customer-facing query. `withSystem(fn)` → superuser, RLS off — only unauthenticated bootstrap / system maintenance. NEVER use `withSystem` for user-scoped queries. Watch the silent-fallback footgun: missing `DATABASE_URL_APP` falls back to superuser (`packages/db/src/client.ts`).
+- **ADR-0013 deploy invariants are LOCKED** (`outputFileTracingRoot`, hoisted externals svgo + @prisma/client, Prisma binaryTargets, guardrails). Any change requires an amendment ADR.
+- **`PII_ENCRYPTION_KEY` never rotates** without a planned migration that re-encrypts every PII column.
+
+## 3. REVIEW PROTOCOL (replaces CodeRabbit as of 2026-06-09)
+CodeRabbit is RETIRED. Greptile is obsolete. Never invoke either. Every PR, before merge:
+1. Run the repo's `/code-review` plugin command (or `code-reviewer` skill) against the full diff in a FRESH context — not the context that wrote the code.
+2. CI must be green.
+3. PRs touching RLS, auth, the DB split, or deploy config additionally get an `advisor()` second opinion (in CC sessions with the advisor tool). Do NOT rubber-stamp reviews on RLS.
+4. Record the review output in the PR description.
+Keep `.coderabbit.yaml` in the repo until the Goal 4 ADR-0013 amendment migrates its guardrails into CI.
+
+## 4. OPERATING RULES
+- `activities.md` is append-only, newest entries at TOP. Never edit prior entries — corrections are new entries referencing the original.
+- Never delete files. Never force-push to main.
+- New `/goal` prompts go through `/prompt-engineer` (Role/Context/Task/Inputs/Constraints/Output skeleton; audit-first context at top; concrete Definition of Done). Prompts live in `prompts/`.
+- Goal work runs in a dedicated worktree (`git worktree add -b goal/<N>-<slug> ../alphawolf-goal-<N> origin/main`). Remove it at closeout.
+- Voice: simple, concise, direct, efficient. Archer is not a dev — dumb down explanations of decisions, not the work itself.
+
+## 5. CLOSEOUT RITUAL (every goal end)
+1. `activities.md` entry at the TOP — per-PR entries + summary linking the diagram.
+2. Mermaid diagram in `docs/vault/diagrams/<goal>.md`.
+3. PostHog + Sentry screenshots if metrics changed → `docs/deployment/screenshots/<date>/`.
+4. Worktree cleanup: `git worktree remove ../alphawolf-goal-<N> && git branch -d goal/<N>-<slug>`.
+
+## 6. DEBUGGING GOTCHAS (learned the hard way — don't re-derive)
+- Vercel deploy <2s with EMPTY build logs = preflight reject (region/config), NOT billing. `errorMessage` populated = billing. 30–120s with logs = real build failure. Always pull deployment via MCP/API, never trust CLI summary.
+- Vercel "missing env var" while the var "already exists" = empty/stale value. Edit-in-place, then push a fresh commit.
+- Supabase free tier auto-pauses after 7 days idle. Resume via `restore_project` — standing permission granted, no need to ask.
+- After `apply_migration` via Supabase MCP, insert the row into `_prisma_migrations` with the SHA-256 checksum so `prisma migrate deploy` skips cleanly.
+- Stacked PRs after squash-merge: retarget base to main, rebase head branch (auto-detects applied commits), force-push the feature branch.
+
+## 7. VERIFY BEFORE DELIVERING
+A task is done only when: the claimed files/deploys/PRs actually exist and were verified this session; nothing in a read-only area was modified; no file was deleted; every assumption was either stated explicitly or confirmed with Archer. If a check fails, fix it before responding — don't ship and caveat.
+
+---
+*Cowork-workspace folder protocol (ABOUT ME/, TEMPLATES/, PROJECTS/, CLAUDE OUTPUTS/) applies to the `Documents/Claude` workspace, not this repo. Repo deliverables live where the codebase expects them.*
