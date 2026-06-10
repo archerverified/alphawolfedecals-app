@@ -6,6 +6,89 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-10 — Goal 4 — MVP verification + investor handoff (CLOSEOUT)
+
+**Status:** ✅ Deliverables 0–4 complete. Two HIGH findings: one **fixed** (prod RLS
+recursion, PR #116, merged), one **flagged** (AW-template panel data — editor
+non-functional on the catalogue, launch blocker). Investor handoff package shipped.
+**Duration:** single Claude Code session, dedicated `goal/4-mvp-handoff` worktree.
+
+**advisor() substitution (recorded once):** the prompt's `advisor()` tool isn't
+present in Claude Code; per Archer it was run as a **fresh-context Opus subagent** at
+every checkpoint (clean context — diff/finding + question only). Verdicts recorded in
+PR descriptions + `docs/deployment/audits/2026-06-09-goal-4/_advisor-verdicts.md`.
+
+**Per-deliverable.**
+
+- **D0 — security + production-readiness audits (BLOCKING): PASS.** Ran the two real
+  skill files Cowork placed (`prompts/skills/*.SKILL.md`) four-phase against prod. No
+  High/critical live FAIL. RLS forced on all 14 tables verified live; orders triple,
+  two-connection split, headers (config↔live parity), dev-endpoint 404 gating, no
+  client secrets — all confirmed. Reports in `docs/deployment/audits/2026-06-09-goal-4/`.
+  Med/Low gaps → **PR #101** (next-auth+postcss CVE bumps, robots.txt, README,
+  /terms+/privacy stubs, dependabot, Upstash runbook), full review protocol, merged.
+- **D0.5 — smoke unblock.** `scripts/seed-smoke-accounts.ts` seeds verified
+  customer+shop via the real `@alphawolf/auth`+db path (not raw SQL). `SMOKE_*`
+  repo secrets + `SMOKE_INCLUDE_SHOP` set. **Full smoke green on prod.** While
+  seeding the first shop-routed order it hit the RLS recursion (see findings) → fixed
+  in **PR #116** before the smoke could pass. PostHog funnel events fired on prod
+  (task #69 — dashboard confirmation is an Archer step).
+- **D1 — 12 demo screenshots** from prod (`docs/deployment/screenshots/2026-06-09-goal-4/`),
+  editor shots on the Ford Transit (the catalogue templates have no panels).
+- **D2 — investor handoff** in `dist/mvp-handoff/` (md/docx/pdf/pptx + screenshots).
+- **D3 — Lighthouse re-baseline** (`docs/deployment/lighthouse-2026-06-10/`). Perf
+  ~flat (88 vs 89), A11y 100, BP 92. SEO 100→63 is the **intentional pre-launch
+  robots.txt** (PR #101), self-reverts at launch — not a regression. One
+  session-induced upload 500 in the logs (finding #3); no spontaneous new error class.
+- **D4 — ADR-0014** (amends ADR-0013) records the MVP-build LOCKED invariants +
+  the CodeRabbit→Claude review-stack swap. `.coderabbit.yaml` retired; guardrails
+  ported to `docs/review/review-checklist.md` + `.github/workflows/gitleaks.yml`.
+
+**Findings.**
+
+1. **FIXED (was HIGH) — prod RLS infinite recursion (PR #116).** `memberships_member_select`
+   self-referenced `memberships` in its USING clause, so reading any order with a
+   non-null `owner_shop_id` under `app_user` threw `42P17` — the whole shop-routed-order
+   path (submit-routed, dashboard read, transitions) was broken. **Fail-closed → no
+   data exposure.** Fixed with a `SECURITY DEFINER` `app_is_shop_member` helper
+   (search_path-pinned, GUC-scoped, EXECUTE locked to app_user — also closed two
+   `app_is_admin` PostgREST advisor WARNs). Verified live across 6 advisor gates.
+   _Root cause / why 3b missed it:_ the policy shipped in **Goal 3b**; its integration
+   test (`tests/orders-rls.integration.test.ts`) exercised cross-shop UPDATE but never
+   **read a routed order under app_user with the recursive policy live**, and prod had
+   **zero routed orders** until this session seeded the first one (customer→shop
+   routing is unwired), so it stayed dormant.
+2. **FLAGGED (HIGH launch blocker) — catalogue templates have no panel geometry.**
+   The 3 published AW templates (BMW X3 / Bass Boat / Crown Coach) have **0
+   `vehicle_panels`**, so the editor opens but has no design surface — you can't place
+   artwork. The editor itself **works** (proven on the Ford Transit, 6 panels:
+   place/color/save/submit). _Root cause:_ **Goal 2a's manual import** seeded the
+   catalogue rows + wrapped SVGs + thumbnails but **never the panel geometry**, and no
+   verification step caught it until Goal 4. _Remediation:_ author a panel set per
+   template (structured SVG with per-panel/view classes + wrap-safe zones) — in-house
+   or licensed, **never from the RESTRICTIVE PVO outlines** (Goal 1 verdict). The B2C
+   zone-selector (B2C-003) needs the same data. Demo + handoff use the Transit; the
+   smoke was redirected to the Transit + a catalogue-opens guard.
+3. **Med — artwork upload 500s.** The upload Server Action returns 500 (cause hidden by
+   Next's prod error-digest); resolve via the Sentry digest or a local repro.
+4. **Med — edge rate-limiting not live on prod** (Upstash creds unset; DB lockout still
+   guards credentials). Runbook: `docs/deployment/runbooks/enable-edge-rate-limiting.md`.
+
+**Spec-drift correction (re PR #98).** PR #98 assumed `mvp-flow.spec.ts` matched the
+shipped UI; it did not — the Goal 3c spec asserted instrumentation (searchbox on
+/vehicles, `vehicle-card`/`order-row`/`asset-*`/`canvas-element`/`autosave-status`
+testids) that **Goal 3a never shipped**. The spec was rewritten this session to the
+real instrumentation (gallery `use-template`, `start-project-*`, `transition-<to>`,
+etc.). v1.1: add editor testids to restore uploaded-image place/persist asserts.
+
+**Blocked on Archer (launch):** seed AW-template panel data (#1); root-cause the
+upload 500 (#3); set `UPSTASH_*` on Vercel (#4); verify `DATABASE_URL_APP` is set on
+Vercel prod; GH-016 real email send; ToS/Privacy copy; uptime monitor; backup restore
+drill. Full ranked list: `dist/mvp-handoff/handoff.md` §6. **Note:** `tmp/rebase-99`
+still carries the unpushed `30e1f02` (code-simplifier agent + code-structure skill) —
+shipping it is Archer's call. Smoke test accounts accumulated on prod across seed runs
+(fenced "Smoke Test Shop"); cleanup is optional.
+
 ## 2026-06-08 — Goal 3c — Email notifications + MVP smoke (PRs #97, #98 open)
 
 **Status:** ✅ Code complete + locally verified — PRs #97/#98 **open, pending CodeRabbit + CI + merge**.
