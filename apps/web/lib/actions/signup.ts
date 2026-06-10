@@ -11,6 +11,7 @@ import {
   verifyCsrf,
   verifySignupOtp,
 } from '@alphawolf/auth/server';
+import { captureServerEvent } from '@/lib/notifications/posthog-server';
 
 type ActionState = {
   ok: boolean;
@@ -208,6 +209,15 @@ export async function verifyOtpAction(_prev: ActionState, form: FormData): Promi
 
   const result = await verifySignupOtp({ email, code, meta });
   if (result.ok) {
+    // B2C-001 funnel event. Server-side capture (the user has no client PostHog
+    // session yet at verify time); best-effort, never blocks the redirect.
+    if (result.creditsGranted > 0) {
+      await captureServerEvent('credits_granted', result.userId, {
+        amount: result.creditsGranted,
+        source: 'grant',
+        reason: 'signup',
+      });
+    }
     const dest = result.accountType === 'shop_user' ? '/welcome/shop' : '/welcome';
     redirect(dest);
   }

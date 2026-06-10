@@ -511,3 +511,24 @@ create policy orders_shop_update on orders
     owner_shop_id is not null
     and app_is_shop_member(orders.owner_shop_id)
   );
+
+-- credit_ledger -----------------------------------------------------------------
+-- Append-only credit ledger (Goal 5 / B2C-001). Balance = SUM(delta) per user.
+-- Write model: ONLY the system connection writes rows (signup grant at OTP
+-- activation today; Stripe webhook `purchase` rows in Phase 2). The blanket
+-- table GRANT at the top of this file gives app_user INSERT/UPDATE/DELETE at
+-- the table-ACL layer, so two defenses below:
+--   1. RLS (enable + FORCE) with a SELECT-only owner policy and NO write
+--      policies — a hand-crafted INSERT on the withUser connection fails
+--      closed (users cannot mint themselves credits).
+--   2. Belt-and-braces: the write grants are explicitly revoked for this table.
+-- Asserted by packages/db/tests/credits-rls.integration.test.ts.
+alter table credit_ledger enable row level security;
+alter table credit_ledger force row level security;
+
+revoke insert, update, delete on credit_ledger from app_user;
+
+drop policy if exists credit_ledger_owner_read on credit_ledger;
+create policy credit_ledger_owner_read on credit_ledger
+  for select
+  using (user_id = nullif(current_setting('app.current_user_id', true), '')::uuid);

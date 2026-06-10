@@ -214,13 +214,24 @@ describe('orders RLS — shop dashboard read + cross-shop isolation', () => {
   });
 
   test('WITH CHECK blocks re-routing an order to a shop the member is not in', async () => {
-    // Shop A member tries to reassign the order to shop B (not their shop). USING
-    // passes (they own the current row) but WITH CHECK on the new owner_shop_id
-    // fails → zero rows updated.
-    const res = await withUser(aMemberId, (db) =>
-      db.order.updateMany({ where: { id: orderId }, data: { ownerShopId: shopBId } }),
-    );
-    expect(res.count).toBe(0);
+    // Shop A member tries to reassign the order to shop B (not their shop).
+    // USING passes (their shop owns the current row) but no policy's WITH CHECK
+    // accepts the rewritten row — Postgres surfaces that as error 42501 ("new
+    // row violates row-level security policy"), NOT as zero affected rows
+    // (zero-rows is the USING-filtered case, asserted in the previous test).
+    // Drive-by fix (Goal 5): the original expectation asserted count === 0,
+    // which is not how WITH CHECK violations present; CI never runs the
+    // integration project, so the drift surfaced on the next local run.
+    let blocked = false;
+    try {
+      const res = await withUser(aMemberId, (db) =>
+        db.order.updateMany({ where: { id: orderId }, data: { ownerShopId: shopBId } }),
+      );
+      blocked = res.count === 0;
+    } catch (error) {
+      blocked = error instanceof Error && /row-level security/i.test(error.message);
+    }
+    expect(blocked).toBe(true);
 
     const stillA = await withSystem((db) =>
       db.order.findUnique({ where: { id: orderId }, select: { ownerShopId: true } }),

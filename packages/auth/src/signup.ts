@@ -9,7 +9,7 @@
 // Both flows email an OTP. Verification activates the user account and, for
 // shops, provisions the shop org.
 
-import { authEvents, shops as shopRepo, users as userRepo } from '@alphawolf/db';
+import { authEvents, credits, shops as shopRepo, users as userRepo } from '@alphawolf/db';
 import { z } from 'zod';
 import {
   generateOtpCode,
@@ -251,7 +251,16 @@ export async function resendVerificationOtp(
 }
 
 export type VerifyResult =
-  | { ok: true; userId: string; accountType: 'customer' | 'shop_user'; shopId?: string }
+  | {
+      ok: true;
+      userId: string;
+      accountType: 'customer' | 'shop_user';
+      shopId?: string;
+      // Credits granted by THIS verification (0 on a retry that found the
+      // grant already present, or if the grant failed non-fatally). Lets the
+      // caller fire the credits_granted analytics event without re-querying.
+      creditsGranted: number;
+    }
   | {
       ok: false;
       reason: 'invalid' | 'expired' | 'too_many_attempts' | 'not_found';
@@ -312,6 +321,19 @@ export async function verifySignupOtp(args: {
     userAgent: meta.userAgent ?? null,
   });
 
+  // B2C-001 signup grant. Idempotent (partial unique index) and non-fatal: a
+  // failed grant must never block account activation — the migration backfill
+  // (or an ops re-run of it) heals any stragglers.
+  let creditsGranted = 0;
+  try {
+    creditsGranted = await credits.grantSignupCredits(user.id);
+  } catch (error) {
+    console.error('[auth/signup] signup credit grant failed (non-fatal)', {
+      userId: user.id,
+      error,
+    });
+  }
+
   let shopId: string | undefined;
   if (user.accountType === 'shop_user') {
     const pending = pendingShopData.get(user.id);
@@ -336,6 +358,7 @@ export async function verifySignupOtp(args: {
     ok: true,
     userId: user.id,
     accountType: user.accountType,
+    creditsGranted,
     ...(shopId ? { shopId } : {}),
   };
 }
