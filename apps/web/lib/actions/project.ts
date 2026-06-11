@@ -11,7 +11,9 @@ import { cookies } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { revalidatePath } from 'next/cache';
 import { CSRF_COOKIE_NAME, CSRF_FIELD_NAME, verifyCsrf } from '@alphawolf/auth/server';
-import { projects, vehicles } from '@alphawolf/db';
+import { credits, projects, vehicles } from '@alphawolf/db';
+import { vehicleSlotGate } from '../plan/gates';
+import { captureServerEvent } from '../notifications/posthog-server';
 import {
   serializeDocument,
   deserializeDocument,
@@ -37,6 +39,23 @@ export async function createProjectAction(formData: FormData): Promise<void> {
 
   const vehicle = await vehicles.getPublishedDetail(vehicleId);
   if (!vehicle) throw new Error('Vehicle not found or not published.');
+
+  // Free-plan vehicle-slot gate (B2C-011) — server-side, before any write. A
+  // project on an already-used vehicle never consumes a new slot.
+  const gateCtx = await credits.getPlanGateContext(user.id);
+  const gate = vehicleSlotGate({
+    plan: gateCtx.plan,
+    usedVehicleIds: gateCtx.usedVehicleIds,
+    requestedVehicleId: vehicleId,
+  });
+  if (!gate.allowed) {
+    await captureServerEvent('plan_gate_hit', user.id, {
+      gate: 'vehicle_slots',
+      vehicleId,
+      limit: gate.limit,
+    });
+    redirect(`/vehicles/${vehicleId}?gate=slots`);
+  }
 
   const initialCanvasState = serializeDocument(factory.newDocument(vehicleId));
   const { projectId } = await projects.createProject(user.id, {
