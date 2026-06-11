@@ -1,6 +1,10 @@
 // Goal 5 (B2C-002+) E2E: the guided design-brief wizard on the seeded Transit.
-// Grows with the goal — each story's PR extends this spec; PR10 promotes the
-// happy path into the production smoke run alongside mvp-flow.
+// Runs in TWO modes (same contract as mvp-flow.spec.ts):
+//  - local dev: fresh signup via the dev-otp peek;
+//  - deployed targets (the production smoke): the pre-seeded SMOKE_CUSTOMER
+//    account — green-skips when the creds are absent (no prod backdoor).
+// The smoke customer's projects all live on the Transit, so repeated runs
+// never consume a second free-plan vehicle slot (B2C-011).
 //
 // Covers: wizard loads from the editor entry point, zones default to full wrap
 // and toggle off, style prompt + material persist via per-step autosave,
@@ -12,6 +16,17 @@ import { expect, test, type Page } from '@playwright/test';
 import { signUpAndVerify, signIn, uniqueEmail } from './support/flows';
 
 const SEEDED_VEHICLE_ID = 'a0000000-0000-4000-8000-000000000001';
+
+const HAS_SEEDED_CUSTOMER = Boolean(
+  process.env.SMOKE_CUSTOMER_EMAIL && process.env.SMOKE_CUSTOMER_PASSWORD,
+);
+
+function isRemoteTarget(): boolean {
+  const url = process.env.DEPLOY_URL;
+  if (!url) return false;
+  const { hostname } = new URL(url);
+  return !['localhost', '127.0.0.1', '::1'].includes(hostname);
+}
 
 // 64×64 solid-red PNG with NO alpha channel — trips the B2C-004 quality gate
 // twice: opaque (solid background) AND low DPI (64px across a van panel).
@@ -28,6 +43,11 @@ async function createProject(page: Page): Promise<string> {
 }
 
 test.describe('Goal 5 brief wizard', () => {
+  test.skip(
+    isRemoteTarget() && !HAS_SEEDED_CUSTOMER,
+    'Against a deployed target set SMOKE_CUSTOMER_EMAIL/PASSWORD — dev-otp is 404 in production.',
+  );
+
   test('brief: zones → style → materials → review → save → resume', async ({ page, request }) => {
     // Dev-mode cold compiles + the full signup→wizard journey + TWO upload
     // round-trips (photo + logo, B2C-004) blow well past test.slow()'s 3×30s —
@@ -35,9 +55,15 @@ test.describe('Goal 5 brief wizard', () => {
     // (the failure point moved between runs). Production targets finish in a
     // fraction of this.
     test.setTimeout(300_000);
-    const email = uniqueEmail('brief');
-    await signUpAndVerify(page, request, email);
-    await signIn(page, email, '/vehicles/select');
+    const seededEmail = process.env.SMOKE_CUSTOMER_EMAIL;
+    const seededPassword = process.env.SMOKE_CUSTOMER_PASSWORD;
+    if (seededEmail && seededPassword) {
+      await signIn(page, seededEmail, '/vehicles/select', seededPassword);
+    } else {
+      const email = uniqueEmail('brief');
+      await signUpAndVerify(page, request, email);
+      await signIn(page, email, '/vehicles/select');
+    }
     const projectId = await createProject(page);
 
     // Enter the wizard from the editor header.
@@ -199,7 +225,7 @@ test.describe('Goal 5 brief wizard', () => {
     );
 
     await page.getByTestId('brief-save').click();
-    await expect(page.getByText(/brief saved \(v1\)/i)).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByText(/brief saved \(v\d+\)/i)).toBeVisible({ timeout: 15_000 });
     await page.waitForURL(/\/projects\/[0-9a-f-]+\/editor/);
   });
 });

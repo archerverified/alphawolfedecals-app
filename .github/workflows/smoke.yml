@@ -88,7 +88,8 @@ jobs:
           SMOKE_SHOP_EMAIL: ${{ secrets.SMOKE_SHOP_EMAIL }}
           SMOKE_SHOP_PASSWORD: ${{ secrets.SMOKE_SHOP_PASSWORD }}
           SMOKE_INCLUDE_SHOP: ${{ vars.SMOKE_INCLUDE_SHOP }}
-        run: pnpm --filter @alphawolf/web exec playwright test e2e/mvp-flow.spec.ts
+        # mvp-flow + the Goal 5 brief-wizard happy path (B2C-002..010).
+        run: pnpm --filter @alphawolf/web exec playwright test e2e/mvp-flow.spec.ts e2e/brief-wizard.spec.ts
 
       - name: Upload Playwright report
         if: ${{ always() }}
