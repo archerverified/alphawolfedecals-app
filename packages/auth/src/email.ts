@@ -32,6 +32,19 @@ function getFromAddress(): string {
   return process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
 }
 
+// Resend's SDK returns { data, error } and does NOT throw on API errors.
+// Without this check, rejections (e.g. unverified from-domain, test-sender
+// recipient limits) vanish silently and callers' failure handling never runs.
+// (Root cause of the Goal 5 "36 email_sent, zero in the Resend dashboard" bug.)
+async function sendViaResend(payload: Parameters<Resend['emails']['send']>[0]): Promise<void> {
+  const result = await getResend().emails.send(payload);
+  if (result.error) {
+    throw new Error(
+      `[auth] Resend rejected the email: ${result.error.name ?? 'unknown'} — ${result.error.message}`,
+    );
+  }
+}
+
 // Ring buffer of the last 20 OTPs in non-production. Read by the dev-only
 // peek route during E2E tests.
 //
@@ -110,7 +123,7 @@ export async function sendEmail(input: {
   if (process.env.AUTH_EMAIL_TRANSPORT === 'console') {
     return;
   }
-  await getResend().emails.send({
+  await sendViaResend({
     from: getFromAddress(),
     to: input.to,
     subject: input.subject,
@@ -131,7 +144,7 @@ export async function sendOtpEmail(input: SendOtpInput): Promise<void> {
     return;
   }
 
-  await getResend().emails.send({
+  await sendViaResend({
     from: getFromAddress(),
     to: input.to,
     subject: 'Your Alpha Wolf verification code',
