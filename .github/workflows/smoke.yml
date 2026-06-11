@@ -53,7 +53,7 @@ jobs:
       startsWith(github.event.deployment_status.environment, 'Production') &&
       contains(github.event.deployment_status.environment_url, '.vercel.app')
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v6
 

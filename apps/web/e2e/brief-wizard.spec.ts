@@ -92,14 +92,16 @@ test.describe('Goal 5 brief wizard', () => {
     await page.getByTestId('brief-step-tab-photos').click();
     await page.getByTestId('photo-input').setInputFiles(OPAQUE_PNG);
     const photoNote = page.locator('[data-testid^="photo-note-"]').first();
-    await photoNote.waitFor({ state: 'visible', timeout: 60_000 }); // inline parse on dev
+    // 120s = the upload hook's own poll ceiling; the post-deploy smoke is the
+    // free-tier Render worker's COLD-START hit (~up to 2.5 min observed).
+    await photoNote.waitFor({ state: 'visible', timeout: 120_000 });
     await photoNote.fill('dent on rear left quarter panel');
 
     // Logo (B2C-004): the opaque low-res PNG must trip BOTH gate warnings,
     // then get assigned to a zone.
     await page.getByTestId('brief-step-tab-logo').click();
     await page.getByTestId('logo-input').setInputFiles(OPAQUE_PNG);
-    await expect(page.getByTestId('logo-warning-opaque')).toBeVisible({ timeout: 60_000 });
+    await expect(page.getByTestId('logo-warning-opaque')).toBeVisible({ timeout: 120_000 });
     await expect(page.getByTestId('logo-rembg')).toBeVisible(); // one-click path offered
     await expect(page.getByTestId('logo-warning-dpi')).toBeVisible();
     await expect(page.getByTestId('logo-warning-dpi')).toContainText(/DPI/);
@@ -204,10 +206,7 @@ test.describe('Goal 5 brief wizard', () => {
     // burn its rate budget every run (PR #130 review) — the panel's presence
     // is still asserted everywhere.
     await expect(page.getByTestId('delivery-panel')).toBeVisible();
-    const isRemote = Boolean(
-      process.env.DEPLOY_URL && !/localhost|127\.0\.0\.1|::1/.test(process.env.DEPLOY_URL),
-    );
-    if (!isRemote) {
+    if (!isRemoteTarget()) {
       await page.getByTestId('delivery-email-self').click();
       await expect(page.getByText(/sent to your inbox/i).first()).toBeVisible({
         timeout: 30_000,
