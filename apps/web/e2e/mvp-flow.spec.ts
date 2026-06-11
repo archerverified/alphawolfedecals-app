@@ -12,10 +12,12 @@
 // customer loop runs on the Ford Transit (TRANSIT_ID) — the panel-bearing template —
 // because the 3 AW catalogue templates have no vehicle_panels, so the editor has no
 // design surface on them (launch blocker; ADR-0014 inv 12). It exercises real place +
-// color via the shape tool + inspector (`tool-shape` + `color-fill`). Artwork UPLOAD
-// is omitted (it currently 500s — Goal 4 finding #3). A separate "catalogue opens"
-// test guards that an AW template still browses + opens without crashing.
-//   v1.1 follow-ups — restore upload + the uploaded-image place/persist asserts
+// color via the shape tool + inspector (`tool-shape` + `color-fill`), and artwork
+// UPLOAD through the full parse pipeline (restored Goal 5 — the Goal 4 finding #3
+// 500 was a stale Vercel service-role key, fixed + verified; Sentry NODE-A). A
+// separate "catalogue opens" test guards that an AW template still browses + opens
+// without crashing.
+//   v1.1 follow-up — uploaded-image place/persist asserts
 //   (needs `asset-status-ready` / `asset-thumbnail` / `canvas-element` testids).
 //
 // ── Auth gate (Option (a), unchanged) ────────────────────────────────────────
@@ -36,7 +38,6 @@ import * as path from 'path';
 import { signIn, signUpAndVerify, uniqueEmail } from './support/flows';
 
 const TINY_SVG = path.resolve(__dirname, 'fixtures/tiny-logo.svg');
-void TINY_SVG; // upload is omitted from the smoke (Goal 4 finding #3 — it 500s)
 
 // The Ford Transit is the panel-bearing template. The 3 curated AW catalogue
 // templates have no vehicle_panels, so the editor has no design surface on them
@@ -90,10 +91,17 @@ test.describe('MVP smoke — customer design → submit loop', () => {
     await canvasHost.waitFor({ state: 'visible', timeout: 20_000 });
     await page.getByTestId('canvas-ready').waitFor({ state: 'attached', timeout: 20_000 });
 
+    // Artwork upload — restored 2026-06-11 (Goal 5). Goal 4 finding #3 (prod
+    // 500) was a stale Vercel SUPABASE_SERVICE_ROLE_KEY after the Supabase
+    // API-key rotation, fixed + verified e2e (Sentry NODE-A). This guards the
+    // whole pipeline: signed-URL grant → browser PUT → finalize → BullMQ →
+    // Render parse worker → "Parse complete." toast. Generous timeout: the
+    // free-tier Render worker can cold-start.
+    await page.getByTestId('upload-input').setInputFiles(TINY_SVG);
+    await expect(page.getByText('Parse complete.')).toBeVisible({ timeout: 120_000 });
+
     // Place a shape on the auto-targeted front panel, then recolor it via the
-    // inspector — both work on a panel-bearing template. (Artwork UPLOAD is omitted:
-    // it currently 500s — Goal 4 finding #3; restoring upload + the uploaded-image
-    // place/persist asserts is a v1.1 follow-up.)
+    // inspector — both work on a panel-bearing template.
     await page.getByTestId('tool-shape').click();
     const fill = page.getByTestId('color-fill').first();
     await fill.waitFor({ state: 'visible', timeout: 10_000 });
@@ -159,11 +167,38 @@ test.describe('MVP smoke — shop receipt → fulfil loop', () => {
       await signIn(page, email, '/dashboard');
     }
 
-    // Dashboard loaded; open the newest routed order.
+    // Dashboard loaded. The seeded routed order is CONSUMED by a successful run
+    // (submitted → in_production → fulfilled is one-way), so target a row that
+    // is still actionable instead of blindly clicking the newest. When every
+    // routed order is already fulfilled (i.e. the fixture is spent — observed
+    // 2026-06-11 after the cancelled 2026-06-10 run consumed it), fall back to
+    // verifying the read path and say so, rather than timing out on a
+    // transition button that can't exist. Re-seed a fresh routed order
+    // (scripts/seed-smoke-accounts.ts) to restore full transition coverage.
     await page.getByTestId('orders-table').waitFor({ state: 'visible', timeout: 15_000 });
-    const orderLink = page.getByTestId('order-link').first();
-    await orderLink.waitFor({ state: 'visible', timeout: 15_000 });
-    await orderLink.click();
+    const actionableRow = page
+      .locator('tr')
+      .filter({
+        has: page.locator('[data-testid="order-status-badge"][data-status="submitted"]'),
+      })
+      .first();
+
+    if ((await actionableRow.count()) === 0) {
+      test.info().annotations.push({
+        type: 'warning',
+        description:
+          'No routed order in `submitted` state — seeded fixture is spent. ' +
+          'Verified the dashboard→detail read path only; re-seed to exercise transitions.',
+      });
+      const orderLink = page.getByTestId('order-link').first();
+      await orderLink.waitFor({ state: 'visible', timeout: 15_000 });
+      await orderLink.click();
+      await expect(page).toHaveURL(/dashboard\/orders\//);
+      await expect(page.getByTestId('order-detail')).toBeVisible();
+      return;
+    }
+
+    await actionableRow.getByTestId('order-link').click();
     await expect(page).toHaveURL(/dashboard\/orders\//);
     await expect(page.getByTestId('order-detail')).toBeVisible();
 
