@@ -49,6 +49,7 @@ export default async function BriefPage({ params }: { params: Promise<{ id: stri
           view: p.view,
           outlinePath: p.svgPath,
         }))}
+        vehicleDims={{ lengthMm: vehicle.lengthMm, widthMm: vehicle.widthMm }}
       />
     </main>
   );

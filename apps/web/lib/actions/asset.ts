@@ -86,6 +86,8 @@ export type AssetView = {
   mimeType: string;
   parseStatus: string;
   parseMetadata: unknown;
+  /** Bumped each time a (re-)parse completes — generation marker for re-parse polls. */
+  version: number;
   url: string | null; // signed read url of the parsed (or source) object
 };
 
@@ -106,6 +108,7 @@ export async function getAssetAction(input: {
     mimeType: asset.mimeType,
     parseStatus: asset.parseStatus,
     parseMetadata: asset.parseMetadata,
+    version: asset.version,
     url,
   };
 }
@@ -125,6 +128,7 @@ export async function listAssetsAction(input: { projectId: string }): Promise<As
         mimeType: a.mimeType,
         parseStatus: a.parseStatus,
         parseMetadata: a.parseMetadata,
+        version: a.version,
         url: key ? await storage.signedAssetReadUrl(key) : null,
       };
     }),

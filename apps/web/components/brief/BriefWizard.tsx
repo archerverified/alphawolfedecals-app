@@ -26,6 +26,8 @@ import {
   ZonesStep,
   type BriefPanel,
 } from './steps';
+import { PhotosStep } from './PhotosStep';
+import { LogoStep } from './LogoStep';
 
 export interface BriefWizardProps {
   projectId: string;
@@ -35,6 +37,8 @@ export interface BriefWizardProps {
   initialStep: string | null;
   vehicleLabel: string;
   panels: BriefPanel[];
+  /** Real overall vehicle dimensions (mm) — anchor for the logo DPI gate. */
+  vehicleDims: { lengthMm: number; widthMm: number };
 }
 
 export function BriefWizard({
@@ -45,6 +49,7 @@ export function BriefWizard({
   initialStep,
   vehicleLabel,
   panels,
+  vehicleDims,
 }: BriefWizardProps) {
   const steps = useMemo(() => enabledBriefSteps(), []);
   const initialIndex = Math.max(
@@ -162,6 +167,16 @@ export function BriefWizard({
 
       <section className="min-h-[320px]" data-testid={`brief-step-${step.key}`}>
         {step.key === 'zones' && <ZonesStep data={data} patch={patch} panels={panels} />}
+        {step.key === 'photos' && <PhotosStep projectId={projectId} data={data} patch={patch} />}
+        {step.key === 'logo' && (
+          <LogoStep
+            projectId={projectId}
+            data={data}
+            patch={patch}
+            panels={panels}
+            vehicleDims={vehicleDims}
+          />
+        )}
         {step.key === 'style' && <StyleStep data={data} patch={patch} />}
         {step.key === 'zoneNotes' && <ZoneNotesStep data={data} patch={patch} panels={panels} />}
         {step.key === 'materials' && <MaterialsStep data={data} patch={patch} />}
