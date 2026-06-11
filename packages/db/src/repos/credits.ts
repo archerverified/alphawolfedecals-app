@@ -5,7 +5,7 @@
 // prisma/sql/auth_rls.sql for the enforcement story.
 
 import { withSystem, withUser } from '../client.js';
-import { CREDIT_CONFIG } from '../credit-config.js';
+import { CREDIT_CONFIG, PLAN_LIMITS, type PlanName } from '../credit-config.js';
 
 export type CreditSource = 'grant' | 'purchase' | 'referral' | 'admin';
 
@@ -56,5 +56,29 @@ export async function grantSignupCredits(userId: string): Promise<number> {
       ON CONFLICT (user_id) WHERE source = 'grant' AND reason = 'signup' DO NOTHING
     `;
     return inserted === 1 ? amount : 0;
+  });
+}
+
+// --- Plan gates (B2C-011) ----------------------------------------------------
+
+export type PlanGateContext = {
+  plan: PlanName;
+  /** Distinct vehicles the user holds non-deleted projects for. */
+  usedVehicleIds: string[];
+};
+
+// Everything the server-side plan gates need, in one RLS-scoped read. Unknown
+// future plans (Phase 2 paid tiers) fall back to 'free' limits until their
+// entry lands in PLAN_LIMITS — gates must never fail open on a typo.
+export async function getPlanGateContext(userId: string): Promise<PlanGateContext> {
+  return withUser(userId, async (db) => {
+    const user = await db.user.findUnique({ where: { id: userId }, select: { plan: true } });
+    const rows = await db.project.findMany({
+      where: { ownerUserId: userId, status: { not: 'deleted' } },
+      select: { vehicleId: true },
+      distinct: ['vehicleId'],
+    });
+    const plan: PlanName = user && user.plan in PLAN_LIMITS ? (user.plan as PlanName) : 'free';
+    return { plan, usedVehicleIds: rows.map((r) => r.vehicleId) };
   });
 }

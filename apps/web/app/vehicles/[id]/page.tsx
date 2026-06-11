@@ -4,7 +4,7 @@
 
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { vehicles, storage } from '@alphawolf/db';
+import { vehicles, storage, PLAN_LIMITS } from '@alphawolf/db';
 import { OutlinePreview } from '../../../components/vehicles/OutlinePreview';
 import { DetailViewTracker } from '../../../components/vehicles/DetailViewTracker';
 import { StartProjectButton } from '../../../components/projects/StartProjectButton';
@@ -13,8 +13,16 @@ import { bodyTypeLabel, formatDimensions, vehicleTitle } from '../../../lib/vehi
 
 export const dynamic = 'force-dynamic';
 
-export default async function VehicleDetailPage({ params }: { params: Promise<{ id: string }> }) {
+export default async function VehicleDetailPage({
+  params,
+  searchParams,
+}: {
+  params: Promise<{ id: string }>;
+  searchParams: Promise<{ gate?: string | string[] }>;
+}) {
   const { id } = await params;
+  const { gate: gateParam } = await searchParams;
+  const gate = Array.isArray(gateParam) ? gateParam[0] : gateParam;
   const vehicle = await vehicles.getPublishedDetail(id);
   if (!vehicle) notFound();
 
@@ -42,6 +50,20 @@ export default async function VehicleDetailPage({ params }: { params: Promise<{ 
         <Link href="/vehicles" className="text-sm text-zinc-500 hover:text-zinc-800">
           ← Back to templates
         </Link>
+
+        {gate === 'slots' ? (
+          <p
+            className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800"
+            data-testid="slot-gate-banner"
+          >
+            Your free plan covers {PLAN_LIMITS.free.vehicleSlots} vehicles, and all slots are in
+            use. More slots are coming soon — for now, keep designing on{' '}
+            <Link href="/projects" className="underline">
+              your current vehicles
+            </Link>
+            .
+          </p>
+        ) : null}
 
         <header className="mt-4 flex flex-wrap items-start justify-between gap-3">
           <div>
