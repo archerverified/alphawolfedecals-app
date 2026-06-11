@@ -13,6 +13,10 @@ export interface RasterResult {
     rembg: { requested: boolean; removed: boolean; error?: string };
     // Detected content bounding box (transparent/edge trim), for the crop UI.
     contentBbox: { left: number; top: number; width: number; height: number } | null;
+    // True when the FINAL png (post-rembg) has no transparent pixels — drives
+    // the logo quality gate's "solid background" warning (Goal 5 / B2C-004).
+    // null when stats couldn't be computed.
+    opaque: boolean | null;
   };
 }
 
@@ -89,6 +93,17 @@ export async function rasterToPng(input: Buffer, opts: { rembg: boolean }): Prom
     rembg.error = r.error;
   }
 
+  // Transparency check on the FINAL buffer: a JPG source re-encoded to PNG is
+  // still opaque; a post-rembg PNG is not. sharp's stats().isOpaque is a full
+  // alpha scan — cheap at logo sizes.
+  let opaque: boolean | null = null;
+  try {
+    const stats = await sharp(png).stats();
+    opaque = stats.isOpaque;
+  } catch {
+    opaque = null;
+  }
+
   let contentBbox: RasterResult['metadata']['contentBbox'] = null;
   try {
     const { info } = await sharp(png).trim({ threshold: 10 }).toBuffer({ resolveWithObject: true });
@@ -107,6 +122,7 @@ export async function rasterToPng(input: Buffer, opts: { rembg: boolean }): Prom
       naturalHeight: meta.height ?? null,
       rembg,
       contentBbox,
+      opaque,
     },
   };
 }
