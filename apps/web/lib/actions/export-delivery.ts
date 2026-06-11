@@ -16,7 +16,9 @@ import { loadSpecPackData } from '../export/load-spec-pack-data';
 import { buildSpecPack } from '../export/spec-pack';
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
-const RATE = { windowMs: 15 * 60 * 1000, threshold: 5, lockoutMs: 15 * 60 * 1000 };
+// threshold semantics: recordFailure denies AT the threshold, so 6 = five
+// sends allowed per window (PR #130 review off-by-one).
+const RATE = { windowMs: 15 * 60 * 1000, threshold: 6, lockoutMs: 15 * 60 * 1000 };
 
 function escapeHtml(s: string): string {
   return s
@@ -58,16 +60,21 @@ export async function emailSpecPackAction(input: {
   );
   if (!data) return { ok: false, reason: 'not_found' };
 
+  // Header-safe project name: control chars stripped, capped — project names
+  // are unbounded free text and go into an email SUBJECT (PR #130 MUST-FIX).
+  // eslint-disable-next-line no-control-regex
+  const safeName = data.projectName.replace(/[\u0000-\u001f\u007f]+/g, ' ').slice(0, 80);
+
   const pdf = await buildSpecPack(data);
   const filename = `wrap-spec-${data.projectName.replace(/[^A-Za-z0-9_-]+/g, '-').slice(0, 60) || 'pack'}.pdf`;
 
   const intro =
     input.channel === 'self'
       ? 'Here is the Wrap Spec Pack for your design.'
-      : `${escapeHtml(data.customer.name)} built this wrap design with Alpha Wolf Wrap Studio and would like a quote. The full spec is attached — colors as film SKUs, zone sizes, tint, and condition photos.`;
+      : `${escapeHtml(data.customer.name)} (${escapeHtml(user.email)}) built this wrap design with Alpha Wolf Wrap Studio and would like a quote. The full spec is attached — colors as film SKUs, zone sizes, tint, and condition photos.`;
   const subject =
     input.channel === 'self'
-      ? `Your Wrap Spec Pack — ${data.projectName}`
+      ? `Your Wrap Spec Pack — ${safeName}`
       : `Wrap quote request — ${data.vehicle.label}`;
 
   try {
@@ -80,7 +87,10 @@ export async function emailSpecPackAction(input: {
 <p style="margin: 0 0 12px; font-size: 14px; color: #555;">${escapeHtml(data.vehicle.label)}</p>
 <p style="margin: 0; font-size: 12px; color: #777;">Designed with Alpha Wolf Wrap Studio.</p>
 </body></html>`,
-      text: `${data.projectName}\n\n${input.channel === 'self' ? 'Your Wrap Spec Pack is attached.' : `${data.customer.name} would like a wrap quote — the spec pack is attached.`}\n${data.vehicle.label}\n\nDesigned with Alpha Wolf Wrap Studio.`,
+      text: `${safeName}\n\n${input.channel === 'self' ? 'Your Wrap Spec Pack is attached.' : `${data.customer.name} (${user.email}) would like a wrap quote — the spec pack is attached.`}\n${data.vehicle.label}\n\nDesigned with Alpha Wolf Wrap Studio.`,
+      // Replies from the shop must reach the CUSTOMER, not our sender address
+      // — and the verified account email rides along for abuse traceability.
+      replyTo: input.channel === 'shop' ? user.email : undefined,
       attachments: [{ filename, content: Buffer.from(pdf) }],
     });
   } catch {

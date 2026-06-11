@@ -98,6 +98,8 @@ export async function sendEmail(input: {
   text: string;
   /** Optional file attachments (Goal 5 / B2C-010 — the spec-pack PDF). */
   attachments?: EmailAttachment[];
+  /** Optional Reply-To (e.g. the customer on send-to-shop). */
+  replyTo?: string;
 }): Promise<void> {
   if (process.env.NODE_ENV !== 'production') {
     const att = input.attachments?.length
@@ -114,6 +116,7 @@ export async function sendEmail(input: {
     subject: input.subject,
     html: input.html,
     text: input.text,
+    replyTo: input.replyTo,
     attachments: input.attachments?.map((a) => ({ filename: a.filename, content: a.content })),
   });
 }

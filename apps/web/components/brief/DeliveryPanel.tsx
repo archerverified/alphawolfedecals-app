@@ -38,7 +38,7 @@ export function DeliveryPanel({ projectId, flushNow }: Props) {
         shopEmail: channel === 'shop' ? shopEmail : undefined,
       });
       if (res.ok) {
-        toast.success(channel === 'self' ? `Sent to ${res.to}.` : `Sent to ${res.to}.`);
+        toast.success(channel === 'self' ? 'Sent to your inbox.' : `Sent to ${res.to}.`);
         if (channel === 'shop') setShopEmail('');
       } else {
         toast.error(FRIENDLY[res.reason] ?? 'Could not send.');
