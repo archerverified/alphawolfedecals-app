@@ -120,6 +120,20 @@ describe('scrubSentryEvent', () => {
     expect(result.breadcrumbs?.[0]?.message).toBe('dispatching OTP to [email]');
   });
 
+  it('redacts the email query param in request URLs (/verify?email=...)', () => {
+    const event: Event = {
+      request: {
+        url: 'https://app.example.com/verify?email=casey%40example.com&type=customer',
+      },
+    };
+
+    const result = scrubSentryEvent(event);
+
+    expect(result.request?.url).toBe(
+      'https://app.example.com/verify?email=[redacted]&type=customer',
+    );
+  });
+
   it('passes a clean event through untouched (no false positives)', () => {
     const event: Event = {
       message: 'something happened',

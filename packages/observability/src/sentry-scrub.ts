@@ -9,7 +9,9 @@ import type { Event, EventHint } from '@sentry/core';
 // second is a belt-and-suspenders pass for Supabase signed-URL `?token=` values
 // (whose JWT-shaped value can contain characters the first alternation list
 // would otherwise stop at).
-const TOKEN_QUERY_RE = /([?&](?:token|access_token|api_key|key|signature)=)[^&#]*/gi;
+// `email` included: the app's own /verify?email=... routing would otherwise put
+// the address in every request URL Sentry records for that page.
+const TOKEN_QUERY_RE = /([?&](?:token|access_token|api_key|key|signature|email)=)[^&#]*/gi;
 const SIGNED_URL_RE = /([?&]token=)[^&#]+/gi;
 
 // Email addresses redacted from message-like fields (event.message, exception

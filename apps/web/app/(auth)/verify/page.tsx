@@ -21,21 +21,20 @@ export default async function VerifyPage({ searchParams }: { searchParams: Promi
         <h2 className="text-xl font-semibold text-zinc-900">
           {sendFailed ? 'Almost there' : 'Check your email'}
         </h2>
-        {sendFailed ? (
-          <p
-            role="alert"
-            className="mt-2 rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
-          >
-            Your account was created, but we couldn't send the verification code. Tap
-            &ldquo;Resend&rdquo; below to try again.
-          </p>
-        ) : (
+        {sendFailed ? null : (
           <p className="mt-1 text-sm text-zinc-600">
             We sent a 6-digit verification code. It's good for 10 minutes.
           </p>
         )}
       </div>
-      <VerifyForm email={email} accountType={accountType} csrfToken={csrfToken} />
+      {/* The send-failure notice lives inside VerifyForm (client) so it can
+          clear itself once a Resend succeeds — the URL's sent=0 never updates. */}
+      <VerifyForm
+        email={email}
+        accountType={accountType}
+        csrfToken={csrfToken}
+        sendFailed={sendFailed}
+      />
     </>
   );
 }

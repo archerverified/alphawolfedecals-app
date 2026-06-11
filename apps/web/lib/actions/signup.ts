@@ -11,6 +11,7 @@ import {
   verifyCsrf,
   verifySignupOtp,
 } from '@alphawolf/auth/server';
+import * as Sentry from '@sentry/nextjs';
 import { captureServerEvent } from '@/lib/notifications/posthog-server';
 
 type ActionState = {
@@ -109,6 +110,11 @@ export async function signupCustomerAction(
     };
   }
   if (result.ok) {
+    if (!result.otpSent) {
+      // The send failure was swallowed in @alphawolf/auth (so signup still
+      // succeeds) — re-surface it here or a Resend outage stays invisible.
+      Sentry.captureMessage('signup OTP send failed — user routed to /verify (sent=0)', 'error');
+    }
     const email = encodeURIComponent(result.email);
     // sent=0: account created but the OTP email failed — the verify page shows
     // a "tap Resend" notice. Never bounce back to signup (email_in_use trap).
@@ -173,6 +179,9 @@ export async function signupShopAction(_prev: ActionState, form: FormData): Prom
     };
   }
   if (result.ok) {
+    if (!result.otpSent) {
+      Sentry.captureMessage('signup OTP send failed — user routed to /verify (sent=0)', 'error');
+    }
     const email = encodeURIComponent(result.email);
     // See signupCustomerAction: sent=0 routes the send-failure to /verify.
     const sent = result.otpSent ? '' : '&sent=0';
@@ -250,6 +259,7 @@ export async function resendOtpAction(_prev: ActionState, form: FormData): Promi
     // Resend (or the DB) failed mid-send. Without this catch the Server Action
     // 500s and the verify page shows Next's generic error screen.
     console.error('[resendOtpAction] unhandled error', err);
+    Sentry.captureException(err, { tags: { feature: 'auth-otp' } });
     return {
       ok: false,
       message: "We couldn't send the email. Please try again in a moment.",
