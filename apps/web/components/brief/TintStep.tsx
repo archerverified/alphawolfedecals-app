@@ -88,6 +88,7 @@ export function TintStep({ projectId, data, patch }: Props) {
                   <button
                     type="button"
                     onClick={() => setVlt(w.key, null)}
+                    aria-label={`Clear ${w.label}`}
                     className="text-xs text-zinc-400 underline hover:text-zinc-600"
                   >
                     clear

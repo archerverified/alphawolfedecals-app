@@ -127,9 +127,10 @@ export const briefSchema = z
     tint: z
       .object({
         state: z.string().length(2).optional(),
+        // Keys pinned to the law table's window set so B2C-009's export pack
+        // can consume them without tolerating unknowns (PR #127 review).
         perWindow: z
-          .record(z.string().max(40), z.number().int().min(0).max(100))
-          .refine((obj) => Object.keys(obj).length <= 16, 'too many windows')
+          .record(z.enum(['front', 'back', 'rear']), z.number().int().min(0).max(100))
           .optional(),
       })
       .optional(),

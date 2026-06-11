@@ -8,6 +8,7 @@
 import type { ReactNode } from 'react';
 import { Button } from '@alphawolf/ui/components/ui/button';
 import { ZoneDiagram } from './ZoneDiagram';
+import { TINT_WINDOWS } from '@/lib/brief/tint-laws';
 import {
   BRIEF_STYLE_PRESETS,
   MATERIAL_TIERS,
@@ -417,8 +418,10 @@ export function ReviewStep({
       label: 'Tint',
       value: (() => {
         const windows = Object.entries(data.tint?.perWindow ?? {});
-        if (windows.length === 0) return '—';
-        const parts = windows.map(([w, v]) => `${w.replace('_', ' ')} ${v}%`);
+        if (windows.length === 0 && !data.tint?.state) return '—';
+        const parts = windows.map(
+          ([w, v]) => `${TINT_WINDOWS.find((t) => t.key === w)?.label ?? w} ${v}%`,
+        );
         return [data.tint?.state, ...parts].filter(Boolean).join(' — ');
       })(),
     },

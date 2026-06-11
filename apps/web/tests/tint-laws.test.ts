@@ -1,7 +1,7 @@
 // Tint law table + verdict invariants (Goal 5 / B2C-006).
 
 import { describe, expect, it } from 'vitest';
-import { TINT_LAWS, tintLawFor, tintVerdict } from '../lib/brief/tint-laws';
+import { IOWA_PENDING, TINT_LAWS, tintLawFor, tintVerdict } from '../lib/brief/tint-laws';
 
 describe('TINT_LAWS', () => {
   it('covers all 50 states + DC with unique codes', () => {
@@ -30,6 +30,17 @@ describe('TINT_LAWS', () => {
     expect(tintLawFor('LA')).toMatchObject({ front: 25, rear: 12 }); // Act 143 (2025)
     expect(tintLawFor('ND')).toMatchObject({ front: 35 }); // HB 1340 (2025)
     expect(tintLawFor('XX')).toBeNull();
+    // PR #127 review MUST-FIX: IL is 35/35/35 for sedans (625 ILCS 5/12-503);
+    // 50/35/any was the SUV rule + mirrors exception — false-legal.
+    expect(tintLawFor('IL')).toMatchObject({ front: 35, back: 35, rear: 35 });
+  });
+
+  it('dated tripwire: Iowa HF 766 lowers front to 50 on 2026-07-01', () => {
+    // Intentionally wall-clock dependent: when this fails, update IA in the
+    // table (and retire IOWA_PENDING). Loud staleness beats silent drift.
+    const effective = new Date(IOWA_PENDING.effective + 'T00:00:00Z').getTime();
+    const expected = Date.now() >= effective ? IOWA_PENDING.front : 70;
+    expect(tintLawFor('IA')?.front).toBe(expected);
   });
 });
 

@@ -19,8 +19,13 @@
 // final disclaimer wording + table audit needs the human legal pass before
 // launch (PRD §8).
 //
-// Vans/SUVs (MPVs): most states allow ANY darkness behind the driver with
-// dual mirrors — sedan rules shown here are the conservative baseline.
+// CONVENTION: the conservative sedan baseline WITHOUT relying on the
+// dual-outside-mirror exception many states offer for windows behind the
+// driver (erring toward "stricter than the meter" is the safe direction for
+// a pre-purchase hint). Where a statute makes 'any' the plain rule (e.g.
+// Hawaii Act 129), 'any' is encoded. Reconciling per-state mirror exceptions
+// is on the legal-pass list. Vans/SUVs (MPVs): most states allow ANY darkness
+// behind the driver — sedan rules here are the conservative baseline.
 
 export type VltRule = number | 'any' | 'none';
 
@@ -55,7 +60,7 @@ export const TINT_LAWS: readonly StateTintLaw[] = [
   { code: 'GA', name: 'Georgia', front: 32, back: 32, rear: 32 },
   { code: 'HI', name: 'Hawaii', front: 35, back: 'any', rear: 'any' },
   { code: 'ID', name: 'Idaho', front: 35, back: 20, rear: 35 },
-  { code: 'IL', name: 'Illinois', front: 50, back: 35, rear: 'any' },
+  { code: 'IL', name: 'Illinois', front: 35, back: 35, rear: 35 },
   { code: 'IN', name: 'Indiana', front: 30, back: 30, rear: 30 },
   { code: 'IA', name: 'Iowa', front: 70, back: 'any', rear: 'any' },
   { code: 'KS', name: 'Kansas', front: 35, back: 35, rear: 35 },
@@ -124,12 +129,12 @@ const CLOSE_MARGIN = 5;
  */
 export function tintVerdict(
   stateCode: string,
-  window: TintWindow,
+  windowKey: TintWindow,
   vlt: number,
 ): TintVerdict | null {
   const law = tintLawFor(stateCode);
   if (!law) return null;
-  const rule = law[window];
+  const rule = law[windowKey];
   if (rule === 'any') {
     return { status: 'legal', note: `${law.name}: no VLT limit on this window.` };
   }
@@ -148,7 +153,7 @@ export function tintVerdict(
   if (vlt - rule < CLOSE_MARGIN) {
     return {
       status: 'close',
-      note: `Legal, but close to ${law.name}'s ${rule}% minimum — meters vary, confirm with your installer.`,
+      note: `Right at ${law.name}'s ${rule}% minimum — film stacks on factory glass and may meter below it. Confirm with your installer.`,
     };
   }
   return { status: 'legal', note: `Meets ${law.name}'s ${rule}%+ VLT minimum.` };
