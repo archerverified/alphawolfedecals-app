@@ -181,7 +181,7 @@ export const BRIEF_STEPS = [
   { key: 'style', label: 'Style & ideas', enabled: true },
   { key: 'zoneNotes', label: 'Zone notes', enabled: true },
   { key: 'materials', label: 'Materials', enabled: true },
-  { key: 'tint', label: 'Tint', enabled: false },
+  { key: 'tint', label: 'Tint', enabled: true },
   { key: 'extras', label: 'Extras', enabled: true },
   { key: 'aiNotes', label: 'Notes', enabled: true },
   { key: 'review', label: 'Review', enabled: true },

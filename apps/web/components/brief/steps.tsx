@@ -412,6 +412,16 @@ export function ReviewStep({
         : '—',
     },
     { key: 'materials', label: 'Material', value: tier ? `${tier.label} (${tier.cost})` : '—' },
+    {
+      key: 'tint',
+      label: 'Tint',
+      value: (() => {
+        const windows = Object.entries(data.tint?.perWindow ?? {});
+        if (windows.length === 0) return '—';
+        const parts = windows.map(([w, v]) => `${w.replace('_', ' ')} ${v}%`);
+        return [data.tint?.state, ...parts].filter(Boolean).join(' — ');
+      })(),
+    },
     { key: 'extras', label: 'Extras', value: extras.length ? extras.join(', ') : '—' },
     { key: 'aiNotes', label: 'Notes', value: data.aiNotes ? data.aiNotes.slice(0, 120) : '—' },
   ];
