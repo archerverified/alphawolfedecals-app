@@ -35,6 +35,14 @@ const BRIEF_SELECT = {
 // Load the project's brief, creating an empty one on first visit. The create
 // runs under RLS: WITH CHECK rejects it unless the caller owns the project, so
 // a guessed foreign projectId 404s instead of planting a brief.
+// Read-only fetch — for surfaces (e.g. the export GET) that must not insert.
+export async function getBrief(userId: string, projectId: string): Promise<BriefRow | null> {
+  return withUser(userId, async (db) => {
+    const row = await db.designBrief.findUnique({ where: { projectId }, select: BRIEF_SELECT });
+    return (row as BriefRow | null) ?? null;
+  });
+}
+
 export async function getOrCreateBrief(
   userId: string,
   projectId: string,

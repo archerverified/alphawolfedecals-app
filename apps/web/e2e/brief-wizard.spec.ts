@@ -162,6 +162,16 @@ test.describe('Goal 5 brief wizard', () => {
     await expect(page.getByText(/1 photo\(s\)/)).toBeVisible();
     await expect(page.getByText(/opaque-logo\.png/)).toBeVisible();
     await expect(page.getByText(/2080-G13/)).toBeVisible();
+    // Export the Wrap Spec Pack (B2C-009): the Review screen's other half.
+    // page.request shares the session cookies — assert a real PDF comes back.
+    await expect(page.getByTestId('brief-export')).toBeVisible();
+    const exportRes = await page.request.get(`/projects/${projectId}/export`);
+    expect(exportRes.status()).toBe(200);
+    expect(exportRes.headers()['content-type']).toContain('application/pdf');
+    const pdf = await exportRes.body();
+    expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
+    expect(pdf.length).toBeGreaterThan(5_000); // a real 4-page pack, not an error body
+
     await page.getByTestId('brief-save').click();
     await expect(page.getByText(/brief saved \(v1\)/i)).toBeVisible({ timeout: 15_000 });
     await page.waitForURL(/\/projects\/[0-9a-f-]+\/editor/);
