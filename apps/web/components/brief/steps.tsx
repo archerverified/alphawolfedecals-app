@@ -28,7 +28,7 @@ interface StepProps {
   patch: (updater: (prev: BriefData) => BriefData) => void;
 }
 
-function StepShell({
+export function StepShell({
   title,
   hint,
   children,
@@ -368,8 +368,26 @@ export function ReviewStep({
     data.extras?.dotNumber && `DOT: ${data.extras.dotNumber}`,
   ].filter(Boolean);
 
+  const logoZones = (data.logo?.zonePanelIds ?? [])
+    .map((id) => panels.find((p) => p.id === id)?.name)
+    .filter(Boolean);
+
   const rows: Array<{ key: BriefStepKey; label: string; value: string }> = [
     { key: 'zones', label: 'Zones', value: zoneSummary },
+    {
+      key: 'photos',
+      label: 'Vehicle photos',
+      value: data.photos?.length ? `${data.photos.length} photo(s)` : '—',
+    },
+    {
+      key: 'logo',
+      label: 'Logo',
+      value: data.logo?.assetId
+        ? [data.logo.fileName ?? 'Uploaded', logoZones.length ? `on ${logoZones.join(', ')}` : null]
+            .filter(Boolean)
+            .join(' — ')
+        : '—',
+    },
     {
       key: 'style',
       label: 'Style',

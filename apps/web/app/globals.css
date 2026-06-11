@@ -1,1 +1,12 @@
 @import 'tailwindcss';
+
+/* Tailwind v4 auto-detection does NOT scan workspace packages (symlinked via
+   node_modules), so utilities that appear ONLY in @alphawolf/ui components —
+   e.g. the shadcn Dialog's fixed-center top-[50%]/translate-x-[-50%] — were
+   silently missing from the generated CSS (dev AND prod; found via Goal 5 /
+   B2C-004 e2e, where the un-centered Start-Project dialog rendered off-viewport).
+   Scan the ui package's sources explicitly. NOTE: the shadcn THEME VARIABLES
+   (--ring, --destructive, …) are still not defined here — color/ring utilities
+   referencing them stay inert as before; restoring the full shadcn theme block
+   is a separate, visual-review change (Goal 5 launch item). */
+@source '../../../packages/ui/src';

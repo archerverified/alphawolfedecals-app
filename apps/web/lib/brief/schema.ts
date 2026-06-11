@@ -175,8 +175,8 @@ export function parseBriefData(input: unknown): BriefParseResult {
 // wizard. Order matches PRD §3 step 3.
 export const BRIEF_STEPS = [
   { key: 'zones', label: 'Zones', enabled: true },
-  { key: 'photos', label: 'Your vehicle', enabled: false },
-  { key: 'logo', label: 'Logo', enabled: false },
+  { key: 'photos', label: 'Your vehicle', enabled: true },
+  { key: 'logo', label: 'Logo', enabled: true },
   { key: 'colors', label: 'Colors', enabled: false },
   { key: 'style', label: 'Style & ideas', enabled: true },
   { key: 'zoneNotes', label: 'Zone notes', enabled: true },
