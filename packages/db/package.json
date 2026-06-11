@@ -40,16 +40,16 @@
   },
   "dependencies": {
     "@prisma/client": "^5.22.0",
-    "@supabase/supabase-js": "^2.106.1",
+    "@supabase/supabase-js": "^2.108.1",
     "prisma": "^5.22.0",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.0",
     "svgo": "^3.3.3",
     "svgson": "^5.3.1"
   },
   "devDependencies": {
     "@alphawolf/canvas": "workspace:^",
     "@types/node": "^22.9.0",
-    "tsx": "^4.19.2",
+    "tsx": "^4.22.4",
     "typescript": "^5.6.3",
     "vitest": "^2.1.5"
   },
