@@ -28,6 +28,7 @@ import {
 } from './steps';
 import { PhotosStep } from './PhotosStep';
 import { LogoStep } from './LogoStep';
+import { ColorsStep } from './ColorsStep';
 
 export interface BriefWizardProps {
   projectId: string;
@@ -177,6 +178,7 @@ export function BriefWizard({
             vehicleDims={vehicleDims}
           />
         )}
+        {step.key === 'colors' && <ColorsStep projectId={projectId} data={data} patch={patch} />}
         {step.key === 'style' && <StyleStep data={data} patch={patch} />}
         {step.key === 'zoneNotes' && <ZoneNotesStep data={data} patch={patch} panels={panels} />}
         {step.key === 'materials' && <MaterialsStep data={data} patch={patch} />}

@@ -177,7 +177,7 @@ export const BRIEF_STEPS = [
   { key: 'zones', label: 'Zones', enabled: true },
   { key: 'photos', label: 'Your vehicle', enabled: true },
   { key: 'logo', label: 'Logo', enabled: true },
-  { key: 'colors', label: 'Colors', enabled: false },
+  { key: 'colors', label: 'Colors', enabled: true },
   { key: 'style', label: 'Style & ideas', enabled: true },
   { key: 'zoneNotes', label: 'Zone notes', enabled: true },
   { key: 'materials', label: 'Materials', enabled: true },
