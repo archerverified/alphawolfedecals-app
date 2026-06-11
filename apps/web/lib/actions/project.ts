@@ -42,6 +42,10 @@ export async function createProjectAction(formData: FormData): Promise<void> {
 
   // Free-plan vehicle-slot gate (B2C-011) — server-side, before any write. A
   // project on an already-used vehicle never consumes a new slot.
+  // ACCEPTED RACE: the gate read and the create run in separate transactions,
+  // so N concurrent submits can land a free user at limit+N distinct vehicles.
+  // Tolerable for a UX gate with nothing monetary attached; revisit with an
+  // advisory lock / in-transaction re-check when paid tiers land (Phase 2).
   const gateCtx = await credits.getPlanGateContext(user.id);
   const gate = vehicleSlotGate({
     plan: gateCtx.plan,
