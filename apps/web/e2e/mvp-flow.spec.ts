@@ -77,6 +77,10 @@ test.describe('MVP smoke — customer design → submit loop', () => {
   );
 
   test('design a wrap and submit it for production', async ({ page, request }) => {
+    // The upload step below legitimately needs up to ~2.5 min when the
+    // free-tier Render parse worker cold-starts — raise the TEST timeout too,
+    // or Playwright's 30s default aborts long before the expect's window.
+    test.setTimeout(180_000);
     await authenticateCustomer(page, request);
 
     // Design on the panel-bearing Ford Transit (see TRANSIT_ID above). Start a
@@ -96,7 +100,9 @@ test.describe('MVP smoke — customer design → submit loop', () => {
     // API-key rotation, fixed + verified e2e (Sentry NODE-A). This guards the
     // whole pipeline: signed-URL grant → browser PUT → finalize → BullMQ →
     // Render parse worker → "Parse complete." toast. Generous timeout: the
-    // free-tier Render worker can cold-start.
+    // free-tier Render worker can cold-start. Keep the fixture SVG: the vector
+    // passthrough skips the crop Dialog a raster upload opens (which would
+    // block the tool-shape click below behind a modal).
     await page.getByTestId('upload-input').setInputFiles(TINY_SVG);
     await expect(page.getByText('Parse complete.')).toBeVisible({ timeout: 120_000 });
 
@@ -177,7 +183,8 @@ test.describe('MVP smoke — shop receipt → fulfil loop', () => {
     // (scripts/seed-smoke-accounts.ts) to restore full transition coverage.
     await page.getByTestId('orders-table').waitFor({ state: 'visible', timeout: 15_000 });
     const actionableRow = page
-      .locator('tr')
+      .getByTestId('orders-table')
+      .locator('tbody tr')
       .filter({
         has: page.locator('[data-testid="order-status-badge"][data-status="submitted"]'),
       })
@@ -190,6 +197,12 @@ test.describe('MVP smoke — shop receipt → fulfil loop', () => {
           'No routed order in `submitted` state — seeded fixture is spent. ' +
           'Verified the dashboard→detail read path only; re-seed to exercise transitions.',
       });
+      // ::warning:: is a GitHub Actions workflow command — surfaces on the run
+      // summary so the degraded coverage is loud, not buried in the HTML report.
+      console.warn(
+        '::warning title=Smoke shop loop degraded::No actionable routed order — ' +
+          'status transitions NOT exercised. Re-seed: scripts/seed-smoke-accounts.ts.',
+      );
       const orderLink = page.getByTestId('order-link').first();
       await orderLink.waitFor({ state: 'visible', timeout: 15_000 });
       await orderLink.click();
