@@ -8,6 +8,7 @@
 import type { ReactNode } from 'react';
 import { Button } from '@alphawolf/ui/components/ui/button';
 import { ZoneDiagram } from './ZoneDiagram';
+import { TINT_WINDOWS } from '@/lib/brief/tint-laws';
 import {
   BRIEF_STYLE_PRESETS,
   MATERIAL_TIERS,
@@ -412,6 +413,18 @@ export function ReviewStep({
         : '—',
     },
     { key: 'materials', label: 'Material', value: tier ? `${tier.label} (${tier.cost})` : '—' },
+    {
+      key: 'tint',
+      label: 'Tint',
+      value: (() => {
+        const windows = Object.entries(data.tint?.perWindow ?? {});
+        if (windows.length === 0 && !data.tint?.state) return '—';
+        const parts = windows.map(
+          ([w, v]) => `${TINT_WINDOWS.find((t) => t.key === w)?.label ?? w} ${v}%`,
+        );
+        return [data.tint?.state, ...parts].filter(Boolean).join(' — ');
+      })(),
+    },
     { key: 'extras', label: 'Extras', value: extras.length ? extras.join(', ') : '—' },
     { key: 'aiNotes', label: 'Notes', value: data.aiNotes ? data.aiNotes.slice(0, 120) : '—' },
   ];

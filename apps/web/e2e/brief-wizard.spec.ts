@@ -101,10 +101,26 @@ test.describe('Goal 5 brief wizard', () => {
     await page.getByTestId('brief-step-tab-materials').click();
     await page.getByRole('button', { name: /premium cast vinyl/i }).click();
 
+    // Tint (B2C-006): pick a state, choose a too-dark front VLT → illegal
+    // verdict; bump to a legal one → verdict flips.
+    await page.getByTestId('brief-step-tab-tint').click();
+    await page.getByTestId('tint-state').selectOption('GA'); // GA front min = 32% VLT
+    await page.getByTestId('tint-front-20').click();
+    await expect(page.getByTestId('tint-verdict-front')).toHaveAttribute('data-status', 'illegal');
+    await page.getByTestId('tint-front-50').click();
+    await expect(page.getByTestId('tint-verdict-front')).toHaveAttribute('data-status', 'legal');
+    await page.getByTestId('tint-rear-20').click();
+    await expect(page.getByTestId('tint-verdict-rear')).toHaveAttribute('data-status', 'illegal');
+
     // Let the debounced autosave land, then reload → resume restores data+step.
     await expect(page.getByText('Saved', { exact: true })).toBeVisible({ timeout: 15_000 });
     await page.reload();
-    await expect(page.getByTestId('brief-step-materials')).toBeVisible(); // resumed step
+    await expect(page.getByTestId('brief-step-tint')).toBeVisible(); // resumed step
+    // Tint data survived: state + selections + recomputed verdicts.
+    await expect(page.getByTestId('tint-state')).toHaveValue('GA');
+    await expect(page.getByTestId('tint-front-50')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.getByTestId('tint-verdict-rear')).toHaveAttribute('data-status', 'illegal');
+    await page.getByTestId('brief-step-tab-materials').click();
     await expect(page.getByRole('button', { name: /premium cast vinyl/i })).toHaveAttribute(
       'aria-pressed',
       'true',

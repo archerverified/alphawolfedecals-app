@@ -29,6 +29,7 @@ import {
 import { PhotosStep } from './PhotosStep';
 import { LogoStep } from './LogoStep';
 import { ColorsStep } from './ColorsStep';
+import { TintStep } from './TintStep';
 
 export interface BriefWizardProps {
   projectId: string;
@@ -182,6 +183,7 @@ export function BriefWizard({
         {step.key === 'style' && <StyleStep data={data} patch={patch} />}
         {step.key === 'zoneNotes' && <ZoneNotesStep data={data} patch={patch} panels={panels} />}
         {step.key === 'materials' && <MaterialsStep data={data} patch={patch} />}
+        {step.key === 'tint' && <TintStep projectId={projectId} data={data} patch={patch} />}
         {step.key === 'extras' && <ExtrasStep data={data} patch={patch} />}
         {step.key === 'aiNotes' && <NotesStep data={data} patch={patch} />}
         {step.key === 'review' && (
