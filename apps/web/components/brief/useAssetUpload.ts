@@ -66,6 +66,16 @@ export function useAssetUpload(projectId: string) {
           if (view.parseStatus === 'failed') {
             return { ok: false, message: "We couldn't process that file. Try another one." };
           }
+          if (view.parseStatus === 'queued_missing_cli') {
+            // AI/EPS need a converter the deployed worker doesn't have yet
+            // (inkscape deferred — deploy topology). Don't present raw bytes
+            // as a parsed result.
+            return {
+              ok: false,
+              message:
+                "That format needs extra processing we can't run yet — a PNG, JPG, or SVG works right away.",
+            };
+          }
           return { ok: true, asset: { view, meta: readUploadMeta(view.parseMetadata) } };
         }
         if (Date.now() > deadline) {
@@ -127,16 +137,20 @@ export function useAssetUpload(projectId: string) {
 
   // One-click background removal on an ALREADY-parsed asset: re-enqueue the
   // same source with rembg and poll for the NEW result. The accept predicate
-  // keys on metadata.rembg.requested — the pre-rembg metadata has it false, so
-  // a poll that lands before the worker picks the job up can't return stale.
+  // keys on the asset VERSION (bumped each time a re-parse completes) — a
+  // metadata-based predicate returns stale on RETRY, because a failed first
+  // attempt already left rembg.requested=true in the stored row (PR #125
+  // review finding #2, queued-mode only so no test can see it).
   const removeBackground = useCallback(
     async (assetId: string, mimeType: string): Promise<UploadResult> => {
       if (busyRef.current) return { ok: false, message: 'Another upload is still running.' };
       busyRef.current = true;
       setPhase('parsing');
       try {
+        const before = await getAssetAction({ projectId, assetId });
+        if (!before) return { ok: false, message: 'The file disappeared during processing.' };
         await finalizeAssetUploadAction({ projectId, assetId, mimeType, rembg: true });
-        return await poll(assetId, (view) => readUploadMeta(view.parseMetadata).rembg.requested);
+        return await poll(assetId, (view) => view.version > before.version);
       } catch (err) {
         return {
           ok: false,

@@ -49,7 +49,7 @@ export default async function BriefPage({ params }: { params: Promise<{ id: stri
           view: p.view,
           outlinePath: p.svgPath,
         }))}
-        scaleDenom={vehicle.scaleDenom}
+        vehicleDims={{ lengthMm: vehicle.lengthMm, widthMm: vehicle.widthMm }}
       />
     </main>
   );

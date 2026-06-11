@@ -95,7 +95,8 @@ export async function rasterToPng(input: Buffer, opts: { rembg: boolean }): Prom
 
   // Transparency check on the FINAL buffer: a JPG source re-encoded to PNG is
   // still opaque; a post-rembg PNG is not. sharp's stats().isOpaque is a full
-  // alpha scan — cheap at logo sizes.
+  // pixel scan — runs on every raster upload (incl. large vehicle photos), an
+  // accepted cost for a single decode-speed pass.
   let opaque: boolean | null = null;
   try {
     const stats = await sharp(png).stats();

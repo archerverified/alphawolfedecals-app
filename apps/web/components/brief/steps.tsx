@@ -368,7 +368,10 @@ export function ReviewStep({
     data.extras?.dotNumber && `DOT: ${data.extras.dotNumber}`,
   ].filter(Boolean);
 
+  // Intersect with currently-included zones: an assignment to a later-excluded
+  // panel must not print on the review (PR #125 review finding #3).
   const logoZones = (data.logo?.zonePanelIds ?? [])
+    .filter((id) => included === null || included.includes(id))
     .map((id) => panels.find((p) => p.id === id)?.name)
     .filter(Boolean);
 

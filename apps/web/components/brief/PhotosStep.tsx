@@ -60,14 +60,16 @@ export function PhotosStep({ projectId, data, patch }: Props) {
       }
       const { view } = result.asset;
       if (view.url) setUrls((prev) => ({ ...prev, [view.assetId]: view.url! }));
+      let added = false;
       patch((prev) => {
         const existing = prev.photos ?? [];
         if (existing.length >= MAX_PHOTOS || existing.some((p) => p.assetId === view.assetId)) {
           return prev;
         }
+        added = true;
         return { ...prev, photos: [...existing, { assetId: view.assetId }] };
       });
-      capture('brief_photo_added', { projectId, count: photos.length + 1 });
+      if (added) capture('brief_photo_added', { projectId, count: photos.length + 1 });
     },
     [upload, patch, projectId, photos.length],
   );

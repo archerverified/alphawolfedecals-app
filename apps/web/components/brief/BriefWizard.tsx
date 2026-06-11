@@ -37,8 +37,8 @@ export interface BriefWizardProps {
   initialStep: string | null;
   vehicleLabel: string;
   panels: BriefPanel[];
-  /** Template drawing scale (1:N) — doc units × N = physical mm (DPI gate). */
-  scaleDenom: number;
+  /** Real overall vehicle dimensions (mm) — anchor for the logo DPI gate. */
+  vehicleDims: { lengthMm: number; widthMm: number };
 }
 
 export function BriefWizard({
@@ -49,7 +49,7 @@ export function BriefWizard({
   initialStep,
   vehicleLabel,
   panels,
-  scaleDenom,
+  vehicleDims,
 }: BriefWizardProps) {
   const steps = useMemo(() => enabledBriefSteps(), []);
   const initialIndex = Math.max(
@@ -174,7 +174,7 @@ export function BriefWizard({
             data={data}
             patch={patch}
             panels={panels}
-            scaleDenom={scaleDenom}
+            vehicleDims={vehicleDims}
           />
         )}
         {step.key === 'style' && <StyleStep data={data} patch={patch} />}

@@ -13,7 +13,13 @@ import { Button } from '@alphawolf/ui/components/ui/button';
 import { capture } from '@/lib/analytics';
 import { getAssetAction } from '@/lib/actions/asset';
 import type { BriefData } from '@/lib/brief/schema';
-import { dpiVerdict, readUploadMeta, MIN_LOGO_DPI, type UploadMeta } from '@/lib/brief/quality';
+import {
+  dpiVerdict,
+  readUploadMeta,
+  MIN_LOGO_DPI,
+  type UploadMeta,
+  type VehicleDims,
+} from '@/lib/brief/quality';
 import { useAssetUpload, LOGO_MIME } from './useAssetUpload';
 import { StepShell, type BriefPanel } from './steps';
 
@@ -22,7 +28,8 @@ interface Props {
   data: BriefData;
   patch: (updater: (prev: BriefData) => BriefData) => void;
   panels: BriefPanel[];
-  scaleDenom: number;
+  /** Real overall dimensions (mm) — anchor for the approximate DPI math. */
+  vehicleDims: VehicleDims;
 }
 
 const VECTOR_MIME = new Set([
@@ -32,7 +39,7 @@ const VECTOR_MIME = new Set([
   'application/illustrator',
 ]);
 
-export function LogoStep({ projectId, data, patch, panels, scaleDenom }: Props) {
+export function LogoStep({ projectId, data, patch, panels, vehicleDims }: Props) {
   const logo = data.logo;
   const { phase, upload, removeBackground } = useAssetUpload(projectId);
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -73,11 +80,16 @@ export function LogoStep({ projectId, data, patch, panels, scaleDenom }: Props) 
   const rembgRemoved = Boolean(preview?.meta.rembg.removed);
 
   // DPI against the biggest zone this logo is assigned to (falls back to the
-  // brief's included zones when nothing is assigned yet).
+  // brief's included zones when nothing is assigned yet). Assignments are
+  // intersected with the CURRENT included zones — excluding a zone after
+  // assigning the logo to it must not keep gating against it (PR #125 #3).
   const includedIds = data.zones?.includedPanelIds ?? null;
-  const assignedIds = logo?.zonePanelIds?.length ? logo.zonePanelIds : includedIds;
+  const assignedNow = (logo?.zonePanelIds ?? []).filter(
+    (id) => includedIds === null || includedIds.includes(id),
+  );
+  const assignedIds = assignedNow.length ? assignedNow : includedIds;
   const verdict = preview
-    ? dpiVerdict(preview.meta.naturalWidth, panels, scaleDenom, assignedIds)
+    ? dpiVerdict(preview.meta.naturalWidth, panels, vehicleDims, assignedIds)
     : null;
   const lowDpi = Boolean(verdict && !verdict.ok && !isVector);
 
@@ -226,7 +238,8 @@ export function LogoStep({ projectId, data, patch, panels, scaleDenom }: Props) 
               onClick={clearLogo}
               aria-label="Remove this logo"
               data-testid="logo-remove"
-              className="shrink-0 rounded-full p-1 text-zinc-400 hover:text-zinc-700"
+              disabled={busy}
+              className="shrink-0 rounded-full p-1 text-zinc-400 hover:text-zinc-700 disabled:pointer-events-none disabled:opacity-50"
             >
               <X className="size-4" aria-hidden />
             </button>
