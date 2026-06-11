@@ -108,7 +108,7 @@ Delivery: download + email-to-self + "send to my shop" (email with PDF attached)
 
 **The model:** the initial design experience is free — signup grant covers the first concept generation(s). **Purchased credits are for what comes after: edits, additions, and AI prompt requests once the initial design(s) exist.** That's the revenue line, and it's strictly **digital goods only**: credit packs, extra vehicle slots. Never materials, never USA price ranges, never quotes on behalf of shops — quoting belongs to the receiving shop, and the export pack itself is never paywalled.
 
-Ledger ships purchase-ready (`source: grant|purchase|referral|admin`). **Checkout ships in Phase 2 alongside the AI build** (Archer, 2026-06-10): a narrow Stripe integration — credit packs only, no subscriptions, webhook-verified, no card data in our DB. Revenue turns on the same day AI iteration does.
+Ledger ships purchase-ready (`source: grant|purchase|referral|admin`). **Checkout DEFERRED (Archer, 2026-06-11 — supersedes the 06-10 same-day decision):** no Stripe yet. Phase 2 AI ships grant-only — exhaustion shows a credit-pack **waitlist** sheet (purchase-intent metric) instead of checkout. Everything is built purchase-ready (ledger sources, pack definitions as config, the exhaustion sheet swaps waitlist→checkout in one component) so Stripe slots in later as a standalone mini-goal with zero migration.
 
 | Item | Launch value (tunable via config, not code) |
 |---|---|
@@ -146,7 +146,7 @@ Every story inherits the standing constraints: `withUser` RLS for all customer q
 ## 7. Phasing
 
 - **Phase 1 — Brief + export without AI** (ships value immediately): wizard (B2C-002..006), export pack driven by the EXISTING canvas/editor design (B2C-009, 010), free-plan gates (B2C-011), ledger (B2C-001 grant-only). A customer can brief, design manually (or with a shop), and export a professional pack. No AI dependency, no payment dependency.
-- **Phase 2 — AI generation + credits economy:** pipeline (B2C-007), iteration UX (B2C-008), vehicle photo reference (B2C-012), Stripe credit-pack checkout (B2C-013), before/after slider. Free initial design on grant; purchased credits power post-initial edits/additions/prompts from day one of the AI feature.
+- **Phase 2 — AI generation (grant-only credits):** pipeline (B2C-007), iteration UX (B2C-008 with waitlist sheet), vehicle photo reference (B2C-012), before/after slider. B2C-013 (Stripe checkout) is PARKED — built-around, not built; slots in as a standalone mini-goal when Archer green-lights payments.
 - **Phase 3 — Loops:** share-for-feedback, referral credits, shop locator, and the shop affiliate program exploration (export-pack QR attribution makes "which shop did this PDF convert at" trackable — the affiliate mechanic falls out of data we're already capturing).
 
 Sequencing rationale: Phase 1 has zero new external dependencies and makes the investor-demo story stronger on its own; the AI pipeline (Phase 2) is the highest-risk build and benefits from real Phase-1 brief data to tune prompts against.
@@ -169,6 +169,7 @@ Sequencing rationale: Phase 1 has zero new external dependencies and makes the i
 5. **Tint/PPF/chrome-delete are free brief inputs**, never charged — they enrich the spec the shop quotes from.
 6. **Affiliate program with shops**: endorsed direction, future phase — see §7 Phase 3; QR attribution groundwork ships in B2C-009.
 7. **AI model stack: Option A — Flux family via fal.ai** (Archer, 2026-06-11). Full strategy in §10. Supersedes PRD v1.1 §4.4's "Flux-pro or Higgsfield via OpenRouter/Replicate" line.
+8. **Stripe checkout DEFERRED** (Archer, 2026-06-11, supersedes decision in §5's earlier revision): AI ships grant-only + waitlist; all credit/slot infrastructure remains purchase-ready; checkout is a parked standalone mini-goal.
 
 ## 10. AI model strategy (Phase 2) — decided 2026-06-11
 
