@@ -6,6 +6,40 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-11 — PR #134 — Resend error-swallow fix + caller hardening (merged)
+
+**Status:** ✅ Merged to main (squash). Fresh-context code review + separate
+security review both APPROVE (full verdicts recorded in the PR description).
+**PR:** #134 (`fix/resend-error-swallow`).
+
+**What.** Resend's SDK returns `{data, error}` and never throws, so every email
+rejection was invisible (PostHog logged 36 `email_sent` while the Resend
+dashboard showed zero). The original commit added a throwing `sendViaResend`
+helper; this session implemented the review's 4 required caller-hardening
+changes + all nits:
+
+- `resendOtpAction` catches send failures → friendly retry message (was: Server
+  Action 500 on the verify page) + Sentry capture.
+- Signup with a failed OTP send returns `ok` + `otpSent:false` → redirects to
+  `/verify?sent=0` with a "tap Resend" notice (was: the `email_in_use` retry
+  trap — the user existed but could never get a code).
+- Audit: the ONLY Resend instantiation is `packages/auth/src/email.ts`; the
+  apps/api retry worker + notifications dispatch both route through `sendEmail`
+  and inherit the fix (failed retries now actually retry via BullMQ backoff).
+- Failed sends no longer consume `OTP_HOURLY_RESEND_LIMIT`: the undelivered OTP
+  row is deleted (new `otp.deleteOtp`), so a Resend outage can't lock users out
+  for an hour. Delivered sends still count.
+- `scrubSentryEvent` now redacts email addresses in messages/exception
+  values/breadcrumbs and the `email=` URL param — Resend's testing-mode 403
+  embeds the recipient address and previously reached Sentry verbatim.
+- `sendEmail`/`sendOtpEmail` now return the Resend email id.
+
+**Ops still open (Archer):** set
+`RESEND_FROM_EMAIL="Alpha Wolf Wrap Studio <wraps@1stimpression.co>"` on Vercel
+web + Render alphawolf-api, then redeploy Render (PR description has the
+steps). Security review follow-up: confirm `UPSTASH_REDIS_REST_*` is set in
+prod so the per-IP middleware rate limiter is active.
+
 ## 2026-06-11 — Goal 5 — B2C Guided Design Flow, Phase 1 (CLOSEOUT)
 
 **Status:** ✅ All 9 Phase-1 stories merged via reviewed, CI-green PRs; wizard
