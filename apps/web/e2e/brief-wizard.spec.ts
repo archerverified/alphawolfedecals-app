@@ -172,6 +172,21 @@ test.describe('Goal 5 brief wizard', () => {
     expect(pdf.subarray(0, 5).toString()).toBe('%PDF-');
     expect(pdf.length).toBeGreaterThan(5_000); // a real 4-page pack, not an error body
 
+    // Delivery (B2C-010): email-to-self and send-to-shop run the real action
+    // (dev uses AUTH_EMAIL_TRANSPORT=console — same path, no real mail).
+    await page.getByTestId('delivery-email-self').click();
+    await expect(page.getByText(/sent to .*@/i).first()).toBeVisible({ timeout: 30_000 });
+    await page.getByTestId('delivery-shop-email').fill('quotes@example-shop.test');
+    await page.getByTestId('delivery-send-shop').click();
+    await expect(page.getByText(/sent to quotes@example-shop\.test/i)).toBeVisible({
+      timeout: 30_000,
+    });
+    // The platform-order seam points at the editor (Goal 3a submit reuse).
+    await expect(page.getByTestId('delivery-submit-order')).toHaveAttribute(
+      'href',
+      `/projects/${projectId}/editor`,
+    );
+
     await page.getByTestId('brief-save').click();
     await expect(page.getByText(/brief saved \(v1\)/i)).toBeVisible({ timeout: 15_000 });
     await page.waitForURL(/\/projects\/[0-9a-f-]+\/editor/);

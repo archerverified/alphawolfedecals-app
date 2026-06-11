@@ -30,6 +30,7 @@ import { PhotosStep } from './PhotosStep';
 import { LogoStep } from './LogoStep';
 import { ColorsStep } from './ColorsStep';
 import { TintStep } from './TintStep';
+import { DeliveryPanel } from './DeliveryPanel';
 
 export interface BriefWizardProps {
   projectId: string;
@@ -187,15 +188,18 @@ export function BriefWizard({
         {step.key === 'extras' && <ExtrasStep data={data} patch={patch} />}
         {step.key === 'aiNotes' && <NotesStep data={data} patch={patch} />}
         {step.key === 'review' && (
-          <ReviewStep
-            data={data}
-            panels={panels}
-            vehicleLabel={vehicleLabel}
-            onJumpTo={(key: BriefStepKey) => {
-              const idx = steps.findIndex((s) => s.key === key);
-              if (idx >= 0) setStepIndex(idx);
-            }}
-          />
+          <>
+            <ReviewStep
+              data={data}
+              panels={panels}
+              vehicleLabel={vehicleLabel}
+              onJumpTo={(key: BriefStepKey) => {
+                const idx = steps.findIndex((s) => s.key === key);
+                if (idx >= 0) setStepIndex(idx);
+              }}
+            />
+            <DeliveryPanel projectId={projectId} flushNow={autosave.flushNow} />
+          </>
         )}
       </section>
 
