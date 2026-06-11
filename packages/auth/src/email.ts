@@ -85,14 +85,27 @@ function renderOtpText(code: string): string {
 // Generic transactional send, reusing the one Resend client + from-address.
 // Used for non-OTP notifications (e.g. GH-017 "your requested template shipped").
 // Best-effort callers should wrap this in try/catch; it throws if Resend rejects.
+export type EmailAttachment = {
+  filename: string;
+  /** Raw bytes — passed to Resend as a Buffer. */
+  content: Buffer;
+};
+
 export async function sendEmail(input: {
   to: string;
   subject: string;
   html: string;
   text: string;
+  /** Optional file attachments (Goal 5 / B2C-010 — the spec-pack PDF). */
+  attachments?: EmailAttachment[];
+  /** Optional Reply-To (e.g. the customer on send-to-shop). */
+  replyTo?: string;
 }): Promise<void> {
   if (process.env.NODE_ENV !== 'production') {
-    console.log(`[auth][dev] email to ${input.to}: ${input.subject}`);
+    const att = input.attachments?.length
+      ? ` (+${input.attachments.length} attachment${input.attachments.length > 1 ? 's' : ''})`
+      : '';
+    console.log(`[auth][dev] email to ${input.to}: ${input.subject}${att}`);
   }
   if (process.env.AUTH_EMAIL_TRANSPORT === 'console') {
     return;
@@ -103,6 +116,8 @@ export async function sendEmail(input: {
     subject: input.subject,
     html: input.html,
     text: input.text,
+    replyTo: input.replyTo,
+    attachments: input.attachments?.map((a) => ({ filename: a.filename, content: a.content })),
   });
 }
 
