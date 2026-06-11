@@ -1,6 +1,6 @@
 ---
 name: mobile-design
-description: Mobile-first design thinking and decision-making for iOS and Android apps. Touch interaction, performance patterns, platform conventions. Teaches principles, not fixed values. Use when building React Native, Flutter, or native mobile apps.
+description: Mobile-first design and engineering guidance for native iOS and Android apps built with React Native, Flutter, SwiftUI, or Jetpack Compose. Use this whenever the work involves building, designing, reviewing, or improving a mobile app screen, component, or flow — including touch targets and gestures, thumb-zone layout, navigation (tabs/stack/drawer), list performance and 60fps scrolling, offline behavior, push notifications, dark mode, and platform conventions (Apple Human Interface Guidelines vs Material Design). Trigger it even when the user never says the word "design" — requests like "build a login screen in React Native," "why is my Flutter list janky," "add a bottom tab bar," "make this Compose screen feel native," or "review my mobile UI" all qualify. Also use it for mobile framework, state-management, and storage decisions. Do NOT use it for responsive or mobile web design (CSS media queries, mobile-friendly websites), desktop apps, email templates, or mobile game engines like Unity.
 allowed-tools: Read, Glob, Grep, Bash
 ---
 
@@ -392,3 +392,20 @@ For deeper guidance on specific areas:
 ---
 
 > **Remember:** Mobile users are impatient, interrupted, and using imprecise fingers on small screens. Design for the WORST conditions: bad network, one hand, bright sun, low battery. If it works there, it works everywhere.
+
+---
+
+## 2025–2026 Updates (verified June 2026)
+
+### Platform design languages (the 2025 split)
+- **Apple Liquid Glass (iOS 26, WWDC 2025)**: translucent, refractive material across iOS/iPadOS/macOS/watchOS/visionOS. React Native support via `@callstack/liquid-glass` (RN 0.80+, Xcode 26) or **Expo SDK 54 `expo-glass-effect`** — both degrade gracefully on older iOS/Android. Respect legibility: glass over busy content needs scrims.
+- **Material 3 Expressive (Google, 2025)**: bold dynamic color, variable typography, native shape-morphing, 35+ shape library, 10 corner-radius tokens. Jetpack Compose has first-class support; React Native via react-native-paper trailing.
+
+### Framework currency
+- **React Native New Architecture (Fabric + TurboModules) is the default** — legacy architecture is deprecated; audit libs for New-Arch compatibility before adding.
+- Expo SDK 54+ is the sane RN default (config plugins, EAS, glass-effect, edge-to-edge Android enforced).
+- SwiftUI: iOS 26 APIs for Liquid Glass materials; Compose: M3 Expressive theming.
+
+### Standards
+- Touch targets: WCAG 2.2 hard minimum 24×24 CSS px; platform comfort targets remain 44pt (Apple HIG) / 48dp (Material) — design to platform comfort, test against WCAG floor.
+- Performance: 60fps list scroll via FlashList/Fabric; startup budget and hermes bytecode precompile by default.

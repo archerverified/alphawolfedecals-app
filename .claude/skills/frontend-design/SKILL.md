@@ -1,6 +1,10 @@
 ---
 name: frontend-design
-description: Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, artifacts, posters, or applications (examples include websites, landing pages, dashboards, React components, HTML/CSS layouts, or when styling/beautifying any web UI). Generates creative, polished code and UI design that avoids generic AI aesthetics.
+description: Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, or applications. Generates creative, polished code that avoids generic AI aesthetics.
+---
+
+name: frontend-design
+description: Create distinctive, production-grade frontend interfaces with high design quality. Use this skill when the user asks to build web components, pages, or applications. Generates creative, polished code that avoids generic AI aesthetics.
 license: Complete terms in LICENSE.txt
 ---
 
@@ -40,3 +44,11 @@ Interpret creatively and make unexpected choices that feel genuinely designed fo
 **IMPORTANT**: Match implementation complexity to the aesthetic vision. Maximalist designs need elaborate code with extensive animations and effects. Minimalist or refined designs need restraint, precision, and careful attention to spacing, typography, and subtle details. Elegance comes from executing the vision well.
 
 Remember: Claude is capable of extraordinary creative work. Don't hold back, show what can truly be created when thinking outside the box and committing fully to a distinctive vision.
+---
+
+## 2025–2026 Updates (verified June 2026)
+- **Accessibility bar: WCAG 2.2 AA** (now ISO/IEC 40500:2025). New criteria to check: Target Size min 24×24 CSS px, Focus Not Obscured, Dragging Movements alternative, Consistent Help placement, Accessible Authentication (no cognitive tests). EU EAA enforced since June 2025.
+- **Modern CSS is the differentiator**: container queries, `:has()`, View Transitions API and scroll-driven animations (stable in Chromium 2025 — replace JS scroll/transition hacks), variable fonts (1,800+ on Google Fonts; 60–80% payload cut).
+- **Platform design languages diverged in 2025**: Apple **Liquid Glass** (iOS 26 — translucent refractive material system-wide) vs Google **Material 3 Expressive** (bold dynamic color, shape-morphing, 35+ shapes, variable type). Web work should acknowledge, not clone, these.
+- **Anti-generic directive**: models converge to on-distribution output; force a point of view per project — one distinctive display typeface, one signature color move, one unexpected layout decision — before writing any component code.
+- React 19.2 View Transitions for route/element morphs; CSS scroll-driven animations for reveal effects — zero-JS by default.

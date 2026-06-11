@@ -1,6 +1,11 @@
 ---
 name: webapp-testing
 description: Toolkit for interacting with and testing local web applications using Playwright. Supports verifying frontend functionality, debugging UI behavior, capturing browser screenshots, and viewing browser logs.
+---
+
+---
+name: webapp-testing
+description: Toolkit for interacting with and testing local web applications using Playwright. Supports verifying frontend functionality, debugging UI behavior, capturing browser screenshots, and viewing browser logs.
 license: Complete terms in LICENSE.txt
 ---
 
@@ -94,3 +99,10 @@ with sync_playwright() as p:
   - `element_discovery.py` - Discovering buttons, links, and inputs on a page
   - `static_html_automation.py` - Using file:// URLs for local HTML
   - `console_logging.py` - Capturing console logs during automation
+---
+
+## 2025–2026 Updates: Playwright ~1.56 era (verified June 2026)
+- **Visual regression is built in**: `await expect(page).toHaveScreenshot({ maxDiffPixelRatio: 0.01, animations: 'disabled' })`; mask dynamic regions (`mask: [locator]`); generate baselines inside Playwright's Docker image so CI/OS font rendering matches.
+- **Accessibility**: ARIA snapshots (`expect(locator).toMatchAriaSnapshot()`) for structural a11y assertions + `@axe-core/playwright` for WCAG rule scans — run both on key pages; gate on WCAG 2.2 AA rule set.
+- **Playwright Test Agents + MCP** (2025–2026): Planner/Generator/Healer agent workflow for authoring and self-healing tests; the Playwright MCP server lets Claude drive a real browser for exploratory verification before codifying specs.
+- Layering: Vitest (unit) → component tests → Playwright E2E happy-paths → visual snapshots on design-stable pages → axe pass. Don't visual-snapshot pages with live data unless masked.

@@ -3,6 +3,11 @@ name: senior-architect
 description: Comprehensive software architecture skill for designing scalable, maintainable systems using ReactJS, NextJS, NodeJS, Express, React Native, Swift, Kotlin, Flutter, Postgres, GraphQL, Go, Python. Includes architecture diagram generation, system design patterns, tech stack decision frameworks, and dependency analysis. Use when designing system architecture, making technical decisions, creating architecture diagrams, evaluating trade-offs, or defining integration patterns.
 ---
 
+---
+name: senior-architect
+description: Comprehensive software architecture skill for designing scalable, maintainable systems using ReactJS, NextJS, NodeJS, Express, React Native, Swift, Kotlin, Flutter, Postgres, GraphQL, Go, Python. Includes architecture diagram generation, system design patterns, tech stack decision frameworks, and dependency analysis. Use when designing system architecture, making technical decisions, creating architecture diagrams, evaluating trade-offs, or defining integration patterns.
+---
+
 # Senior Architect
 
 Complete toolkit for senior architect with modern tools and best practices.
@@ -207,3 +212,11 @@ Check the comprehensive troubleshooting section in `references/tech_decision_gui
 - Workflow Guide: `references/system_design_workflows.md`
 - Technical Guide: `references/tech_decision_guide.md`
 - Tool Scripts: `scripts/` directory
+---
+
+## 2025–2026 Updates (verified June 2026)
+- **Modular monolith first** remains the 2026 consensus: microservices only when team topology (not traffic) demands it; extract along proven seam lines. Event-driven via outbox pattern + a single broker before any service split.
+- **Edge vs region**: Next.js 16 moved middleware (now proxy.ts) to Node runtime — treat edge compute as a CDN-adjacent optimization (rewrites, AB headers), not an application tier.
+- **Supply chain is an architecture concern** (OWASP 2025 A03): lockfile integrity, artifact provenance/signing (Sigstore), minimal base images, and dependency-review gates belong in the reference architecture, not just CI hygiene.
+- **AI integration layer**: standardize on MCP (spec 2025-11-25; Streamable HTTP transport, OAuth 2.1 resource-server pattern) for agent/tool connectivity rather than bespoke plugin APIs.
+- Postgres-as-platform (Supabase pattern): queues (pg-boss/pgmq), vectors (pgvector HNSW), cron (pg_cron) in-database before adding Redis/Kafka/Pinecone — fewer systems, one backup story.

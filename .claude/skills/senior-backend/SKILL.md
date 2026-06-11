@@ -3,6 +3,11 @@ name: senior-backend
 description: Comprehensive backend development skill for building scalable backend systems using NodeJS, Express, Go, Python, Postgres, GraphQL, REST APIs. Includes API scaffolding, database optimization, security implementation, and performance tuning. Use when designing APIs, optimizing database queries, implementing business logic, handling authentication/authorization, or reviewing backend code.
 ---
 
+---
+name: senior-backend
+description: Comprehensive backend development skill for building scalable backend systems using NodeJS, Express, Go, Python, Postgres, GraphQL, REST APIs. Includes API scaffolding, database optimization, security implementation, and performance tuning. Use when designing APIs, optimizing database queries, implementing business logic, handling authentication/authorization, or reviewing backend code.
+---
+
 # Senior Backend
 
 Complete toolkit for senior backend with modern tools and best practices.
@@ -31,14 +36,12 @@ python scripts/api_load_tester.py [options]
 Automated tool for api scaffolder tasks.
 
 **Features:**
-
 - Automated scaffolding
 - Best practices built-in
 - Configurable templates
 - Quality checks
 
 **Usage:**
-
 ```bash
 python scripts/api_scaffolder.py <project-path> [options]
 ```
@@ -48,14 +51,12 @@ python scripts/api_scaffolder.py <project-path> [options]
 Comprehensive analysis and optimization tool.
 
 **Features:**
-
 - Deep analysis
 - Performance metrics
 - Recommendations
 - Automated fixes
 
 **Usage:**
-
 ```bash
 python scripts/database_migration_tool.py <target-path> [--verbose]
 ```
@@ -65,14 +66,12 @@ python scripts/database_migration_tool.py <target-path> [--verbose]
 Advanced tooling for specialized tasks.
 
 **Features:**
-
 - Expert-level automation
 - Custom configurations
 - Integration ready
 - Production-grade output
 
 **Usage:**
-
 ```bash
 python scripts/api_load_tester.py [arguments] [options]
 ```
@@ -145,7 +144,6 @@ python scripts/database_migration_tool.py .
 ### 3. Implement Best Practices
 
 Follow the patterns and practices documented in:
-
 - `references/api_design_patterns.md`
 - `references/database_optimization_guide.md`
 - `references/backend_security_practices.md`
@@ -153,28 +151,24 @@ Follow the patterns and practices documented in:
 ## Best Practices Summary
 
 ### Code Quality
-
 - Follow established patterns
 - Write comprehensive tests
 - Document decisions
 - Review regularly
 
 ### Performance
-
 - Measure before optimizing
 - Use appropriate caching
 - Optimize critical paths
 - Monitor in production
 
 ### Security
-
 - Validate all inputs
 - Use parameterized queries
 - Implement proper authentication
 - Keep dependencies updated
 
 ### Maintainability
-
 - Write clear code
 - Use consistent naming
 - Add helpful comments
@@ -218,3 +212,10 @@ Check the comprehensive troubleshooting section in `references/backend_security_
 - Workflow Guide: `references/database_optimization_guide.md`
 - Technical Guide: `references/backend_security_practices.md`
 - Tool Scripts: `scripts/` directory
+---
+
+## 2025–2026 Updates (verified June 2026)
+- **OWASP Top 10:2025** reshapes secure-API defaults: A01 Broken Access Control (now absorbs SSRF) still #1; **A02 Security Misconfiguration** (up from #5); **A03 Software Supply Chain Failures** (new — lockfiles, provenance, dependency review; reflects 2025 npm attacks like Shai-Hulud); **A10 Mishandling of Exceptional Conditions** (new — fail-closed, no logic-by-exception).
+- **Supabase/Postgres deltas**: Supavisor is the default pooler (transaction mode 6543 for serverless, session 5432 for migrations/index builds); **RLS auto-enables on all new tables since 2025** — a table without policies returns zero rows, so every migration must ship policies; pgvector 0.7+ with HNSW default.
+- **Node 20.9+ floor** (Next 16 alignment); native `fetch`, `node:test`, and `--env-file` reduce dependency surface.
+- API design: REST + zod/valibot edge validation remains default; GraphQL only with a federation-scale justification; idempotency keys on all mutating endpoints that retry.

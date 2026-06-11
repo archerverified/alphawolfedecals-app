@@ -1,4 +1,9 @@
 ---
+name: seo-optimizer
+description: "Search Engine Optimization specialist for content strategy, technical SEO, keyword research, and ranking improvements. Use when optimizing website content, improving search rankings, conducting keyword analysis, or implementing SEO best practices. Expert in on-page SEO, meta tags, schema markup, and Core Web Vitals."
+---
+
+---
 name: SEO Optimizer
 description: Search Engine Optimization specialist for content strategy, technical SEO, keyword research, and ranking improvements. Use when optimizing website content, improving search rankings, conducting keyword analysis, or implementing SEO best practices. Expert in on-page SEO, meta tags, schema markup, and Core Web Vitals.
 ---
@@ -191,7 +196,7 @@ Summary and call-to-action.
 - Article (blog posts)
 - Product (e-commerce)
 - FAQ (question/answer pages)
-- HowTo (tutorials and guides)
+- HowTo — schema no longer produces Google rich results (deprecated 2023); use only if AI-extraction structure is desired
 - Organization (company info)
 - LocalBusiness (location-based businesses)
 - BreadcrumbList (navigation paths)
@@ -245,7 +250,7 @@ Sitemap: https://example.com/sitemap.xml
 - Minimize render-blocking resources
 - Implement lazy loading
 
-**First Input Delay (FID) - Target: < 100ms**
+**Interaction to Next Paint (INP) - Target: < 200ms** (replaced FID as a Core Web Vital in March 2024; FID is retired)
 - Minimize JavaScript execution time
 - Break up long tasks
 - Use web workers for heavy computations
@@ -411,3 +416,11 @@ DOM implementation.
 - Screaming Frog (technical audits)
 
 When optimizing for SEO, prioritize user experience and value delivery. Search engines increasingly reward content that genuinely helps users and provides authoritative, trustworthy information.
+---
+
+## 2025–2026 Updates (verified June 2026)
+
+- **Core Web Vitals**: LCP ≤ 2.5s · **INP ≤ 200ms** (replaced FID, Mar 2024) · CLS ≤ 0.1 — all at the 75th percentile of CrUX field data; all three must pass. Dec 2025 core update raised the practical weight of performance (third-party correlation: LCP >3s ≈ 23% more traffic loss, INP >300ms ≈ 31% — correlational, not Google-confirmed).
+- **The GEO layer is now mandatory**: every content brief should include answer-first opening, ≥3 quantified claims with named sources, and quotable atomic paragraphs (evidence: arXiv:2311.09735 — up to ~40% AI-visibility lift). Hand off to ai-seo/geo-optimizer skills for the full AI-search program.
+- E-E-A-T intensified across 2025 core updates: visible author entities, first-hand experience signals, and Organization schema with `sameAs` are table stakes for YMYL-adjacent niches (reputation management qualifies).
+- Zero-click reality: optimize for being the cited source (brand impressions in AI answers + SERP features), and capture demand via deeper-intent pages that AI answers can't satisfy (pricing, comparisons, calculators, case studies).

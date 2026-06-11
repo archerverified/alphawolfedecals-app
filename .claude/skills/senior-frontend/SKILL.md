@@ -3,6 +3,11 @@ name: senior-frontend
 description: Comprehensive frontend development skill for building modern, performant web applications using ReactJS, NextJS, TypeScript, Tailwind CSS. Includes component scaffolding, performance optimization, bundle analysis, and UI best practices. Use when developing frontend features, optimizing performance, implementing UI/UX designs, managing state, or reviewing frontend code.
 ---
 
+---
+name: senior-frontend
+description: Comprehensive frontend development skill for building modern, performant web applications using ReactJS, NextJS, TypeScript, Tailwind CSS. Includes component scaffolding, performance optimization, bundle analysis, and UI best practices. Use when developing frontend features, optimizing performance, implementing UI/UX designs, managing state, or reviewing frontend code.
+---
+
 # Senior Frontend
 
 Complete toolkit for senior frontend with modern tools and best practices.
@@ -31,14 +36,12 @@ python scripts/frontend_scaffolder.py [options]
 Automated tool for component generator tasks.
 
 **Features:**
-
 - Automated scaffolding
 - Best practices built-in
 - Configurable templates
 - Quality checks
 
 **Usage:**
-
 ```bash
 python scripts/component_generator.py <project-path> [options]
 ```
@@ -48,14 +51,12 @@ python scripts/component_generator.py <project-path> [options]
 Comprehensive analysis and optimization tool.
 
 **Features:**
-
 - Deep analysis
 - Performance metrics
 - Recommendations
 - Automated fixes
 
 **Usage:**
-
 ```bash
 python scripts/bundle_analyzer.py <target-path> [--verbose]
 ```
@@ -65,14 +66,12 @@ python scripts/bundle_analyzer.py <target-path> [--verbose]
 Advanced tooling for specialized tasks.
 
 **Features:**
-
 - Expert-level automation
 - Custom configurations
 - Integration ready
 - Production-grade output
 
 **Usage:**
-
 ```bash
 python scripts/frontend_scaffolder.py [arguments] [options]
 ```
@@ -145,7 +144,6 @@ python scripts/bundle_analyzer.py .
 ### 3. Implement Best Practices
 
 Follow the patterns and practices documented in:
-
 - `references/react_patterns.md`
 - `references/nextjs_optimization_guide.md`
 - `references/frontend_best_practices.md`
@@ -153,28 +151,24 @@ Follow the patterns and practices documented in:
 ## Best Practices Summary
 
 ### Code Quality
-
 - Follow established patterns
 - Write comprehensive tests
 - Document decisions
 - Review regularly
 
 ### Performance
-
 - Measure before optimizing
 - Use appropriate caching
 - Optimize critical paths
 - Monitor in production
 
 ### Security
-
 - Validate all inputs
 - Use parameterized queries
 - Implement proper authentication
 - Keep dependencies updated
 
 ### Maintainability
-
 - Write clear code
 - Use consistent naming
 - Add helpful comments
@@ -218,3 +212,10 @@ Check the comprehensive troubleshooting section in `references/frontend_best_pra
 - Workflow Guide: `references/nextjs_optimization_guide.md`
 - Technical Guide: `references/frontend_best_practices.md`
 - Tool Scripts: `scripts/` directory
+---
+
+## 2025–2026 Updates (verified June 2026)
+- **Stack currency**: Next.js 16 (Turbopack default, explicit `use cache`, proxy.ts, React Compiler stable), React 19.2 (Actions, View Transitions, `useEffectEvent`, `<Activity>`), TypeScript 5.x. State: TanStack Query (server) + Zustand (client).
+- **Modern CSS now production-safe**: container queries, `:has()`, View Transitions API, CSS scroll-driven animations (both stable in Chromium 2025 — replace IntersectionObserver/JS scroll hacks), variable fonts (60–80% font payload cut).
+- **Accessibility bar is WCAG 2.2 AA** (ISO/IEC 40500:2025): new criteria include Target Size minimum 24×24 CSS px, Focus Not Obscured, Dragging alternatives, Consistent Help, Accessible Authentication. EU EAA in force since June 2025.
+- **Performance budget = CWV field data**: LCP ≤ 2.5s, INP ≤ 200ms, CLS ≤ 0.1 (75th percentile). INP replaced FID — interaction handlers and hydration cost are now ranking-relevant.
