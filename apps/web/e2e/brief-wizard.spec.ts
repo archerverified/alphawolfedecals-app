@@ -81,6 +81,17 @@ test.describe('Goal 5 brief wizard', () => {
     await firstLogoZone.click();
     await expect(firstLogoZone).toHaveAttribute('aria-pressed', 'true');
 
+    // Colors (B2C-005): film-library pick + one-tap extract from the logo.
+    await page.getByTestId('brief-step-tab-colors').click();
+    await page.getByTestId('film-search').fill('hot rod');
+    await page.getByTestId('film-2080-G13').click();
+    await expect(page.getByTestId('color-picks')).toContainText('2080-G13');
+    await page.getByTestId('color-extract').click();
+    const extractedChip = page.locator('[data-testid^="color-extracted-"]').first();
+    await extractedChip.waitFor({ state: 'visible', timeout: 30_000 });
+    await extractedChip.click(); // red fixture → a red swatch lands in picks
+    await expect(page.getByTestId('color-picks').locator('li')).toHaveCount(2);
+
     // Style: preset + prompt.
     await page.getByTestId('brief-step-tab-style').click();
     await page.getByRole('button', { name: 'Clean', exact: true }).click();
@@ -124,11 +135,17 @@ test.describe('Goal 5 brief wizard', () => {
     );
     await expect(page.getByTestId('logo-warning-opaque')).toBeVisible({ timeout: 30_000 });
 
+    // Colors survived the reload (film SKU + extracted pick).
+    await page.getByTestId('brief-step-tab-colors').click();
+    await expect(page.getByTestId('color-picks')).toContainText('2080-G13');
+    await expect(page.getByTestId('color-picks').locator('li')).toHaveCount(2);
+
     // Review → Save brief → numbered version toast → back to the editor.
     await page.getByTestId('brief-step-tab-review').click();
     await expect(page.getByText(/premium cast vinyl/i)).toBeVisible();
     await expect(page.getByText(/1 photo\(s\)/)).toBeVisible();
     await expect(page.getByText(/opaque-logo\.png/)).toBeVisible();
+    await expect(page.getByText(/2080-G13/)).toBeVisible();
     await page.getByTestId('brief-save').click();
     await expect(page.getByText(/brief saved \(v1\)/i)).toBeVisible({ timeout: 15_000 });
     await page.waitForURL(/\/projects\/[0-9a-f-]+\/editor/);

@@ -392,6 +392,13 @@ export function ReviewStep({
         : '—',
     },
     {
+      key: 'colors',
+      label: 'Colors',
+      value: (data.colors?.picks ?? []).length
+        ? (data.colors?.picks ?? []).map((p) => (p.sku ? `${p.sku} (${p.hex})` : p.hex)).join(', ')
+        : '—',
+    },
+    {
       key: 'style',
       label: 'Style',
       value:
