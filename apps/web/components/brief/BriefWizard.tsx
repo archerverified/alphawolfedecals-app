@@ -209,8 +209,11 @@ export function BriefWizard({
           // generation run will version against.
           <span className="flex items-center gap-2">
             <Button asChild variant="outline" data-testid="brief-export">
-              {/* Plain anchor: a binary download, not a client navigation. */}
-              <a href={`/projects/${projectId}/export`}>Download spec pack (PDF)</a>
+              {/* Plain anchor: a binary download, not a client navigation.
+                  Flush first so just-typed edits make it onto the pack. */}
+              <a href={`/projects/${projectId}/export`} onClick={autosave.flushNow}>
+                Download spec pack (PDF)
+              </a>
             </Button>
             <Button onClick={saveBrief} disabled={savingBrief} data-testid="brief-save">
               {savingBrief ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}

@@ -16,6 +16,13 @@ function appBaseUrl(): string {
 
 async function fetchHeroPng(url: string | null): Promise<Uint8Array | undefined> {
   if (!url || !url.endsWith('.png')) return undefined;
+  // Allowlist: only our Supabase public-storage origin — thumbPngUrl is
+  // admin-written catalog data, but a server-side fetch embedded into a
+  // user-delivered PDF deserves the one-line SSRF pin (PR #129 review).
+  const base = process.env.SUPABASE_URL ?? process.env.NEXT_PUBLIC_SUPABASE_URL;
+  if (!base || !url.startsWith(`${base.replace(/\/+$/, '')}/storage/v1/object/public/`)) {
+    return undefined;
+  }
   try {
     const res = await fetch(url, { cache: 'no-store' });
     if (!res.ok) return undefined;
@@ -58,13 +65,15 @@ export async function loadSpecPackData(
   const vehicle = await vehicles.getPublishedDetail(project.vehicleId);
   if (!vehicle) return null;
 
-  const brief = await briefs.getOrCreateBrief(userId, projectId);
-  if (!brief) return null;
-  const parsed = parseBriefData(brief.data ?? {});
+  // Read-only: a GET must not insert (PR #129 review) — a project whose
+  // wizard was never opened still exports an (empty-brief) pack.
+  const brief = await briefs.getBrief(userId, projectId);
+  const parsed = parseBriefData(brief?.data ?? {});
   const briefData: BriefData = parsed.ok ? parsed.data : {};
 
-  const snapshots = await briefs.listBriefSnapshots(userId, brief.id).catch(() => []);
-  const briefVersion = snapshots[0]?.version ?? null;
+  const briefVersion = brief
+    ? ((await briefs.listBriefSnapshots(userId, brief.id).catch(() => []))[0]?.version ?? null)
+    : null;
 
   const label = [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(' ');
   const heroPng = await fetchHeroPng(vehicle.thumbPngUrl);

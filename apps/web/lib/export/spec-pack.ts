@@ -94,7 +94,7 @@ const TYPOGRAPHIC: ReadonlyArray<[RegExp, string]> = [
 function safe(text: string): string {
   let out = text;
   for (const [re, sub] of TYPOGRAPHIC) out = out.replace(re, sub);
-   
+
   return out.replace(/[^\x20-\x7E\xA0-\xFF]/g, '?');
 }
 
@@ -119,7 +119,7 @@ function footer(ctx: Ctx, page: PDFPage) {
     font,
     color: MUTED,
   });
-  page.drawText('Designed with Alpha Wolf Wrap Studio — alpha-wolf-decals.vercel.app', {
+  page.drawText('Designed with Alpha Wolf Wrap Studio — alphawolfedecals-app-web.vercel.app', {
     x: MARGIN,
     y: y - 11,
     size: 7.5,
@@ -188,7 +188,9 @@ export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
   doc.setTitle(`Wrap Spec Pack — ${data.projectName}`);
   doc.setAuthor('Alpha Wolf Wrap Studio');
   doc.setProducer('Alpha Wolf Wrap Studio spec-pack generator (B2C-009)');
-  doc.setCreator('AI-assisted design brief — generated content; provenance: alpha-wolf-decals');
+  doc.setCreator(
+    'AI-assisted design brief — generated content; provenance: alphawolfedecals-app-web.vercel.app',
+  );
   doc.setSubject(`Vehicle wrap specification for ${data.vehicle.label}`);
   doc.setCreationDate(data.createdAt);
 
@@ -347,11 +349,16 @@ export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
     });
     y -= 14;
 
-    let totalSqFt = 0;
+    // Total over ALL included panels — independent of how many table rows fit
+    // (PR #129 review MUST-FIX: a truncated table must not shrink the total).
+    const totalSqFt = included.reduce((sum, panel) => {
+      const size = sizes.get(panel.id);
+      return size ? sum + (size.widthIn * size.heightIn) / 144 : sum;
+    }, 0);
+    let drawn = 0;
     for (const panel of included) {
       const size = sizes.get(panel.id);
       const sqft = size ? (size.widthIn * size.heightIn) / 144 : null;
-      if (sqft) totalSqFt += sqft;
       page.drawText(safe(panel.name), { x: cols[0]!, y, size: 9.5, font, color: INK });
       page.drawText(size ? `~${Math.round(size.widthIn)} × ${Math.round(size.heightIn)} in` : '—', {
         x: cols[1]!,
@@ -384,7 +391,18 @@ export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
         page.drawText(noteLines[i]!, { x: cols[4]!, y, size: 8.5, font, color: MUTED });
       }
       y -= 16;
-      if (y < 120) break; // single-page table budget; full zone list lives in the app
+      drawn += 1;
+      if (y < 132) break; // single-page table budget; full zone list lives in the app
+    }
+    if (drawn < included.length) {
+      page.drawText(`+ ${included.length - drawn} more zone(s) — full list in the app`, {
+        x: MARGIN,
+        y,
+        size: 8.5,
+        font,
+        color: MUTED,
+      });
+      y -= 14;
     }
     y -= 4;
     page.drawLine({
@@ -419,7 +437,7 @@ export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
     ]
       .filter(Boolean)
       .join(' — ');
-    if (style) {
+    if (style && y > 150) {
       page.drawText('Style & ideas', { x: MARGIN, y, size: 11, font: bold, color: INK });
       y -= 15;
       for (const line of wrapText(font, safe(style), 9.5, PAGE_W - 2 * MARGIN).slice(0, 6)) {
@@ -436,7 +454,9 @@ export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
 
     const tier = MATERIAL_TIERS.find((t) => t.id === data.brief.materials?.tier);
     page.drawText('Material', { x: MARGIN, y, size: 10, font: bold, color: MUTED });
-    page.drawText(safe(tier ? `${tier.label} (${tier.cost})` : 'Shop to advise'), {
+    // Tier label only — the wizard's relative-cost glyphs ($..$$$$) stay OFF
+    // the pack: nothing that reads like a price anchor (PRD §9.1 spirit).
+    page.drawText(safe(tier ? tier.label : 'Shop to advise'), {
       x: MARGIN + 110,
       y,
       size: 10,
@@ -450,7 +470,6 @@ export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
     const tintEntries = Object.entries(tint?.perWindow ?? {}) as Array<[TintWindow, number]>;
     if (tintEntries.length > 0) {
       page.drawText('Window tint', { x: MARGIN, y, size: 10, font: bold, color: MUTED });
-      let first = true;
       for (const [w, vlt] of tintEntries) {
         const label = TINT_WINDOWS.find((t) => t.key === w)?.label ?? w;
         const verdict = tint?.state ? tintVerdict(tint.state, w, vlt) : null;
@@ -469,9 +488,7 @@ export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
           color: verdict?.status === 'illegal' ? AMBER : INK,
         });
         y -= 15;
-        first = false;
       }
-      void first;
       y -= 3;
     }
 

@@ -105,10 +105,11 @@ describe('buildSpecPack', () => {
   });
 
   it('has no pricing inputs by construction (the quote box is blank by design)', () => {
-    // "No Alpha Wolf pricing anywhere" (PRD §9.1) is enforced by the TYPE:
-    // SpecPackData carries no price/quote/amount field at all, so the builder
-    // cannot print one. A binary grep over compressed PDF streams false-flags;
-    // this assertion pins the contract where it actually lives.
+    // "No Alpha Wolf pricing anywhere" (PRD §9.1): SpecPackData carries no
+    // price/quote/amount field, AND the builder draws tier LABELS only (the
+    // wizard's $-glyph cost indicators are deliberately not printed — PR #129
+    // review). This pins the input contract; the rendering side is a one-line
+    // grep away in spec-pack.ts ('tier.cost' must not appear).
     const keys = JSON.stringify(Object.keys(baseData())).toLowerCase();
     for (const banned of ['price', 'quote', 'amount', 'cost', 'total']) {
       expect(keys).not.toContain(banned);

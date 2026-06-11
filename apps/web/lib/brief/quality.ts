@@ -107,7 +107,7 @@ function panelBoxes(panels: BriefPanel[]): PanelBox[] {
     try {
       const b = geometry.bbox(geometry.parsePath(panel.outlinePath));
       if (!b || !Number.isFinite(b.minX) || !Number.isFinite(b.maxX) || b.maxX <= b.minX) continue;
-      if (!Number.isFinite(b.minY) || !Number.isFinite(b.maxY) || b.maxY < b.minY) continue;
+      if (!Number.isFinite(b.minY) || !Number.isFinite(b.maxY) || b.maxY <= b.minY) continue;
       out.push({ panel, minX: b.minX, maxX: b.maxX, minY: b.minY, maxY: b.maxY });
     } catch {
       // Unparseable outline → that panel just can't be sized.
@@ -148,7 +148,12 @@ export function panelPrintSizesIn(
     for (const b of boxes) {
       const widthIn = ((b.maxX - b.minX) * mmPerUnit) / MM_PER_INCH;
       const heightIn = ((b.maxY - b.minY) * mmPerUnit) / MM_PER_INCH;
-      if (widthIn >= MIN_PLAUSIBLE_PANEL_IN && widthIn <= MAX_PLAUSIBLE_PANEL_IN) {
+      if (
+        widthIn >= MIN_PLAUSIBLE_PANEL_IN &&
+        widthIn <= MAX_PLAUSIBLE_PANEL_IN &&
+        heightIn >= 1 &&
+        heightIn <= MAX_PLAUSIBLE_PANEL_IN
+      ) {
         sizes.set(b.panel.id, { widthIn, heightIn });
       }
     }
