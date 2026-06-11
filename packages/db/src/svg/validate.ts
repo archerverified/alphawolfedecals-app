@@ -59,6 +59,20 @@ export type SvgValidationResult =
 
 export type OutlineDims = { lengthMm: number; heightMm: number };
 
+// Declared-views support (Goal 6 Template Studio). Templates with fewer than
+// the 4 standard views (the AW catalogue: a 2-view boat, a 3-view coach —
+// vehicles.view_count is CHECK-constrained 1..4) declare the exact view set
+// their sheet carries. When `views` is provided:
+//   * every declared view must be present with ≥1 panel, and no OTHER view
+//     group may appear (including "top" unless declared) — the SVG and the
+//     vehicle row can't drift apart;
+//   * the §3.4 aspect-ratio formula is SKIPPED — it encodes the 4-across
+//     reference sheet (length×4 / height×2) and is meaningless for other
+//     layouts. Scale correctness for declared-view sheets is enforced by the
+//     Studio's measurement calibration instead, not by aspect heuristics.
+// Omitting `views` keeps the original behavior (4 required + optional top).
+export type OutlineValidationOptions = { views?: readonly string[] };
+
 // --- small AST helpers ------------------------------------------------------
 
 function classesOf(node: INode): string[] {
@@ -148,9 +162,36 @@ function fail(errors: SvgValidationError[]): SvgValidationResult {
   return { ok: false, errors };
 }
 
-export function validateOutlineSvg(svgText: string, dims: OutlineDims): SvgValidationResult {
+export function validateOutlineSvg(
+  svgText: string,
+  dims: OutlineDims,
+  opts?: OutlineValidationOptions,
+): SvgValidationResult {
   const errors: SvgValidationError[] = [];
   const warnings: string[] = [];
+
+  // Resolve the view contract up front. Declared views are validated as
+  // config: a bad declaration is a caller bug, reported as errors rather than
+  // thrown so admin UIs surface it like any other validation miss.
+  const declared = opts?.views;
+  if (declared !== undefined) {
+    if (declared.length === 0) {
+      return fail([{ rule: 'views', message: 'Declared views list is empty.' }]);
+    }
+    const unknown = declared.filter(
+      (v) => !KNOWN_VIEWS.includes(v as (typeof KNOWN_VIEWS)[number]),
+    );
+    if (unknown.length > 0) {
+      return fail([{ rule: 'views', message: `Unknown declared view(s): ${unknown.join(', ')}.` }]);
+    }
+    if (new Set(declared).size !== declared.length) {
+      return fail([{ rule: 'views', message: 'Declared views list has duplicates.' }]);
+    }
+  }
+  const requiredViews: readonly string[] = declared ?? REQUIRED_VIEWS;
+  // Views allowed to appear in the document: exactly the declared set, or the
+  // default contract (4 required + optional top).
+  const allowedViews: readonly string[] = declared ?? KNOWN_VIEWS;
 
   let root: INode;
   try {
@@ -176,7 +217,7 @@ export function validateOutlineSvg(svgText: string, dims: OutlineDims): SvgValid
     viewBox = { width: w, height: h };
     if (w <= 0 || h <= 0) {
       errors.push({ rule: 'viewBox', message: 'viewBox width/height must be positive.' });
-    } else if (dims.heightMm > 0 && dims.lengthMm > 0) {
+    } else if (declared === undefined && dims.heightMm > 0 && dims.lengthMm > 0) {
       const actual = w / h;
       const expected = (dims.lengthMm * 4) / (dims.heightMm * 2);
       const drift = Math.abs(actual - expected) / expected;
@@ -198,7 +239,7 @@ export function validateOutlineSvg(svgText: string, dims: OutlineDims): SvgValid
   const viewByName = new Map<string, INode>();
   for (const g of viewGroups) {
     const name = g.attributes['data-view'] ?? (g.attributes.id ?? '').replace(/^view-/, '');
-    if (!KNOWN_VIEWS.includes(name as (typeof KNOWN_VIEWS)[number])) {
+    if (!allowedViews.includes(name)) {
       errors.push({ rule: 'views', message: `Unknown view group "${name}".` });
       continue;
     }
@@ -208,7 +249,7 @@ export function validateOutlineSvg(svgText: string, dims: OutlineDims): SvgValid
     }
     viewByName.set(name, g);
   }
-  for (const required of REQUIRED_VIEWS) {
+  for (const required of requiredViews) {
     if (!viewByName.has(required)) {
       errors.push({ rule: 'views', message: `Missing required view group "view-${required}".` });
     }
@@ -218,14 +259,11 @@ export function validateOutlineSvg(svgText: string, dims: OutlineDims): SvgValid
   // both an .outline and a .wrap-safe path.
   const panels: ExtractedPanel[] = [];
   let installSeq = 0;
-  for (const view of KNOWN_VIEWS) {
+  for (const view of allowedViews) {
     const group = viewByName.get(view);
     if (!group) continue;
     const panelGroups = findAll(group, (n) => n.name === 'g' && hasClass(n, 'panel'));
-    if (
-      REQUIRED_VIEWS.includes(view as (typeof REQUIRED_VIEWS)[number]) &&
-      panelGroups.length === 0
-    ) {
+    if (requiredViews.includes(view) && panelGroups.length === 0) {
       errors.push({ rule: 'panels', message: `View "${view}" has no <g class="panel">.` });
     }
     for (const panel of panelGroups) {

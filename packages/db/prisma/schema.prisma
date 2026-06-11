@@ -106,6 +106,7 @@ model User {
   verifiedVehicles Vehicle[]                @relation("VehicleVerifiedBy")
   templateRequests VehicleTemplateRequest[]
   creditLedger     CreditLedger[]
+  templateSources  TemplateSource[]         @relation("TemplateSourceCreatedBy")
 
   @@index([accountType])
   @@index([status])
@@ -252,6 +253,19 @@ enum FinishHint {
   @@map("finish_hint")
 }
 
+// What kind of owned source material a Studio ingest row points at (Goal 6).
+// The legal wall (ADR-0014 invariant 12) is enforced by PROVENANCE: every
+// authored template traces back to rows here, and every row is one of the
+// three allowed source classes from docs/product/template-supply-strategy.md
+// (shop photos, OEM body-builder PDFs, Alpha Wolf's own SVG art).
+enum TemplateSourceKind {
+  photo
+  oem_pdf
+  owned_svg
+
+  @@map("template_source_kind")
+}
+
 model Vehicle {
   id       String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   year     Int
@@ -316,6 +330,7 @@ model Vehicle {
   panels          VehiclePanel[]
   shippedRequests VehicleTemplateRequest[] @relation("RequestShippedVehicle")
   projects        Project[]
+  templateSources TemplateSource[]
 
   @@index([year, make, model], map: "vehicles_year_make_model_idx")
   @@map("vehicles")
@@ -368,9 +383,37 @@ model VehicleTemplateRequest {
 
   requester      User?    @relation(fields: [requesterId], references: [id])
   shippedVehicle Vehicle? @relation("RequestShippedVehicle", fields: [shippedVehicleId], references: [id])
+  templateSources TemplateSource[]
 
   @@index([status, createdAt])
   @@map("vehicle_template_requests")
+}
+
+// Template Studio ingest provenance (Goal 6). One row per uploaded source
+// artifact (orthographic photo, OEM dimensional PDF, owned SVG art) feeding a
+// template authoring session. Files live in the PRIVATE `template-sources`
+// bucket (admin-only signed reads — ADR-0014 invariant 6 pattern); this table
+// is the audit trail that keeps the two storage roots from ever crossing
+// (strategy doc: shop production files vs app template sources).
+// measurements carries the operator's reference numbers as JSON, e.g.
+// { overall_length_mm, wheelbase_mm, wrap_height_mm } — the calibration inputs.
+model TemplateSource {
+  id           String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vehicleId    String?            @map("vehicle_id") @db.Uuid
+  requestId    String?            @map("request_id") @db.Uuid
+  kind         TemplateSourceKind
+  storageKey   String             @map("storage_key")
+  measurements Json?
+  notes        String?
+  createdById  String             @map("created_by") @db.Uuid
+  createdAt    DateTime           @default(now()) @map("created_at") @db.Timestamptz
+
+  vehicle   Vehicle?                @relation(fields: [vehicleId], references: [id])
+  request   VehicleTemplateRequest? @relation(fields: [requestId], references: [id])
+  createdBy User                    @relation("TemplateSourceCreatedBy", fields: [createdById], references: [id])
+
+  @@index([vehicleId], map: "template_sources_vehicle_idx")
+  @@map("template_sources")
 }
 
 // ----------------------------------------------------------------------------

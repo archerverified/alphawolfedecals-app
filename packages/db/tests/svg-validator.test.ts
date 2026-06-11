@@ -172,6 +172,78 @@ describe('isValidPathData', () => {
   });
 });
 
+// Goal 6 Template Studio: templates with fewer than the 4 standard views
+// (vehicles.view_count 1..4) declare their exact view set.
+describe('validateOutlineSvg — declared views (Goal 6)', () => {
+  // 2-view boat sheet: aspect bears no relation to length×4/height×2.
+  const BOAT_DIMS = { lengthMm: 11125, heightMm: 2400 };
+
+  test('a 2-view sheet passes with views declared, aspect formula skipped', () => {
+    const result = validateOutlineSvg(
+      buildSvg(['driver', 'passenger'], '0 0 1920 1080'),
+      BOAT_DIMS,
+      {
+        views: ['driver', 'passenger'],
+      },
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.panels.map((p) => p.view).sort()).toEqual(['driver', 'passenger']);
+    }
+  });
+
+  test('a declared view missing from the document fails', () => {
+    expectFailRule(
+      validateOutlineSvg(buildSvg(['driver'], '0 0 1920 1080'), BOAT_DIMS, {
+        views: ['driver', 'passenger'],
+      }),
+      'views',
+    );
+  });
+
+  test('an undeclared view group in the document fails (even "top")', () => {
+    expectFailRule(
+      validateOutlineSvg(buildSvg(['driver', 'passenger', 'top'], '0 0 1920 1080'), BOAT_DIMS, {
+        views: ['driver', 'passenger'],
+      }),
+      'views',
+    );
+  });
+
+  test('a declared view with no panels fails', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080">${viewGroup(
+      'driver',
+    )}<g id="view-passenger" data-view="passenger"></g></svg>`;
+    expectFailRule(
+      validateOutlineSvg(svg, BOAT_DIMS, { views: ['driver', 'passenger'] }),
+      'panels',
+    );
+  });
+
+  test('declared views must be known view names', () => {
+    expectFailRule(
+      validateOutlineSvg(buildSvg(['driver'], '0 0 1920 1080'), BOAT_DIMS, { views: ['port'] }),
+      'views',
+    );
+  });
+
+  test('empty / duplicate declarations fail', () => {
+    expectFailRule(validateOutlineSvg(buildSvg(['driver']), BOAT_DIMS, { views: [] }), 'views');
+    expectFailRule(
+      validateOutlineSvg(buildSvg(['driver']), BOAT_DIMS, { views: ['driver', 'driver'] }),
+      'views',
+    );
+  });
+
+  test('omitting the option keeps the original 4-view + aspect behavior', () => {
+    // Same doc that passes with declared views fails the default contract.
+    expectFailRule(
+      validateOutlineSvg(buildSvg(['driver', 'passenger'], '0 0 1920 1080'), BOAT_DIMS),
+      'views',
+    );
+  });
+});
+
 describe('real seed file', () => {
   test('the shipped Tier-1 Transit SVG passes validation', () => {
     const svg = readFileSync(

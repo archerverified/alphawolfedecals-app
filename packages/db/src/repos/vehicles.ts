@@ -417,6 +417,40 @@ export async function createVehicle(adminId: string, input: CreateVehicleInput):
   });
 }
 
+// Replace a vehicle's entire panel set (Goal 6 Template Studio). The AW
+// catalogue rows shipped published with ZERO panels (wrapped display art only);
+// the Studio authors panels onto the EXISTING row so its id, AW-TPL code, and
+// any projects pointing at it survive. Replace-all (not merge) keeps the panel
+// set exactly what the authored outline SVG says — withUser wraps the delete +
+// insert in one transaction, and RLS admin policies gate both statements.
+export async function setVehiclePanels(
+  adminId: string,
+  vehicleId: string,
+  panels: PanelInput[],
+): Promise<void> {
+  if (panels.length === 0) {
+    throw new Error('[db] setVehiclePanels: refusing to replace panels with an empty set');
+  }
+  await withUser(adminId, async (db) => {
+    const exists = await db.vehicle.findUnique({ where: { id: vehicleId }, select: { id: true } });
+    if (!exists) throw new Error('[db] setVehiclePanels: vehicle not found');
+    await db.vehiclePanel.deleteMany({ where: { vehicleId } });
+    await db.vehiclePanel.createMany({
+      data: panels.map((p) => ({
+        vehicleId,
+        name: p.name,
+        view: p.view,
+        svgPath: p.svgPath,
+        wrapSafeZone: p.wrapSafeZone,
+        printableAreaMm2: p.printableAreaMm2,
+        finishHint: p.finishHint,
+        installOrder: p.installOrder,
+        notes: p.notes ?? null,
+      })),
+    });
+  });
+}
+
 // Publish a draft/review row. Enforces "one published per (year,make,model,trim,
 // variant)" by retiring any currently-published sibling first — the matching
 // partial unique index (vehicles_published_uk) is the backstop. Records the
