@@ -60,7 +60,16 @@ export type CustomerSignupInput = z.infer<typeof customerSignupSchema>;
 export type ShopSignupInput = z.infer<typeof shopSignupSchema>;
 
 export type SignupResult =
-  | { ok: true; userId: string; email: string; accountType: 'customer' | 'shop_user' }
+  | {
+      ok: true;
+      userId: string;
+      email: string;
+      accountType: 'customer' | 'shop_user';
+      // false = the account exists but the verification email failed to send.
+      // The caller must still route to /verify (its Resend button retries the
+      // send) — re-running signup would dead-end in the email_in_use branch.
+      otpSent: boolean;
+    }
   | { ok: false; reason: 'email_in_use' | 'invalid_input' | 'weak_password'; messages: string[] };
 
 type Pending = {
@@ -98,13 +107,22 @@ async function issueOtpFor(
 ): Promise<void> {
   const code = generateOtpCode();
   const codeHash = await hashOtp(code);
-  await otpRepo.createOtp({
+  const otpRow = await otpRepo.createOtp({
     userId,
     codeHash,
     purpose: 'signup_verification',
     expiresAt: otpExpiry(),
   });
-  await sendOtpEmail({ to: email, code, accountType });
+  try {
+    await sendOtpEmail({ to: email, code, accountType });
+  } catch (err) {
+    // The email never left the building — drop the orphaned row so undelivered
+    // codes don't consume OTP_HOURLY_RESEND_LIMIT or trip the 30s too_soon
+    // window. Cleanup is best-effort: the send failure is the error worth
+    // surfacing, not a secondary DB hiccup.
+    await otpRepo.deleteOtp(otpRow.id).catch(() => undefined);
+    throw err;
+  }
   await authEvents.logAuthEvent({
     userId,
     eventType: 'otp_requested',
@@ -147,8 +165,25 @@ export async function signupCustomer(
       userAgent: meta.userAgent ?? null,
       metadata: { accountType: 'customer' },
     });
-    await issueOtpFor(user.id, parsed.data.email, 'customer', meta);
-    return { ok: true, userId: user.id, email: parsed.data.email, accountType: 'customer' };
+    let otpSent = true;
+    try {
+      await issueOtpFor(user.id, parsed.data.email, 'customer', meta);
+    } catch (err) {
+      // User row already exists; failing the whole signup here would trap them:
+      // a retry hits email_in_use. Report success with otpSent=false instead.
+      otpSent = false;
+      console.error('[auth/signup] OTP send failed after user creation', {
+        userId: user.id,
+        err,
+      });
+    }
+    return {
+      ok: true,
+      userId: user.id,
+      email: parsed.data.email,
+      accountType: 'customer',
+      otpSent,
+    };
   } catch (err) {
     if (userRepo.isUniqueViolation(err)) {
       // Don't reveal that the email is in use. Still issue an OTP-like delay
@@ -202,8 +237,24 @@ export async function signupShop(
       userAgent: meta.userAgent ?? null,
       metadata: { accountType: 'shop_user' },
     });
-    await issueOtpFor(user.id, parsed.data.email, 'shop_user', meta);
-    return { ok: true, userId: user.id, email: parsed.data.email, accountType: 'shop_user' };
+    let otpSent = true;
+    try {
+      await issueOtpFor(user.id, parsed.data.email, 'shop_user', meta);
+    } catch (err) {
+      // See signupCustomer: never fail signup for a send error after creation.
+      otpSent = false;
+      console.error('[auth/signup] OTP send failed after user creation', {
+        userId: user.id,
+        err,
+      });
+    }
+    return {
+      ok: true,
+      userId: user.id,
+      email: parsed.data.email,
+      accountType: 'shop_user',
+      otpSent,
+    };
   } catch (err) {
     if (userRepo.isUniqueViolation(err)) {
       return { ok: false, reason: 'email_in_use', messages: ['Email already in use'] };

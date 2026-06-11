@@ -110,7 +110,10 @@ export async function signupCustomerAction(
   }
   if (result.ok) {
     const email = encodeURIComponent(result.email);
-    redirect(`/verify?email=${email}&type=customer`);
+    // sent=0: account created but the OTP email failed — the verify page shows
+    // a "tap Resend" notice. Never bounce back to signup (email_in_use trap).
+    const sent = result.otpSent ? '' : '&sent=0';
+    redirect(`/verify?email=${email}&type=customer${sent}`);
   }
   if (result.reason === 'invalid_input') {
     return {
@@ -171,7 +174,9 @@ export async function signupShopAction(_prev: ActionState, form: FormData): Prom
   }
   if (result.ok) {
     const email = encodeURIComponent(result.email);
-    redirect(`/verify?email=${email}&type=shop`);
+    // See signupCustomerAction: sent=0 routes the send-failure to /verify.
+    const sent = result.otpSent ? '' : '&sent=0';
+    redirect(`/verify?email=${email}&type=shop${sent}`);
   }
   if (result.reason === 'invalid_input') {
     return {
@@ -238,7 +243,19 @@ export async function resendOtpAction(_prev: ActionState, form: FormData): Promi
     return { ok: false, message: 'Invalid request token. Please refresh and try again.' };
   const email = String(form.get('email') ?? '').trim();
   const meta = await requestMeta();
-  const result = await resendVerificationOtp(email, meta);
+  let result;
+  try {
+    result = await resendVerificationOtp(email, meta);
+  } catch (err) {
+    // Resend (or the DB) failed mid-send. Without this catch the Server Action
+    // 500s and the verify page shows Next's generic error screen.
+    console.error('[resendOtpAction] unhandled error', err);
+    return {
+      ok: false,
+      message: "We couldn't send the email. Please try again in a moment.",
+      email,
+    };
+  }
   if (result.ok) return { ok: true, message: 'New code sent. Check your email.', email };
 
   const messages: Record<string, string> = {

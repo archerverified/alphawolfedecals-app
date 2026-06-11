@@ -9,7 +9,7 @@
 // console + stashed in an in-memory ring so the dev-only "peek OTP" route
 // (apps/web/app/api/auth/dev-otp/route.ts) can read it during E2E tests.
 
-import { Resend } from 'resend';
+import { Resend, type CreateEmailOptions } from 'resend';
 
 type SendOtpInput = {
   to: string;
@@ -36,13 +36,16 @@ function getFromAddress(): string {
 // Without this check, rejections (e.g. unverified from-domain, test-sender
 // recipient limits) vanish silently and callers' failure handling never runs.
 // (Root cause of the Goal 5 "36 email_sent, zero in the Resend dashboard" bug.)
-async function sendViaResend(payload: Parameters<Resend['emails']['send']>[0]): Promise<void> {
+// Returns the Resend email id so callers can correlate with the dashboard.
+async function sendViaResend(payload: CreateEmailOptions): Promise<string> {
   const result = await getResend().emails.send(payload);
   if (result.error) {
     throw new Error(
-      `[auth] Resend rejected the email: ${result.error.name ?? 'unknown'} — ${result.error.message}`,
+      `[auth] Resend rejected the email: ${result.error.name} — ${result.error.message}`,
+      { cause: result.error },
     );
   }
+  return result.data.id;
 }
 
 // Ring buffer of the last 20 OTPs in non-production. Read by the dev-only
@@ -98,6 +101,7 @@ function renderOtpText(code: string): string {
 // Generic transactional send, reusing the one Resend client + from-address.
 // Used for non-OTP notifications (e.g. GH-017 "your requested template shipped").
 // Best-effort callers should wrap this in try/catch; it throws if Resend rejects.
+// Resolves to the Resend email id, or null when the console transport skipped the send.
 export type EmailAttachment = {
   filename: string;
   /** Raw bytes — passed to Resend as a Buffer. */
@@ -113,7 +117,7 @@ export async function sendEmail(input: {
   attachments?: EmailAttachment[];
   /** Optional Reply-To (e.g. the customer on send-to-shop). */
   replyTo?: string;
-}): Promise<void> {
+}): Promise<string | null> {
   if (process.env.NODE_ENV !== 'production') {
     const att = input.attachments?.length
       ? ` (+${input.attachments.length} attachment${input.attachments.length > 1 ? 's' : ''})`
@@ -121,9 +125,9 @@ export async function sendEmail(input: {
     console.log(`[auth][dev] email to ${input.to}: ${input.subject}${att}`);
   }
   if (process.env.AUTH_EMAIL_TRANSPORT === 'console') {
-    return;
+    return null;
   }
-  await sendViaResend({
+  return sendViaResend({
     from: getFromAddress(),
     to: input.to,
     subject: input.subject,
@@ -134,17 +138,17 @@ export async function sendEmail(input: {
   });
 }
 
-export async function sendOtpEmail(input: SendOtpInput): Promise<void> {
+export async function sendOtpEmail(input: SendOtpInput): Promise<string | null> {
   if (process.env.NODE_ENV !== 'production') {
     _stashDevOtp(input.to, input.code);
     console.log(`[auth][dev] OTP for ${input.to}: ${input.code}`);
   }
 
   if (process.env.AUTH_EMAIL_TRANSPORT === 'console') {
-    return;
+    return null;
   }
 
-  await sendViaResend({
+  return sendViaResend({
     from: getFromAddress(),
     to: input.to,
     subject: 'Your Alpha Wolf verification code',

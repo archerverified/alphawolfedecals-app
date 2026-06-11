@@ -12,6 +12,17 @@ import type { Event, EventHint } from '@sentry/core';
 const TOKEN_QUERY_RE = /([?&](?:token|access_token|api_key|key|signature)=)[^&#]*/gi;
 const SIGNED_URL_RE = /([?&]token=)[^&#]+/gi;
 
+// Email addresses redacted from message-like fields (event.message, exception
+// values, breadcrumb messages). Third-party APIs embed PII in error strings —
+// e.g. Resend's testing-mode 403 includes the recipient's email address — and
+// those strings arrive here verbatim via thrown Errors.
+const EMAIL_RE = /[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g;
+
+function redactEmails(text: string | undefined): string | undefined {
+  if (!text) return text;
+  return text.replace(EMAIL_RE, '[email]');
+}
+
 // Request headers dropped entirely — these carry credentials or session state
 // that must never leave the encryption boundary. Compared case-insensitively.
 const HEADERS_TO_DROP = new Set([
@@ -50,6 +61,7 @@ function scrubHeaders(
  *  - sensitive request headers (Authorization, Cookie, X-CSRF-Token, etc.)
  *  - query-string tokens in event.request.url and every breadcrumb URL
  *  - Supabase signed-URL ?token= values everywhere they appear
+ *  - email addresses in event.message, exception values, and breadcrumb messages
  *
  * Generic over the event type so it is assignable to every SDK's `beforeSend`
  * hook, whose signature is `(event: ErrorEvent, hint: EventHint) => ErrorEvent`.
@@ -70,9 +82,20 @@ export function scrubSentryEvent<T extends Event>(event: T, _hint?: EventHint): 
     }
   }
 
+  // message-like fields — third-party error strings can embed addresses
+  if (event.message) {
+    event.message = redactEmails(event.message);
+  }
+  if (event.exception?.values) {
+    for (const value of event.exception.values) {
+      value.value = redactEmails(value.value);
+    }
+  }
+
   if (Array.isArray(event.breadcrumbs)) {
     event.breadcrumbs = event.breadcrumbs.map((crumb) => ({
       ...crumb,
+      message: redactEmails(crumb.message),
       data: crumb.data
         ? Object.fromEntries(
             Object.entries(crumb.data).map(([key, value]) => [
