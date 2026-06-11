@@ -207,10 +207,16 @@ export function BriefWizard({
           // PHASE 2 SEAM (B2C-007): "Generate concepts — uses 1 credit" lands
           // here, next to Save; the snapshot path below is the same one a
           // generation run will version against.
-          <Button onClick={saveBrief} disabled={savingBrief} data-testid="brief-save">
-            {savingBrief ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
-            Save brief
-          </Button>
+          <span className="flex items-center gap-2">
+            <Button asChild variant="outline" data-testid="brief-export">
+              {/* Plain anchor: a binary download, not a client navigation. */}
+              <a href={`/projects/${projectId}/export`}>Download spec pack (PDF)</a>
+            </Button>
+            <Button onClick={saveBrief} disabled={savingBrief} data-testid="brief-save">
+              {savingBrief ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+              Save brief
+            </Button>
+          </span>
         ) : (
           <Button onClick={() => goTo(stepIndex + 1)} data-testid="brief-next">
             Next <ChevronRight className="size-4" aria-hidden />

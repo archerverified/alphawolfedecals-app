@@ -98,7 +98,7 @@ function viewSpanMm(view: string, dims: VehicleDims): number | null {
   }
 }
 
-type PanelBox = { panel: BriefPanel; minX: number; maxX: number };
+type PanelBox = { panel: BriefPanel; minX: number; maxX: number; minY: number; maxY: number };
 
 function panelBoxes(panels: BriefPanel[]): PanelBox[] {
   const out: PanelBox[] = [];
@@ -107,7 +107,8 @@ function panelBoxes(panels: BriefPanel[]): PanelBox[] {
     try {
       const b = geometry.bbox(geometry.parsePath(panel.outlinePath));
       if (!b || !Number.isFinite(b.minX) || !Number.isFinite(b.maxX) || b.maxX <= b.minX) continue;
-      out.push({ panel, minX: b.minX, maxX: b.maxX });
+      if (!Number.isFinite(b.minY) || !Number.isFinite(b.maxY) || b.maxY < b.minY) continue;
+      out.push({ panel, minX: b.minX, maxX: b.maxX, minY: b.minY, maxY: b.maxY });
     } catch {
       // Unparseable outline → that panel just can't be sized.
     }
@@ -115,13 +116,22 @@ function panelBoxes(panels: BriefPanel[]): PanelBox[] {
   return out;
 }
 
+export interface PanelSizeIn {
+  widthIn: number;
+  heightIn: number;
+}
+
 /**
- * Approximate physical print width (inches) per panel: each view's panel
+ * Approximate physical print size (inches) per panel: each view's panel
  * union is scaled to the vehicle extent that view faces, panels sized
- * proportionally. Implausible results are dropped, not reported.
+ * proportionally (height uses the same mm-per-unit as width — the drawing is
+ * uniform scale). Implausible results are dropped, not reported.
  */
-export function panelPrintWidthsIn(panels: BriefPanel[], dims: VehicleDims): Map<string, number> {
-  const widths = new Map<string, number>();
+export function panelPrintSizesIn(
+  panels: BriefPanel[],
+  dims: VehicleDims,
+): Map<string, PanelSizeIn> {
+  const sizes = new Map<string, PanelSizeIn>();
   const byView = new Map<string, PanelBox[]>();
   for (const box of panelBoxes(panels)) {
     const list = byView.get(box.panel.view) ?? [];
@@ -137,11 +147,19 @@ export function panelPrintWidthsIn(panels: BriefPanel[], dims: VehicleDims): Map
     const mmPerUnit = spanMm / unionWidth;
     for (const b of boxes) {
       const widthIn = ((b.maxX - b.minX) * mmPerUnit) / MM_PER_INCH;
+      const heightIn = ((b.maxY - b.minY) * mmPerUnit) / MM_PER_INCH;
       if (widthIn >= MIN_PLAUSIBLE_PANEL_IN && widthIn <= MAX_PLAUSIBLE_PANEL_IN) {
-        widths.set(b.panel.id, widthIn);
+        sizes.set(b.panel.id, { widthIn, heightIn });
       }
     }
   }
+  return sizes;
+}
+
+/** Width-only view of panelPrintSizesIn (the DPI gate's original shape). */
+export function panelPrintWidthsIn(panels: BriefPanel[], dims: VehicleDims): Map<string, number> {
+  const widths = new Map<string, number>();
+  for (const [id, s] of panelPrintSizesIn(panels, dims)) widths.set(id, s.widthIn);
   return widths;
 }
 
