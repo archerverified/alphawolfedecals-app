@@ -36,7 +36,9 @@ export async function extractLogoColorsAction(input: {
 
   try {
     const bytes = await storage.downloadAssetObject(key);
-    const { data, info } = await sharp(bytes)
+    // limitInputPixels: an authenticated PNG-bomb shouldn't burn lambda
+    // CPU/memory for a 48px palette; over-limit throws into the catch below.
+    const { data, info } = await sharp(bytes, { limitInputPixels: 30_000_000 })
       .resize(SAMPLE_SIZE, SAMPLE_SIZE, { fit: 'inside' })
       .ensureAlpha()
       .raw()

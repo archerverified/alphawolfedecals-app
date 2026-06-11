@@ -41,21 +41,26 @@ export function ColorsStep({ projectId, data, patch }: Props) {
 
   const addPick = useCallback(
     (pick: Pick, mode: 'picker' | 'extract' | 'film') => {
-      let added = false;
+      // Decide from render-scope state, BEFORE patch: the updater must stay
+      // pure (React may defer/re-run it), so side effects can't live inside
+      // it (PR #126 review finding #1).
+      if (picks.length >= MAX_PICKS) {
+        toast.message(`${MAX_PICKS} colors is the max.`);
+        return;
+      }
+      if (picks.some((p) => p.hex === pick.hex && p.sku === pick.sku)) {
+        toast.message('Already in your colors.');
+        return;
+      }
       patch((prev) => {
         const cur = prev.colors?.picks ?? [];
         if (cur.length >= MAX_PICKS) return prev;
         if (cur.some((p) => p.hex === pick.hex && p.sku === pick.sku)) return prev;
-        added = true;
-        return {
-          ...prev,
-          colors: { ...prev.colors, picks: [...cur, pick] },
-        };
+        return { ...prev, colors: { ...prev.colors, picks: [...cur, pick] } };
       });
-      if (added) capture('brief_color_added', { projectId, mode });
-      else toast.message(full ? `${MAX_PICKS} colors is the max.` : 'Already in your colors.');
+      capture('brief_color_added', { projectId, mode });
     },
-    [patch, projectId, full],
+    [patch, projectId, picks],
   );
 
   const removePick = (index: number) => {
@@ -104,7 +109,9 @@ export function ColorsStep({ projectId, data, patch }: Props) {
         ...prev,
         colors: { ...prev.colors, extractedFromLogo: res.colors.slice(0, 8) },
       }));
-      capture('brief_color_added', { projectId, mode: 'extract_run' });
+      capture('brief_logo_colors_extracted', { projectId, count: res.colors.length });
+    } catch {
+      toast.error("Couldn't read colors from the logo.");
     } finally {
       setExtracting(false);
     }
@@ -120,7 +127,7 @@ export function ColorsStep({ projectId, data, patch }: Props) {
         <ul className="mb-5 flex flex-col gap-2" data-testid="color-picks">
           {picks.map((p, i) => (
             <li
-              key={`${p.hex}-${p.sku ?? i}`}
+              key={`${p.hex}-${p.sku ?? ''}`}
               className="flex items-center gap-3 rounded-md border border-zinc-200 bg-white p-2"
             >
               <span
@@ -141,7 +148,7 @@ export function ColorsStep({ projectId, data, patch }: Props) {
               <select
                 value={p.role ?? ''}
                 onChange={(e) => setRole(i, e.target.value)}
-                aria-label="Color role"
+                aria-label={`Role for ${p.name ?? p.hex}`}
                 className="rounded border border-zinc-200 p-1 text-xs text-zinc-600"
               >
                 <option value="">role…</option>
