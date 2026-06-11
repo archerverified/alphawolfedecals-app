@@ -83,6 +83,16 @@ export async function consumeOtp(otpId: string): Promise<void> {
   });
 }
 
+// Remove an OTP whose email was never delivered (Resend rejected the send).
+// countRecentOtpRequests counts rows by createdAt regardless of consumedAt, so
+// leaving the orphaned row would charge the user's hourly resend budget (and
+// trip the 30s too_soon window) for a failure that was never their fault.
+export async function deleteOtp(otpId: string): Promise<void> {
+  await withSystem(async (db) => {
+    await db.otpCode.delete({ where: { id: otpId } });
+  });
+}
+
 export async function countRecentOtpRequests(
   userId: string,
   purpose: OtpPurpose,

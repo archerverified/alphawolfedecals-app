@@ -8,12 +8,14 @@ type Props = {
   email: string;
   accountType: 'customer' | 'shop';
   csrfToken: string;
+  /** Signup created the account but the OTP email failed (verify?sent=0). */
+  sendFailed?: boolean;
 };
 
 type State = { ok: boolean; message?: string; email?: string };
 const initial: State = { ok: false };
 
-export function VerifyForm({ email, accountType, csrfToken }: Props) {
+export function VerifyForm({ email, accountType, csrfToken, sendFailed }: Props) {
   const [verifyState, verifyAction, verifying] = useActionState<State, FormData>(
     verifyOtpAction,
     initial,
@@ -29,6 +31,16 @@ export function VerifyForm({ email, accountType, csrfToken }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
+      {/* Cleared once a Resend succeeds — the page's sent=0 URL param can't. */}
+      {sendFailed && !resendState.ok ? (
+        <p
+          role="alert"
+          className="rounded border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900"
+        >
+          Your account was created, but we couldn't send the verification code. Tap
+          &ldquo;Resend&rdquo; below to try again.
+        </p>
+      ) : null}
       <form action={verifyAction} className="flex flex-col gap-4">
         <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
         <input type="hidden" name="email" value={email} />

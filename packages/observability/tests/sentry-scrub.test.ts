@@ -95,6 +95,45 @@ describe('scrubSentryEvent', () => {
     expect(crumb?.data?.method).toBe('GET');
   });
 
+  it('redacts email addresses in message, exception values, and breadcrumb messages', () => {
+    const event: Event = {
+      message: 'failed to email someone@example.com about their order',
+      exception: {
+        values: [
+          {
+            type: 'Error',
+            // Resend's testing-mode 403 embeds the account owner's address.
+            value:
+              '[auth] Resend rejected the email: validation_error — You can only send testing emails to your own email address (owner@example.com).',
+          },
+        ],
+      },
+      breadcrumbs: [{ message: 'dispatching OTP to casey.b+tag@sub.example.io' }],
+    };
+
+    const result = scrubSentryEvent(event);
+
+    expect(result.message).toBe('failed to email [email] about their order');
+    expect(result.exception?.values?.[0]?.value).not.toContain('owner@example.com');
+    expect(result.exception?.values?.[0]?.value).toContain('[email]');
+    expect(result.exception?.values?.[0]?.value).toContain('Resend rejected the email');
+    expect(result.breadcrumbs?.[0]?.message).toBe('dispatching OTP to [email]');
+  });
+
+  it('redacts the email query param in request URLs (/verify?email=...)', () => {
+    const event: Event = {
+      request: {
+        url: 'https://app.example.com/verify?email=casey%40example.com&type=customer',
+      },
+    };
+
+    const result = scrubSentryEvent(event);
+
+    expect(result.request?.url).toBe(
+      'https://app.example.com/verify?email=[redacted]&type=customer',
+    );
+  });
+
   it('passes a clean event through untouched (no false positives)', () => {
     const event: Event = {
       message: 'something happened',

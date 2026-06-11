@@ -11,12 +11,14 @@ import type { Worker as BullWorker } from 'bullmq';
 import type IORedisClient from 'ioredis';
 import { EMAIL_QUEUE_NAME, type EmailRetryJob } from '@alphawolf/notifications';
 
+// Return is `unknown` (not void) so @alphawolf/auth's sendEmail — which resolves
+// to the Resend email id — is directly assignable.
 export type EmailSender = (message: {
   to: string;
   subject: string;
   html: string;
   text: string;
-}) => Promise<void>;
+}) => Promise<unknown>;
 
 // Pure processor — re-send the rendered message. Throws on failure so BullMQ
 // applies the queue's retry/backoff policy (set by the producer).

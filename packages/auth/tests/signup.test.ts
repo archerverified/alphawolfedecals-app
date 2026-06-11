@@ -126,6 +126,9 @@ vi.mock('@alphawolf/db', () => ({
         (o) => o.userId === userId && o.purpose === purpose && o.createdAt.getTime() >= cutoff,
       ).length;
     },
+    async deleteOtp(id: string) {
+      otps.delete(id);
+    },
   },
   shops: {
     async createShopWithAdminMembership(input: {
@@ -169,6 +172,14 @@ afterEach(() => {
   delete process.env.AUTH_EMAIL_TRANSPORT;
 });
 
+// Wrap sendOtpEmail in a spy that defaults to the real implementation (console
+// transport in these tests), so the send-failure suite below can inject
+// per-call rejections with mockRejectedValueOnce.
+vi.mock('../src/email', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../src/email')>();
+  return { ...actual, sendOtpEmail: vi.fn(actual.sendOtpEmail) };
+});
+
 import {
   _clearPendingShopData,
   resendVerificationOtp,
@@ -176,7 +187,8 @@ import {
   signupShop,
   verifySignupOtp,
 } from '../src/signup';
-import { _getDevOtp } from '../src/email';
+import { _getDevOtp, sendOtpEmail } from '../src/email';
+import { OTP_HOURLY_RESEND_LIMIT } from '../src/otp-constants';
 
 const goodCustomerInput = {
   firstName: 'Casey',
@@ -200,6 +212,7 @@ describe('signupCustomer', () => {
     expect(res.ok).toBe(true);
     if (!res.ok) return;
     expect(res.accountType).toBe('customer');
+    expect(res.otpSent).toBe(true);
 
     const stored = await Promise.resolve(Array.from(users.values())[0]!);
     expect(stored.status).toBe('pending_verification');
@@ -335,5 +348,58 @@ describe('resendVerificationOtp', () => {
     expect(res.ok).toBe(false);
     if (res.ok) return;
     expect(res.reason).toBe('already_verified');
+  });
+});
+
+// PR #134 caller hardening: when Resend rejects the send, the account must
+// still be created (otpSent=false → caller routes to /verify), and the
+// undelivered OTP must not charge the hourly resend budget.
+describe('signup when the OTP email fails to send', () => {
+  const failNextSend = () =>
+    vi.mocked(sendOtpEmail).mockRejectedValueOnce(new Error('Resend down'));
+
+  beforeEach(() => {
+    // Clears any leftover one-shot rejections and restores the real impl.
+    vi.mocked(sendOtpEmail).mockReset();
+  });
+
+  it('still creates the customer account and reports otpSent=false', async () => {
+    failNextSend();
+    const res = await signupCustomer(goodCustomerInput);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.otpSent).toBe(false);
+
+    // Not the email_in_use trap: the user recovers via the /verify Resend button.
+    const resent = await resendVerificationOtp(goodCustomerInput.email);
+    expect(resent.ok).toBe(true);
+    expect(_getDevOtp(goodCustomerInput.email)).toMatch(/^\d{6}$/);
+  });
+
+  it('still creates the shop account and reports otpSent=false', async () => {
+    failNextSend();
+    const res = await signupShop(goodShopInput);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    expect(res.otpSent).toBe(false);
+  });
+
+  it('does not charge failed sends against the hourly resend limit', async () => {
+    failNextSend();
+    const signup = await signupCustomer(goodCustomerInput);
+    expect(signup.ok && !signup.otpSent).toBe(true);
+
+    // More consecutive failures than the hourly budget allows. Each failed
+    // send deletes its OTP row, so none of them count (and none arm the 30s
+    // too_soon window).
+    for (let i = 0; i <= OTP_HOURLY_RESEND_LIMIT; i++) {
+      failNextSend();
+      await expect(resendVerificationOtp(goodCustomerInput.email)).rejects.toThrow('Resend down');
+    }
+
+    // Resend recovers: the user is NOT locked out behind hourly_limit.
+    const recovered = await resendVerificationOtp(goodCustomerInput.email);
+    expect(recovered.ok).toBe(true);
+    expect(_getDevOtp(goodCustomerInput.email)).toMatch(/^\d{6}$/);
   });
 });

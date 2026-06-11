@@ -17,13 +17,16 @@ import { enqueueEmailRetry } from './retry-queue';
 // be graphed per user/funnel in PostHog.
 export function buildNotificationEffects(distinctId: string): NotificationEffects {
   return {
-    send: (message) =>
-      sendEmail({
+    send: async (message) => {
+      // sendEmail resolves to the Resend email id; NotificationEffects.send is
+      // Promise<void>, so the id is intentionally dropped here.
+      await sendEmail({
         to: message.to,
         subject: message.subject,
         html: message.html,
         text: message.text,
-      }),
+      });
+    },
     capture: (event, props) => captureServerEvent(event, distinctId, props),
     captureException: (error, context) => {
       Sentry.captureException(error, { extra: context, tags: { feature: 'order-notifications' } });
