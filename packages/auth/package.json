@@ -17,6 +17,11 @@
       "node": "./dist/server.js",
       "default": "./src/server.ts"
     },
+    "./email": {
+      "types": "./src/email.ts",
+      "node": "./dist/email.js",
+      "default": "./src/email.ts"
+    },
     "./next": {
       "types": "./src/next.ts",
       "node": "./dist/next.js",

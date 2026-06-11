@@ -31,10 +31,18 @@ if (process.env.NODE_ENV !== 'test') {
 
   // Drain the order-notification retry queue (Goal 3c). No-op without a Redis URL.
   // Failures here must not crash the API process — log + report to Sentry.
-  startEmailRetryWorker().catch((err: unknown) => {
-    console.error('[email] failed to start retry worker:', err);
-    Sentry.captureException(err);
-  });
+  startEmailRetryWorker()
+    .then((worker) => {
+      // Explicit start log so Render logs prove the worker is alive — it failed
+      // handled-but-silent for a day on next-auth beta.31 (Sentry NODE-7).
+      console.log(
+        worker ? '[email] retry worker started' : '[email] retry worker disabled (no Redis URL)',
+      );
+    })
+    .catch((err: unknown) => {
+      console.error('[email] failed to start retry worker:', err);
+      Sentry.captureException(err);
+    });
 }
 
 export { app };

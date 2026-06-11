@@ -49,9 +49,13 @@ async function getConnection(): Promise<IORedisClient> {
 
 export async function startEmailRetryWorker(): Promise<BullWorker | null> {
   if (!isEmailWorkerEnabled()) return null;
+  // '@alphawolf/auth/email' (NOT '/server'): the server barrel pulls in next-auth,
+  // whose v5 beta.31 `lib/env.js` imports the extensionless 'next/server' — fine
+  // under Next's bundler, unresolvable on plain Node ESM (Render). The retry
+  // worker only needs the Resend sender, which is next-auth-free (Sentry NODE-7).
   const [{ Worker }, { sendEmail }] = await Promise.all([
     import('bullmq'),
-    import('@alphawolf/auth/server'),
+    import('@alphawolf/auth/email'),
   ]);
 
   const worker = new Worker<EmailRetryJob>(
