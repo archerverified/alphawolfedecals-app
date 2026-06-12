@@ -15,6 +15,9 @@ import { useMemo, useRef, useState } from 'react';
 import { useActionState } from 'react';
 import { CSRF_FIELD_NAME } from '@alphawolf/auth';
 import { geometry } from '@alphawolf/canvas';
+// Subpath import, NOT the @alphawolf/db barrel: numbering is pure geometry
+// (no Prisma/storage), so it's the one db module safe in a client bundle.
+import { numberViews } from '@alphawolf/db/svg/numbering';
 import {
   publishStudioVehicleAction,
   saveStudioPanelsAction,
@@ -128,6 +131,26 @@ export function StudioWorkspace({
   >(null);
 
   const usedViews = useMemo(() => [...new Set(panels.map((p) => p.view))], [panels]);
+
+  // Live sheet numbers (panel-number unification, Archer spec 2026-06-12):
+  // the panel list shows the SAME numberViews() numeral the template sheets
+  // print — never installOrder. Derived from the in-progress geometry, so the
+  // operator always sees what the next publish will print.
+  const sheetNumbers = useMemo(() => {
+    const views = usedViews.map((view) => ({
+      view,
+      panels: panels
+        .filter((p) => p.view === view)
+        .map((p) => ({
+          name: p.name,
+          outlinePath: pathFromPoints(p.points),
+          installOrder: p.installOrder,
+          key: p.key,
+        })),
+    }));
+    const { numberOf } = numberViews(views);
+    return new Map(views.flatMap((v) => v.panels.map((p) => [p.key, numberOf.get(p)!] as const)));
+  }, [panels, usedViews]);
 
   const toSheet = (e: React.PointerEvent): [number, number] => {
     const svg = svgRef.current!;
@@ -527,20 +550,22 @@ export function StudioWorkspace({
             Panels ({panels.length})
           </h3>
           <ul className="max-h-64 space-y-1 overflow-y-auto text-sm">
-            {panels.map((p) => (
-              <li key={p.key}>
-                <button
-                  type="button"
-                  onClick={() => setSelectedKey(p.key)}
-                  className={`w-full truncate rounded-md px-2 py-1 text-left ${p.key === selectedKey ? 'bg-zinc-900 text-white' : 'hover:bg-zinc-100'}`}
-                >
-                  {p.installOrder}. {p.name}{' '}
-                  <span className={p.key === selectedKey ? 'text-zinc-300' : 'text-zinc-400'}>
-                    · {p.view}
-                  </span>
-                </button>
-              </li>
-            ))}
+            {[...panels]
+              .sort((a, b) => (sheetNumbers.get(a.key) ?? 0) - (sheetNumbers.get(b.key) ?? 0))
+              .map((p) => (
+                <li key={p.key}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedKey(p.key)}
+                    className={`w-full truncate rounded-md px-2 py-1 text-left ${p.key === selectedKey ? 'bg-zinc-900 text-white' : 'hover:bg-zinc-100'}`}
+                  >
+                    {sheetNumbers.get(p.key)}. {p.name}{' '}
+                    <span className={p.key === selectedKey ? 'text-zinc-300' : 'text-zinc-400'}>
+                      · {p.view}
+                    </span>
+                  </button>
+                </li>
+              ))}
           </ul>
           {selected ? (
             <div className="mt-3 space-y-2 border-t border-zinc-100 pt-3 text-sm">
@@ -579,6 +604,11 @@ export function StudioWorkspace({
                     </option>
                   ))}
                 </select>
+              </div>
+              {/* Fitting sequence — clearly labelled so it can't be read as the
+                  panel number (the list shows the sheet numeral). */}
+              <label className="flex items-center justify-between gap-2 text-xs text-zinc-500">
+                Install order (fitting sequence)
                 <input
                   type="number"
                   value={selected.installOrder}
@@ -588,9 +618,8 @@ export function StudioWorkspace({
                     updatePanel(selected.key, { installOrder: Number(e.target.value) })
                   }
                   className="w-16 rounded-md border border-zinc-300 px-1.5 py-1 text-sm"
-                  title="Install order"
                 />
-              </div>
+              </label>
               <input
                 type="text"
                 value={selected.notes}

@@ -6,6 +6,31 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-12 — Panel-number unification in the UI (Archer rider spec, PR #144)
+
+**Status:** PR #144 OPEN, awaiting review/merge — fresh-context review recorded
+in the PR body (verdict: approve, no blockers).
+
+Closes the follow-up flagged in the PR #142 entry below: vehicle pages and the
+Studio still prefixed panel names with installOrder — a DIFFERENT number than
+the sheet numerals. Now every displayed panel number is the `numberViews()`
+sheet number (one number = one panel, everywhere):
+
+- `/vehicles/[id]` and `/admin/vehicles/[id]` panel lists derive sheet numbers
+  server-side via a new shared helper (`apps/web/lib/vehicles/panel-numbers.ts`)
+  and sort 1..N. installOrder prefix gone.
+- Studio panel list shows LIVE sheet numbers derived from the in-progress
+  geometry (identical inputs to what publish stores, so the list always matches
+  the next printed sheet). installOrder survives only as the inspector field,
+  now visibly labelled "Install order (fitting sequence)".
+- Editor inspector + B2C zone selector stay name-only (verified, unchanged).
+- `@alphawolf/db` gains a `./svg/numbering` subpath export — the numbering
+  module is pure geometry (canvas-only deps), so the client-side Studio can
+  import it without pulling Prisma/storage into the browser bundle. Mirrors
+  the `.` export shape; no ADR-0013-locked file touched.
+- New unit test pins the unification (install orders deliberately conflict
+  with sheet order). lint/typecheck/test 15/15 green + full Next build clean.
+
 ## 2026-06-12 — Panel numbering + legend restyle on template sheets (Archer change spec, PR #142)
 
 **Status:** ✅ one reviewed PR, squash-merged (b7b82c7), prod deploy verified
