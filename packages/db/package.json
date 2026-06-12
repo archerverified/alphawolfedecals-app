@@ -38,7 +38,8 @@
     "storage:provision": "dotenv -e .env -- tsx scripts/provision-storage.ts",
     "storage:migrate-local": "dotenv -e .env -- tsx scripts/migrate-local-assets.ts",
     "db:author-aw": "dotenv -e .env -- tsx scripts/author-aw-panels.ts",
-    "db:regen-artifacts": "dotenv -e .env -- tsx scripts/regen-template-artifacts.ts"
+    "db:regen-artifacts": "dotenv -e .env -- tsx scripts/regen-template-artifacts.ts",
+    "db:render-views": "dotenv -e .env -- tsx scripts/render-view-conditioning.ts"
   },
   "dependencies": {
     "@alphawolf/canvas": "workspace:^",
