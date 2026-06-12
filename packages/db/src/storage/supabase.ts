@@ -183,6 +183,105 @@ export async function removeAssetObject(key: string): Promise<void> {
   if (error) throw new Error(`[db/storage] removeAssetObject failed for ${key}: ${error.message}`);
 }
 
+// --- Template Studio (Goal 6) ------------------------------------------------
+//
+// Two Studio storage surfaces with opposite visibility:
+//   * template-sources (PRIVATE): the operator's ingest material — shop photos,
+//     OEM dimensional PDFs, owned SVG art. Access control is at the app layer
+//     (ADR-0014 invariant 6): only admin-gated Server Actions upload, and reads
+//     go through short-lived signed URLs issued after requireAdmin().
+//   * vehicle-templates (PUBLIC): published artifacts — the authored outline
+//     SVG and the 1/20-scale layout sheet join the existing outline/thumb keys.
+
+export const TEMPLATE_SOURCES_BUCKET =
+  process.env.SUPABASE_STORAGE_BUCKET_TEMPLATE_SOURCES ?? 'template-sources';
+
+export function templateSourceKey(vehicleId: string, filename: string): string {
+  // Mirror assetKey's traversal hardening: strip path separators, keep a safe
+  // charset, never trust the original filename.
+  const safe = filename.replace(/[/\\]/g, '_').replace(/[^A-Za-z0-9._-]/g, '_');
+  return `${vehicleId}/sources/${Date.now()}-${safe}`;
+}
+
+// Server-side upload into the PRIVATE template-sources bucket. Returns the
+// bucket-relative key (NOT a URL — private objects are read via signed URLs).
+export async function uploadTemplateSourceObject(
+  key: string,
+  data: Buffer | Uint8Array | ArrayBuffer | Blob,
+  contentType: string,
+): Promise<string> {
+  const { error } = await getServiceClient()
+    .storage.from(TEMPLATE_SOURCES_BUCKET)
+    .upload(key, data, { contentType, upsert: true });
+  if (error)
+    throw new Error(`[db/storage] uploadTemplateSourceObject failed for ${key}: ${error.message}`);
+  return key;
+}
+
+// Signed UPLOAD URL so the admin's browser PUTs the source file straight to
+// Storage instead of riding a Server Action body (which Next caps at 1 MB).
+// Same contract as signedAssetUploadUrl: the CALLER passed requireAdmin().
+export async function signedTemplateSourceUploadUrl(key: string): Promise<SignedUpload> {
+  const { data, error } = await getServiceClient()
+    .storage.from(TEMPLATE_SOURCES_BUCKET)
+    .createSignedUploadUrl(key);
+  if (error || !data) {
+    throw new Error(
+      `[db/storage] signedTemplateSourceUploadUrl failed for ${key}: ${error?.message ?? 'no url'}`,
+    );
+  }
+  return { path: data.path, token: data.token, signedUrl: data.signedUrl };
+}
+
+// Object metadata for a private template source (existence + size check at
+// finalize time — the bucket's own size/MIME caps are the storage-side net).
+export async function templateSourceObjectInfo(
+  key: string,
+): Promise<{ size: number; contentType: string | null } | null> {
+  const { data, error } = await getServiceClient().storage.from(TEMPLATE_SOURCES_BUCKET).info(key);
+  if (error || !data) return null;
+  return { size: data.size ?? 0, contentType: data.contentType ?? null };
+}
+
+// Short-lived signed READ URL for a private template source. The CALLER must
+// have already passed requireAdmin() — same contract as signedAssetReadUrl.
+export async function signedTemplateSourceReadUrl(
+  key: string,
+  expiresIn: number = SIGNED_URL_TTL_SECONDS,
+): Promise<string> {
+  const { data, error } = await getServiceClient()
+    .storage.from(TEMPLATE_SOURCES_BUCKET)
+    .createSignedUrl(key, expiresIn);
+  if (error || !data) {
+    throw new Error(
+      `[db/storage] signedTemplateSourceReadUrl failed for ${key}: ${error?.message ?? 'no url'}`,
+    );
+  }
+  return data.signedUrl;
+}
+
+// Upload an authored outline SVG WITHOUT regenerating the thumbnail. The AW
+// catalogue rows keep their wrapped-art thumb (the customer-facing catalogue
+// card); the Studio outline is a publish artifact + provenance record, not the
+// display image. New (non-AW) vehicles keep using uploadVehicleOutline.
+export async function uploadOutlineOnly(vehicleId: string, svg: Buffer | string): Promise<string> {
+  const buf = typeof svg === 'string' ? Buffer.from(svg) : svg;
+  return uploadTemplateObject(`${vehicleId}/outline.svg`, buf, 'image/svg+xml');
+}
+
+// Upload the published 1/20-scale layout sheet (SVG + a sharp-rasterised PNG
+// for quick preview/print). Public bucket — templates are public catalogue data.
+export async function uploadLayoutSheet(
+  vehicleId: string,
+  svg: string,
+): Promise<{ layoutSheetSvgUrl: string; layoutSheetPngUrl: string }> {
+  const buf = Buffer.from(svg);
+  const svgUrl = await uploadTemplateObject(`${vehicleId}/layout-sheet.svg`, buf, 'image/svg+xml');
+  const png = await sharp(buf, { density: 144 }).resize({ width: 1920 }).png().toBuffer();
+  const pngUrl = await uploadTemplateObject(`${vehicleId}/layout-sheet.png`, png, 'image/png');
+  return { layoutSheetSvgUrl: svgUrl, layoutSheetPngUrl: pngUrl };
+}
+
 const THUMB_WIDTH = 480;
 
 // Upload a vehicle template's outline SVG to the public bucket and generate a real

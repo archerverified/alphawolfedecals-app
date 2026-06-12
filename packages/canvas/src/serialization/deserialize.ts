@@ -17,8 +17,8 @@ import type {
   ShapeElement,
   TextElement,
   VehicleView,
-} from '../schema/types';
-import { CanvasSchemaError, migrateToCurrent } from './migrate';
+} from '../schema/types.js';
+import { CanvasSchemaError, migrateToCurrent } from './migrate.js';
 
 export interface DeserializeResult {
   document: CanvasDocument;

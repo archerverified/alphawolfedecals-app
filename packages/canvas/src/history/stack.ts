@@ -4,9 +4,9 @@
 // MAX_HISTORY=50 (push the 51st -> drop index 0). Redo is cleared on any new
 // push. History is per-session and never persisted.
 
-import type { CanvasDocument } from '../schema/types';
-import type { Command } from './command';
-import { applyCommand, invertCommand } from './apply';
+import type { CanvasDocument } from '../schema/types.js';
+import type { Command } from './command.js';
+import { applyCommand, invertCommand } from './apply.js';
 
 export const MAX_HISTORY = 50;
 

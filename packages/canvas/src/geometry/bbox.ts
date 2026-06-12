@@ -5,8 +5,8 @@
 // corners are rotated/scaled about the element origin (x, y) — matching Konva's
 // node transform (offset at top-left, rotation about the node origin).
 
-import type { CanvasElement } from '../schema/types';
-import type { Bbox } from './polygon';
+import type { CanvasElement } from '../schema/types.js';
+import type { Bbox } from './polygon.js';
 
 /** Local (pre-transform) box width/height for an element, origin at (0,0). */
 function localSize(el: CanvasElement): { w: number; h: number } {

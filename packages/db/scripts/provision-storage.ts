@@ -13,6 +13,7 @@ import {
   getServiceClient,
   VEHICLE_TEMPLATES_BUCKET,
   PROJECT_ASSETS_BUCKET,
+  TEMPLATE_SOURCES_BUCKET,
 } from '../src/storage/supabase';
 
 const FIFTY_MB = 50 * 1024 * 1024;
@@ -32,6 +33,18 @@ const ASSET_MIME_ALLOWLIST = [
 ];
 
 const TEMPLATE_MIME_ALLOWLIST = ['image/svg+xml', 'image/png'];
+
+// Studio ingest sources (Goal 6): owned photos, OEM dimensional PDFs, owned SVG
+// art. PRIVATE — reads only via admin-gated signed URLs (ADR-0014 invariant 6).
+const SOURCE_MIME_ALLOWLIST = [
+  'image/jpeg',
+  'image/png',
+  'image/heic',
+  'image/heif',
+  'image/webp',
+  'image/svg+xml',
+  'application/pdf',
+];
 
 async function ensureBucket(
   id: string,
@@ -68,6 +81,11 @@ async function main(): Promise<void> {
     public: false,
     fileSizeLimit: FIFTY_MB,
     allowedMimeTypes: ASSET_MIME_ALLOWLIST,
+  });
+  await ensureBucket(TEMPLATE_SOURCES_BUCKET, {
+    public: false,
+    fileSizeLimit: FIFTY_MB,
+    allowedMimeTypes: SOURCE_MIME_ALLOWLIST,
   });
   console.log('[storage] provisioning complete.');
 }

@@ -3,7 +3,7 @@
 // TYPE-ONLY module: the runtime reducer lives in apply.ts. Commands are small
 // deltas (not snapshots) so 50 steps of history is kilobytes.
 
-import type { CanvasElement, ElementId, PanelId } from '../schema/types';
+import type { CanvasElement, ElementId, PanelId } from '../schema/types.js';
 
 /** A partial element keyed by id — `before`/`after` for updateElements. */
 export type ElementPatch = { id: ElementId } & Partial<Omit<CanvasElement, 'id' | 'type'>>;

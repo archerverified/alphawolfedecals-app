@@ -296,6 +296,9 @@ importers:
 
   packages/db:
     dependencies:
+      '@alphawolf/canvas':
+        specifier: workspace:^
+        version: link:../canvas
       '@prisma/client':
         specifier: ^5.22.0
         version: 5.22.0(prisma@5.22.0)
@@ -315,9 +318,6 @@ importers:
         specifier: ^5.3.1
         version: 5.3.1
     devDependencies:
-      '@alphawolf/canvas':
-        specifier: workspace:^
-        version: link:../canvas
       '@types/node':
         specifier: ^22.9.0
         version: 22.19.19

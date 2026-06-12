@@ -1,5 +1,5 @@
-export { serializeDocument } from './serialize';
-export type { SerializedDocument } from './serialize';
-export { deserializeDocument } from './deserialize';
-export type { DeserializeResult } from './deserialize';
-export { migrateToCurrent, CanvasSchemaError } from './migrate';
+export { serializeDocument } from './serialize.js';
+export type { SerializedDocument } from './serialize.js';
+export { deserializeDocument } from './deserialize.js';
+export type { DeserializeResult } from './deserialize.js';
+export { migrateToCurrent, CanvasSchemaError } from './migrate.js';

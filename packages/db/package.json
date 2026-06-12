@@ -39,6 +39,7 @@
     "storage:migrate-local": "dotenv -e .env -- tsx scripts/migrate-local-assets.ts"
   },
   "dependencies": {
+    "@alphawolf/canvas": "workspace:^",
     "@prisma/client": "^5.22.0",
     "@supabase/supabase-js": "^2.106.1",
     "prisma": "^5.22.0",
@@ -47,7 +48,6 @@
     "svgson": "^5.3.1"
   },
   "devDependencies": {
-    "@alphawolf/canvas": "workspace:^",
     "@types/node": "^22.9.0",
     "tsx": "^4.19.2",
     "typescript": "^5.6.3",

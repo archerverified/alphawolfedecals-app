@@ -1,7 +1,7 @@
 // Snapping math (ADR-0006 §3). Pure; computed in panel-local space so the view
 // transform never enters the math.
 
-import type { Bbox } from './polygon';
+import type { Bbox } from './polygon.js';
 
 export interface SnapCandidate {
   axis: 'x' | 'y';

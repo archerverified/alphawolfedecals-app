@@ -13,8 +13,8 @@ import type {
   ShapeElement,
   TextElement,
   VehicleView,
-} from './types';
-import { CURRENT_SCHEMA_VERSION } from './versions';
+} from './types.js';
+import { CURRENT_SCHEMA_VERSION } from './versions.js';
 
 /** Mint a branded ElementId from a raw string. */
 export function elementId(raw: string): ElementId {

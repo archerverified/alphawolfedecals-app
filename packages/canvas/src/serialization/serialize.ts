@@ -4,8 +4,8 @@
 // stamped current schemaVersion, a structural clone (so the persisted payload
 // can't alias live editor state), and that only finite numbers reach the DB.
 
-import type { CanvasDocument } from '../schema/types';
-import { CURRENT_SCHEMA_VERSION } from '../schema/versions';
+import type { CanvasDocument } from '../schema/types.js';
+import { CURRENT_SCHEMA_VERSION } from '../schema/versions.js';
 
 /** A structurally-cloned, JSON-safe representation of a document. */
 export type SerializedDocument = Record<string, unknown>;
