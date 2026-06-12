@@ -1,9 +1,11 @@
 {
-  "regions": ["sfo1"],
+  "regions": [
+    "sfo1"
+  ],
   "crons": [
     {
       "path": "/api/cron/sweep-generation",
-      "schedule": "*/15 * * * *"
+      "schedule": "0 9 * * *"
     }
   ],
   "functions": {
