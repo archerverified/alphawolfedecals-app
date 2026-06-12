@@ -218,7 +218,10 @@ function getClient(): Anthropic {
   if (!apiKey?.trim()) {
     throw new OrchestratorError('missing_api_key', 'ANTHROPIC_API_KEY is not set');
   }
-  return new Anthropic({ apiKey });
+  // Bounded (review fix F4): worst case 2 attempts × (20s + 1 SDK retry)
+  // stays well inside the 60s hobby-plan function ceiling instead of the
+  // SDK's 10-minute default eating the whole slice.
+  return new Anthropic({ apiKey, timeout: 20_000, maxRetries: 1 });
 }
 
 function estimateOrchestratorUsd(inputTokens: number, outputTokens: number): number {

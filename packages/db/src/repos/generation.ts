@@ -23,7 +23,11 @@ import { pgQuoteLiteral, withSystem, withUser, type TxClient } from '../client.j
 
 export type GenerationRunKind = 'initial' | 'iteration' | 'final';
 export type GenerationRunStatus = 'queued' | 'orchestrating' | 'rendering' | 'complete' | 'failed';
-export type GenerationJobStatus = 'pending' | 'submitted' | 'complete' | 'failed';
+// 'submitting' is the per-job submit claim (review fix F2): pending →
+// submitting (claimJob, BEFORE provider.submit) → submitted (markJobSubmitted,
+// persisting the provider request id). Non-terminal — an orphaned claim is
+// reaped by the run deadline/sweeper.
+export type GenerationJobStatus = 'pending' | 'submitting' | 'submitted' | 'complete' | 'failed';
 
 export const NON_TERMINAL_RUN_STATUSES = ['queued', 'orchestrating', 'rendering'] as const;
 
@@ -443,12 +447,17 @@ export async function startRun(userId: string, input: StartRunInput): Promise<St
       if (tokenRun) return { ok: true, run: toRunRow(tokenRun), deduped: true };
 
       if (input.kind === 'final' && input.parentRunId && input.conceptKey) {
+        // Mirrors generation_runs_final_once_per_concept, which excludes
+        // failed finals (review fix F1): a failed final does not brick its
+        // concept, so the probe must ignore it too or every retry after a
+        // failure would be misreported as final_already_exists.
         const existingFinal = await withUser(userId, (db) =>
           db.generationRun.findFirst({
             where: {
               kind: 'final',
               parentRunId: input.parentRunId,
               conceptKey: input.conceptKey,
+              status: { not: 'failed' },
             },
             select: { id: true },
           }),
@@ -579,8 +588,36 @@ export async function recordJobs(
   });
 }
 
+// THE submit claim (review fix F2). CAS pending→submitting, only while no
+// provider request id exists. Exactly ONE concurrent slice wins this claim,
+// and ONLY the winner may call provider.submit — the structural guarantee
+// that two racing polls can never double-submit (and double-bill) a job.
+export async function claimJob(userId: string, jobId: string): Promise<boolean> {
+  return withUser(userId, async (db) => {
+    const updated = await db.generationJob.updateMany({
+      where: { id: jobId, status: 'pending', providerRequestId: null },
+      data: { status: 'submitting' },
+    });
+    return updated.count > 0;
+  });
+}
+
+// Release a submit claim after a DEFINITE provider rejection (the submission
+// certainly does not exist provider-side): CAS submitting→pending so a later
+// slice can re-claim and retry. Ambiguous failures (timeouts) must NOT
+// release — the pipeline fails the job instead (see run-pipeline.ts).
+export async function releaseJobClaim(userId: string, jobId: string): Promise<boolean> {
+  return withUser(userId, async (db) => {
+    const updated = await db.generationJob.updateMany({
+      where: { id: jobId, status: 'submitting', providerRequestId: null },
+      data: { status: 'pending' },
+    });
+    return updated.count > 0;
+  });
+}
+
 // THE resubmit guard. Persists the provider's request id in the same CAS that
-// flips pending→submitted, and only while provider_request_id IS NULL — a
+// flips submitting→submitted, and only while provider_request_id IS NULL — a
 // resumed slice that lost the race finds count=0, re-reads the job, and
 // HARVESTS by the stored id instead of resubmitting (double-spend guard).
 export async function markJobSubmitted(
@@ -591,7 +628,7 @@ export async function markJobSubmitted(
 ): Promise<boolean> {
   return withUser(userId, async (db) => {
     const updated = await db.generationJob.updateMany({
-      where: { id: jobId, status: 'pending', providerRequestId: null },
+      where: { id: jobId, status: 'submitting', providerRequestId: null },
       data: { status: 'submitted', providerRequestId, costUsd },
     });
     return updated.count > 0;
@@ -617,10 +654,12 @@ export async function completeJob(
   });
 }
 
+// 'submitting' included: an AMBIGUOUS submit failure (timeout — the request
+// may exist provider-side) is conservatively failed from the claim state.
 export async function failJob(userId: string, jobId: string, error: string): Promise<boolean> {
   return withUser(userId, async (db) => {
     const updated = await db.generationJob.updateMany({
-      where: { id: jobId, status: { in: ['pending', 'submitted'] } },
+      where: { id: jobId, status: { in: ['pending', 'submitting', 'submitted'] } },
       data: { status: 'failed', error },
     });
     return updated.count > 0;
@@ -685,6 +724,19 @@ export async function insertImage(
   });
 }
 
+// All images for one run (the advance loop's harvest-idempotency read: a job
+// that already has an image row is never re-inserted on a re-entered slice).
+export async function listImages(userId: string, runId: string): Promise<GenerationImageRow[]> {
+  return withUser(userId, async (db) => {
+    const rows = await db.generationImage.findMany({
+      where: { runId },
+      orderBy: { createdAt: 'asc' },
+      select: IMAGE_SELECT,
+    });
+    return rows.map(toImageRow);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Cost true-up + spend cap reads.
 // ---------------------------------------------------------------------------
@@ -695,14 +747,23 @@ export async function insertImage(
 // conservative estimate the daily spend cap sums — lowering it mid-run would
 // let concurrent runs slip under the cap (the TOCTOU the estimate exists to
 // close). A non-terminal run is left untouched. Returns the jobs' actual total
-// either way.
-export async function trueUpRunCost(userId: string, runId: string): Promise<number> {
+// either way. `extraCostUsd` carries run-level costs that have no job row —
+// the orchestrator's token spend (pipeline D7: orchestration is part of the
+// run's real cost).
+export async function trueUpRunCost(
+  userId: string,
+  runId: string,
+  extraCostUsd = 0,
+): Promise<number> {
+  if (!Number.isFinite(extraCostUsd) || extraCostUsd < 0) {
+    throw new Error(`[generation] extraCostUsd must be >= 0 (got ${extraCostUsd})`);
+  }
   return withUser(userId, async (db) => {
     const agg = await db.generationJob.aggregate({
       where: { runId },
       _sum: { costUsd: true },
     });
-    const total = Number(agg._sum.costUsd ?? 0);
+    const total = Number(agg._sum.costUsd ?? 0) + extraCostUsd;
     await db.generationRun.updateMany({
       where: { id: runId, status: { in: ['complete', 'failed'] } },
       data: { costUsd: total },
