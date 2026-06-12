@@ -202,6 +202,10 @@ describe('generation jobs + images — resubmit guard and immutability', () => {
   });
 
   test('markJobSubmitted persists the provider id ONCE (resubmit guard)', async () => {
+    // PR #150 F2: a job must be CLAIMED (pending→submitting) before the
+    // provider call; markJobSubmitted then CASes submitting→submitted.
+    expect(await generation.claimJob(aId, jobId)).toBe(true);
+    expect(await generation.claimJob(aId, jobId)).toBe(false); // claim is exclusive
     expect(await generation.markJobSubmitted(aId, jobId, 'fal-req-1', 0.04)).toBe(true);
     // Second submit attempt: provider_request_id is no longer NULL → no-op.
     expect(await generation.markJobSubmitted(aId, jobId, 'fal-req-2', 0.04)).toBe(false);
