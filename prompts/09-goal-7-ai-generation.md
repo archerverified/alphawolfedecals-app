@@ -59,6 +59,7 @@ Dependabot PRs remain DEFERRED. Keep PRs small and merged as you go — interrup
 6. **Selection → final** — chosen concept re-renders at export quality (FLUX.2 Pro), un-watermarked, flows into the existing editor/export pack pipeline; before/after slider (stock vs wrapped) on concept views.
 7. **Safety rails** — PRD §4.4 rate limits enforced server-side beneath credits; in-code daily spend cap (config) with PostHog alert event; all new tables (generation_runs etc.) Prisma + owner RLS + `withUser` only.
 8. **Proof** — e2e with MOCK adapter joins the prod smoke (no real spend in CI); ONE real prod proof run end-to-end (brief → 3 concepts → 1 iteration → final → export pack with generated art + composited logo), screenshots to `docs/deployment/screenshots/<date>-goal-7/`.
+9. **Panel-number unification (small rider, Archer 2026-06-12):** vehicle pages currently prefix panel names with the install order — a DIFFERENT number than the sheet numerals from PR #142's `numberViews()`. Drop the install-order prefix from all customer-facing panel name displays; wherever a panel number is shown, it must be the `numberViews()` number. One number = one panel, everywhere.
 
 ## CONSTRAINTS
 
