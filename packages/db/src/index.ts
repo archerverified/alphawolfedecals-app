@@ -71,6 +71,8 @@ export type { CreditSource, CreditLedgerRow } from './repos/credits.js';
 export type { BriefRow, BriefSaveResult, BriefSnapshotResult } from './repos/briefs.js';
 export { CREDIT_CONFIG, PLAN_LIMITS } from './credit-config.js';
 export type { PlanName } from './credit-config.js';
+export { AI_CONFIG, AI_MODELS, estimateImageCostUsd } from './ai-config.js';
+export type { AiModelKey, AiModelConfig, AiModelPricing } from './ai-config.js';
 export type {
   SvgValidationResult,
   SvgValidationError,
