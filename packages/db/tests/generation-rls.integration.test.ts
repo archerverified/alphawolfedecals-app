@@ -168,7 +168,7 @@ describe('generation runs — ownership, idempotent start, atomic spend', () => 
       withUser(aId, (db) =>
         db.$queryRawUnsafe(`SELECT app_spend_credits('${aRunId}'::uuid, 1, 'generation_run')`),
       ),
-    ).rejects.toThrow(/spend_once_per_run|duplicate key/i);
+    ).rejects.toThrow(/spend_once_per_run|duplicate key|already exists|23505/i);
     expect(await credits.getCreditBalance(aId)).toBe(GRANT - 1);
   });
 

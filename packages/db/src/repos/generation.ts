@@ -366,7 +366,10 @@ export async function startRun(userId: string, input: StartRunInput): Promise<St
       // count closes the gate race: two parallel submits by the same user
       // serialize here, so the second one counts the first one's committed
       // run instead of both passing the gate.
-      await db.$queryRawUnsafe(
+      // $executeRawUnsafe, not $queryRawUnsafe: the lock fn returns void,
+      // which Prisma cannot deserialize as a result column (caught by the
+      // integration suite on first live run).
+      await db.$executeRawUnsafe(
         `SELECT pg_advisory_xact_lock(hashtext('credit_spend'), hashtext(${pgQuoteLiteral(userId)}))`,
       );
 
@@ -425,27 +428,50 @@ export async function startRun(userId: string, input: StartRunInput): Promise<St
     }
     const unique = uniqueViolationTarget(error);
     if (unique) {
-      if (unique.includes('client_token')) {
-        // Two requests raced the same token past the fast path; the loser
-        // reads the winner's run.
-        const run = await withUser(userId, (db) =>
+      // Raw-SQL partial uniques surface as P2002 with NO index name (Prisma
+      // reports "(not available)" — confirmed live by the integration suite),
+      // so name-matching is hopeless. Disambiguate by probing, most specific
+      // first; every probe is an RLS-scoped read.
+      const tokenRun = await withUser(userId, (db) =>
+        db.generationRun.findFirst({
+          where: { clientToken: input.clientToken },
+          select: RUN_SELECT,
+        }),
+      );
+      // Two requests raced the same token past the fast path; the loser
+      // reads the winner's run.
+      if (tokenRun) return { ok: true, run: toRunRow(tokenRun), deduped: true };
+
+      if (input.kind === 'final' && input.parentRunId && input.conceptKey) {
+        const existingFinal = await withUser(userId, (db) =>
           db.generationRun.findFirst({
-            where: { clientToken: input.clientToken },
-            select: RUN_SELECT,
+            where: {
+              kind: 'final',
+              parentRunId: input.parentRunId,
+              conceptKey: input.conceptKey,
+            },
+            select: { id: true },
           }),
         );
-        if (run) return { ok: true, run: toRunRow(run), deduped: true };
-        // Unique fired but the RLS-scoped re-read sees nothing: the token
-        // collides with ANOTHER user's run. Typed failure, not a raw rethrow
-        // — the caller mints a fresh token and retries.
-        return { ok: false, reason: 'token_conflict' };
+        if (existingFinal) return { ok: false, reason: 'final_already_exists' };
       }
-      if (unique.includes('final_once_per_concept')) {
-        return { ok: false, reason: 'final_already_exists' };
-      }
-      if (unique.includes('one_active_per_project_kind')) {
-        return { ok: false, reason: 'active_run_exists' };
-      }
+
+      const activeRun = await withUser(userId, (db) =>
+        db.generationRun.findFirst({
+          where: {
+            projectId: input.projectId,
+            kind: input.kind,
+            status: { notIn: ['complete', 'failed'] },
+          },
+          select: { id: true },
+        }),
+      );
+      if (activeRun) return { ok: false, reason: 'active_run_exists' };
+
+      // Unique fired but every RLS-scoped probe sees nothing: the token
+      // collides with ANOTHER user's run. Typed failure, not a raw rethrow
+      // — the caller mints a fresh token and retries.
+      return { ok: false, reason: 'token_conflict' };
     }
     throw error;
   }
