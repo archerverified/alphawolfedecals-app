@@ -53,7 +53,7 @@ vi.mock('@alphawolf/db', async (importOriginal) => {
   };
 });
 
-import { AI_CONFIG, CREDIT_CONFIG } from '@alphawolf/db';
+import { AI_CONFIG, AI_MODELS, CREDIT_CONFIG, estimateImageCostUsd } from '@alphawolf/db';
 
 import {
   advanceGenerationAction,
@@ -65,8 +65,20 @@ import {
 
 const TOKEN = 'client-token-1234';
 
-// 1 driver view on the draft model: 0.04/MP × 1MP × 3 directions = $0.12.
-const INITIAL_ESTIMATE = 0.12;
+// 1 driver view on the CONFIGURED draft model × 3 directions — derived, not
+// hardcoded, so a bake-off changing the default (e.g. #151's nano-banana
+// switch, which broke the hardcoded 0.12 on the merge with main) can't break
+// this test again.
+const INITIAL_ESTIMATE = Number(
+  (
+    estimateImageCostUsd(
+      AI_MODELS[AI_CONFIG.defaults.draft].pricing,
+      AI_CONFIG.draftImage.width,
+      AI_CONFIG.draftImage.height,
+      1,
+    ) * 3
+  ).toFixed(4),
+);
 
 function completedParent(overrides: Record<string, unknown> = {}) {
   return {
