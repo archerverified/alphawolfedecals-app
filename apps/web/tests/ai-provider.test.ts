@@ -23,7 +23,11 @@ afterEach(() => {
 
 describe('ai-config', () => {
   it('every default points at a configured model with the right op', () => {
-    expect(AI_MODELS[AI_CONFIG.defaults.draft].op).toBe('generate');
+    // Draft may be a generate model OR a conditioned edit model (the 2026-06
+    // bake-off picked nano-banana, which EDITS the template view render);
+    // either way it must accept a conditioning image.
+    expect(['generate', 'edit']).toContain(AI_MODELS[AI_CONFIG.defaults.draft].op);
+    expect(AI_MODELS[AI_CONFIG.defaults.draft].imageField).not.toBe('none');
     expect(AI_MODELS[AI_CONFIG.defaults.iteration].op).toBe('edit');
     expect(AI_MODELS[AI_CONFIG.defaults.final].op).toBe('edit');
     expect(AI_MODELS[AI_CONFIG.defaults.upscale].op).toBe('upscale');
