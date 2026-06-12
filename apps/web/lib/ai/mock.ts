@@ -24,8 +24,11 @@ import type {
 const MOCK_COST_USD = 0;
 
 // Pending submissions; the mock "queue" completes on first check() so the
-// state machine's pending→complete transition is exercised in tests.
+// state machine's pending→complete transition is exercised in tests. Entries
+// stay resident so re-entrant check() calls (the advance route is idempotent)
+// keep succeeding; a size cap stops unbounded growth in long dev sessions.
 const pending = new Map<string, ProviderRequest>();
+const PENDING_CAP = 500;
 
 function hueFor(text: string): number {
   return createHash('sha256').update(text).digest().readUInt8(0) * 1.40625; // 0..359
@@ -51,7 +54,16 @@ async function renderPng(req: ProviderRequest): Promise<string> {
 
 function requestIdFor(req: ProviderRequest): string {
   const digest = createHash('sha256')
-    .update(JSON.stringify([req.modelKey, req.prompt, req.seed ?? 0, req.width, req.height]))
+    .update(
+      JSON.stringify([
+        req.modelKey,
+        req.prompt,
+        req.seed ?? 0,
+        req.width,
+        req.height,
+        req.imageUrls ?? [],
+      ]),
+    )
     .digest('hex')
     .slice(0, 20);
   return `mock-${digest}`;
@@ -59,6 +71,10 @@ function requestIdFor(req: ProviderRequest): string {
 
 async function submit(req: ProviderRequest): Promise<ProviderSubmission> {
   const requestId = requestIdFor(req);
+  if (pending.size >= PENDING_CAP) {
+    const oldest = pending.keys().next().value;
+    if (oldest) pending.delete(oldest);
+  }
   pending.set(requestId, req);
   await emitMockServedInProd();
   return { requestId, estimatedCostUsd: MOCK_COST_USD };

@@ -12,6 +12,8 @@
 //  - run(): submit + poll to completion. Convenience for the bake-off harness
 //    and tests; the customer pipeline does not block on it.
 
+import 'server-only';
+
 import { AI_MODELS, estimateImageCostUsd, type AiModelKey } from '@alphawolf/db';
 
 export interface ProviderImage {
@@ -49,6 +51,13 @@ export interface ProviderRunResult {
   requestId: string;
 }
 
+/**
+ * The provider CONFIRMED the job failed (fal does not bill failed runs).
+ * Distinct from timeouts/storage errors, where money may already be spent —
+ * callers must only release spend records on this error.
+ */
+export class ProviderRunFailedError extends Error {}
+
 export interface WrapImageProvider {
   readonly name: 'fal' | 'mock';
   submit(req: ProviderRequest): Promise<ProviderSubmission>;
@@ -58,7 +67,12 @@ export interface WrapImageProvider {
 }
 
 export function estimateRequestCostUsd(req: ProviderRequest): number {
-  return estimateImageCostUsd(AI_MODELS[req.modelKey].pricing, req.width, req.height);
+  return estimateImageCostUsd(
+    AI_MODELS[req.modelKey].pricing,
+    req.width,
+    req.height,
+    req.imageUrls?.length ?? 0,
+  );
 }
 
 /**
@@ -71,7 +85,7 @@ export function estimateRequestCostUsd(req: ProviderRequest): number {
  */
 export async function getImageProvider(): Promise<WrapImageProvider> {
   if (process.env.AI_PROVIDER === 'fal') {
-    if (!process.env.FAL_KEY) {
+    if (!process.env.FAL_KEY?.trim()) {
       throw new Error('AI_PROVIDER=fal but FAL_KEY is empty — refusing to fall back to mock');
     }
     const { falProvider } = await import('./fal');

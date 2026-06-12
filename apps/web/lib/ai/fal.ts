@@ -11,17 +11,20 @@
 //  - Output URLs are not permanent — callers copy to our storage immediately.
 //  - COMPLETED is terminal even on model error; the result fetch surfaces it.
 
+import 'server-only';
+
 import { fal } from '@fal-ai/client';
 
 import { AI_MODELS, estimateImageCostUsd, type AiModelKey } from '@alphawolf/db';
 
-import type {
-  ProviderCheck,
-  ProviderImage,
-  ProviderRequest,
-  ProviderRunResult,
-  ProviderSubmission,
-  WrapImageProvider,
+import {
+  ProviderRunFailedError,
+  type ProviderCheck,
+  type ProviderImage,
+  type ProviderRequest,
+  type ProviderRunResult,
+  type ProviderSubmission,
+  type WrapImageProvider,
 } from './provider';
 
 interface FalImage {
@@ -106,9 +109,14 @@ async function check(modelKey: AiModelKey, requestId: string): Promise<ProviderC
   let status: { status: string };
   try {
     status = await queue.status(model.id, { requestId, logs: false });
-  } catch {
-    // Status fetch failing is transient until proven otherwise — stay pending;
-    // the run-level deadline (sweeper) is the backstop for a wedged job.
+  } catch (err) {
+    // 4xx = deterministic (bad request id, revoked key) — fail fast rather
+    // than leaning on the run deadline. 5xx/network stays pending; the
+    // run-level deadline (sweeper) is the backstop for a wedged job.
+    const httpStatus = (err as { status?: number }).status;
+    if (httpStatus !== undefined && httpStatus >= 400 && httpStatus < 500) {
+      return { status: 'failed', error: `provider status check rejected (HTTP ${httpStatus})` };
+    }
     return { status: 'pending' };
   }
   if (status.status !== 'COMPLETED') return { status: 'pending' };
@@ -136,10 +144,17 @@ async function run(
   for (;;) {
     const state = await check(req.modelKey, submission.requestId);
     if (state.status === 'complete') {
-      return { images: state.images, costUsd: state.costUsd, requestId: submission.requestId };
+      // fal occasionally omits dims on the result; fall back to the request's
+      // so stored metadata and cost true-up never see 0×0.
+      const images = state.images.map((img) => ({
+        ...img,
+        width: img.width || req.width,
+        height: img.height || req.height,
+      }));
+      return { images, costUsd: state.costUsd, requestId: submission.requestId };
     }
     if (state.status === 'failed') {
-      throw new Error(`fal run ${submission.requestId} failed: ${state.error}`);
+      throw new ProviderRunFailedError(`fal run ${submission.requestId} failed: ${state.error}`);
     }
     if (Date.now() - startedAt > timeoutMs) {
       throw new Error(`fal run ${submission.requestId} timed out after ${timeoutMs}ms`);

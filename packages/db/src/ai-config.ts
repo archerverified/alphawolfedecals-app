@@ -134,12 +134,16 @@ export const AI_CONFIG = {
 
 /**
  * Estimated USD cost of one output at the given pixel dimensions.
- * fal bills megapixels rounded UP per image.
+ * fal bills megapixels rounded UP per image. `inputImages` matters only for
+ * the flux2_pro_metered scheme, which meters INPUT megapixels too — we price
+ * each reference image pessimistically at 1 MP (our conditioning renders are
+ * generated at ≤1 MP, so this bounds, never undercounts, real cost).
  */
 export function estimateImageCostUsd(
   pricing: AiModelPricing,
   width: number,
   height: number,
+  inputImages = 0,
 ): number {
   const mp = Math.max(1, Math.ceil((width * height) / 1_000_000));
   switch (pricing.kind) {
@@ -148,6 +152,6 @@ export function estimateImageCostUsd(
     case 'per_megapixel':
       return pricing.usd * mp;
     case 'flux2_pro_metered':
-      return pricing.firstMpUsd + pricing.extraMpUsd * (mp - 1);
+      return pricing.firstMpUsd + pricing.extraMpUsd * (mp - 1 + inputImages);
   }
 }

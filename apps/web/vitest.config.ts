@@ -10,6 +10,9 @@ export default defineConfig({
     // import (and vi.mock) modules by their app-absolute specifier.
     alias: {
       '@': fileURLToPath(new URL('.', import.meta.url)),
+      // `server-only` throws outside a React Server environment; tests import
+      // server modules (lib/ai/*) directly, so stub the marker out.
+      'server-only': fileURLToPath(new URL('./tests/stubs/server-only.ts', import.meta.url)),
     },
   },
   test: {
