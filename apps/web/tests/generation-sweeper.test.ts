@@ -55,7 +55,12 @@ describe('GET /api/cron/sweep-generation', () => {
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, swept: 2 });
     expect(h.sweepMock).toHaveBeenCalledWith(15);
-    expect(h.captureMock).toHaveBeenCalledWith('generation_swept', 'system', { count: 2 });
+    // F6: the event carries WHICH auth path fired, so the header-only path
+    // is observable (and alertable) in PostHog.
+    expect(h.captureMock).toHaveBeenCalledWith('generation_swept', 'system', {
+      count: 2,
+      auth: 'header',
+    });
   });
 
   it('accepts the CRON_SECRET bearer for manual/ops invocations', async () => {
@@ -63,6 +68,10 @@ describe('GET /api/cron/sweep-generation', () => {
     const res = await GET(request({ authorization: 'Bearer s3cret' }));
     expect(res.status).toBe(200);
     expect(await res.json()).toEqual({ ok: true, swept: 2 });
+    expect(h.captureMock).toHaveBeenCalledWith('generation_swept', 'system', {
+      count: 2,
+      auth: 'bearer',
+    });
   });
 
   it('stays inside the hobby-plan function ceiling', () => {

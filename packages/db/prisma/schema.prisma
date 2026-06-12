@@ -692,6 +692,11 @@ enum GenerationRunStatus {
 
 enum GenerationJobStatus {
   pending
+  // Per-job submit claim (review fix F2): a slice CASes pending → submitting
+  // BEFORE provider.submit; only the claim winner submits, then CASes
+  // submitting → submitted persisting the provider request id. Non-terminal,
+  // so a claim orphaned by a crashed slice is reaped by the run deadline.
+  submitting
   submitted
   complete
   failed
@@ -737,7 +742,10 @@ model GenerationRun {
   //     WHERE status NOT IN ('complete','failed'): one in-flight run per
   //     project+kind.
   //   * generation_runs_final_once_per_concept — UNIQUE(parent_run_id,
-  //     concept_key) WHERE kind='final': free-final farming guard.
+  //     concept_key) WHERE kind='final' AND status <> 'failed': free-final
+  //     farming guard. Failed finals are EXCLUDED (review fix F1) so a
+  //     failed final never bricks its concept — retry stays possible while
+  //     at most one non-failed final exists per concept.
   // Plus two raw-SQL lineage CHECKs (chk_generation_runs_final_lineage /
   // chk_generation_runs_iteration_lineage): finals require parent_run_id AND
   // concept_key, iterations require parent_run_id — NULL lineage (which a
@@ -781,7 +789,9 @@ model GenerationJob {
 model GenerationImage {
   id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   runId             String        @map("run_id") @db.Uuid
-  jobId             String        @map("job_id") @db.Uuid
+  // UNIQUE (review fix F3): at most one image row per job — a racing double
+  // harvest converges on P2002 ("already imaged") instead of duplicating.
+  jobId             String        @unique(map: "generation_images_job_once") @map("job_id") @db.Uuid
   conceptKey        String        @map("concept_key")
   view              String
   // Unwatermarked original in the PRIVATE bucket — owner-scoped signed URLs

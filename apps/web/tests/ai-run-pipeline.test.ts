@@ -72,10 +72,25 @@ const h = vi.hoisted(() => {
     listJobs: vi.fn(async (_u: string, runId: string) =>
       state.jobs.filter((j) => j.runId === runId).map((j) => ({ ...j })),
     ),
+    // F2 claim semantics mirrored from the real repo: claimJob CAS
+    // pending→submitting (only the winner submits), markJobSubmitted CAS
+    // submitting→submitted, releaseJobClaim CAS submitting→pending.
+    claimJob: vi.fn(async (_u: string, jobId: string) => {
+      const j = state.jobs.find((e) => e.id === jobId);
+      if (!j || j.status !== 'pending' || j.providerRequestId !== null) return false;
+      j.status = 'submitting';
+      return true;
+    }),
+    releaseJobClaim: vi.fn(async (_u: string, jobId: string) => {
+      const j = state.jobs.find((e) => e.id === jobId);
+      if (!j || j.status !== 'submitting' || j.providerRequestId !== null) return false;
+      j.status = 'pending';
+      return true;
+    }),
     markJobSubmitted: vi.fn(
       async (_u: string, jobId: string, providerRequestId: string, costUsd: number) => {
         const j = state.jobs.find((e) => e.id === jobId);
-        if (!j || j.status !== 'pending' || j.providerRequestId !== null) return false;
+        if (!j || j.status !== 'submitting' || j.providerRequestId !== null) return false;
         Object.assign(j, { status: 'submitted', providerRequestId, costUsd });
         return true;
       },
@@ -151,7 +166,9 @@ vi.mock('@alphawolf/db', async (importOriginal) => {
   const actual = await importOriginal<typeof DbModule>();
   return {
     ...actual,
-    generation: h.fakeGeneration,
+    // Pure helpers (uniqueViolationTarget for the F3 harvest convergence)
+    // stay REAL; only the stateful repo functions are faked.
+    generation: { ...actual.generation, ...h.fakeGeneration },
     projects: h.fakeProjects,
     vehicles: h.fakeVehicles,
     briefs: h.fakeBriefs,
@@ -188,7 +205,7 @@ function seedRun(overrides: Record<string, unknown> = {}): string {
     model: 'flux_depth_dev',
     costUsd: 0.12,
     error: null,
-    clientToken: 'tok-1234567890',
+    clientToken: 'click-once-0001',
     deadlineAt: new Date(Date.now() + 15 * 60_000),
     createdAt: new Date(),
     updatedAt: new Date(),
@@ -331,6 +348,83 @@ describe('advanceRun — happy path (initial, real mock renders)', () => {
     await Promise.all([advanceRun(USER, runId), advanceRun(USER, runId)]);
     expect(h.compileBriefMock).toHaveBeenCalledTimes(1);
   });
+
+  it('CONCURRENT render slices never double-submit a job (F2 per-job claim)', async () => {
+    // Deferred-promise provider: submits stay pending until the driver loop
+    // below resolves them, so both slices overlap inside the submit window —
+    // exactly the race the pending→submitting claim must win.
+    const pendingSubmits: Array<() => void> = [];
+    let n = 0;
+    const submitSpy = vi.spyOn(mockProvider, 'submit').mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          n += 1;
+          const requestId = `mock-race-${n}`;
+          pendingSubmits.push(() => resolve({ requestId, estimatedCostUsd: 0 }));
+        }),
+    );
+
+    const runId = seedRun();
+    await advanceRun(USER, runId); // slice 1: orchestrate → 3 pending jobs
+
+    let settled = false;
+    const both = Promise.all([advanceRun(USER, runId), advanceRun(USER, runId)]).then((r) => {
+      settled = true;
+      return r;
+    });
+    // Drive the deferreds until both concurrent slices settle.
+    while (!settled) {
+      while (pendingSubmits.length > 0) pendingSubmits.shift()!();
+      await new Promise((r) => setTimeout(r, 0));
+    }
+    await both;
+
+    // EXACTLY one submit per job, ever — across both concurrent slices.
+    expect(submitSpy).toHaveBeenCalledTimes(3);
+    expect(h.state.jobs).toHaveLength(3);
+    for (const job of h.state.jobs) {
+      expect(job.status).toBe('submitted');
+      expect(job.providerRequestId).toMatch(/^mock-race-/);
+    }
+    const ids = h.state.jobs.map((j) => j.providerRequestId);
+    expect(new Set(ids).size).toBe(3); // no shared/duplicated submission
+  });
+
+  it('a DEFINITE submit rejection releases the claim and a later poll retries', async () => {
+    const realSubmit = mockProvider.submit.bind(mockProvider);
+    const submitSpy = vi
+      .spyOn(mockProvider, 'submit')
+      .mockRejectedValueOnce(new Error('422 prompt rejected by provider'))
+      .mockImplementation(realSubmit);
+
+    const runId = seedRun();
+    const snapshot = await advanceUntilTerminal(runId);
+
+    // The rejected job went submitting→pending and was re-claimed + submitted
+    // on a later slice: one extra submit call, run still completes.
+    expect(snapshot.status).toBe('complete');
+    expect(submitSpy).toHaveBeenCalledTimes(4);
+    expect(h.state.jobs.every((j) => j.status === 'complete')).toBe(true);
+  });
+
+  it('an AMBIGUOUS submit failure (timeout) fails the job — never re-claims', async () => {
+    const realSubmit = mockProvider.submit.bind(mockProvider);
+    const submitSpy = vi
+      .spyOn(mockProvider, 'submit')
+      .mockRejectedValueOnce(new Error('fetch failed: ETIMEDOUT'))
+      .mockImplementation(realSubmit);
+
+    const runId = seedRun();
+    const snapshot = await advanceUntilTerminal(runId);
+
+    // The submission may exist provider-side, so the job is failed instead of
+    // released (a re-submit could double-spend) and the paid run refunds.
+    expect(snapshot.status).toBe('failed');
+    expect(submitSpy).toHaveBeenCalledTimes(3); // NO fourth (re-)submit
+    const failedJob = h.state.jobs.find((j) => j.status === 'failed')!;
+    expect(failedJob.error).toContain('submit ambiguous');
+    expect(h.state.refunds).toContain(runId);
+  });
 });
 
 describe('advanceRun — failure paths', () => {
@@ -348,6 +442,9 @@ describe('advanceRun — failure paths', () => {
     expect(events()).toContain('generation_failed');
     expect(h.sentryCaptureMock).toHaveBeenCalled();
     expect(h.state.runs.get(runId)!.error).toBe('all render jobs failed');
+    // F7: the RAW error stays server-side; the snapshot carries friendly copy.
+    expect(snapshot.error).not.toContain('render jobs failed');
+    expect(snapshot.error).toMatch(/went wrong .* try again/i);
   });
 
   it('a PARTIAL failure also fails + refunds (no half-delivered paid run)', async () => {
@@ -375,6 +472,9 @@ describe('advanceRun — failure paths', () => {
     expect(submitSpy).not.toHaveBeenCalled();
     expect(events()).toContain('generation_failed');
     expect(h.state.runs.get(runId)!.error).toContain('deadline');
+    // F7: timeout runs get the friendly "took longer than expected" copy.
+    expect(snapshot?.error).toMatch(/took longer than expected/i);
+    expect(snapshot?.error).not.toContain('deadline');
   });
 
   it('orchestrator failure fails + refunds instead of hanging the poll', async () => {

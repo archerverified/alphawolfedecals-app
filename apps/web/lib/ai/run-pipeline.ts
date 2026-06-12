@@ -9,9 +9,10 @@
 //  - Idempotent + re-entrant: every status transition is compare-and-set, so
 //    concurrent polls (two tabs, a retry racing a slow slice) never double-run
 //    a stage.
-//  - NEVER resubmits: markJobSubmitted persists the provider request id in the
-//    same CAS that flips pending→submitted; a re-entered slice harvests by the
-//    stored id (double-spend guard, design §B3).
+//  - NEVER resubmits: claimJob (pending→submitting) gates provider.submit to
+//    a single winner per job, and markJobSubmitted persists the provider
+//    request id in the CAS submitting→submitted; a re-entered slice harvests
+//    by the stored id (double-spend guard, design §B3 + review fix F2).
 //  - Estimate-then-true-up: run cost is the conservative config estimate until
 //    terminal; trueUpRunCost replaces it with job actuals + orchestrator spend.
 //  - Failure → refund: a failed run refunds its credits via app_refund_credits
@@ -180,7 +181,9 @@ async function fetchImageBytes(url: string): Promise<Buffer> {
   if (parsed.protocol !== 'https:' || !allowedHost) {
     throw new Error('image URL outside the provider CDN allowlist');
   }
-  const res = await fetch(url, { cache: 'no-store' });
+  // Bounded (review fix F4): a hung CDN read must never eat the slice's
+  // whole function budget.
+  const res = await fetch(url, { cache: 'no-store', signal: AbortSignal.timeout(15_000) });
   if (!res.ok) throw new Error(`image fetch failed: ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
 }
@@ -195,8 +198,27 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+// Submit-failure classification (review fix F2). A timeout/abort/network drop
+// is AMBIGUOUS: the submission may exist provider-side even though no request
+// id ever reached us. Releasing the claim would allow a re-submit — a
+// possible double-spend — so ambiguous failures FAIL the job instead
+// (conservative: the run's estimated cost still counts the maybe-spent
+// dollars toward the daily cap until true-up). Only a definite rejection
+// releases the claim for a retry.
+function isAmbiguousSubmitError(error: unknown): boolean {
+  if (error instanceof Error && (error.name === 'AbortError' || error.name === 'TimeoutError')) {
+    return true;
+  }
+  return /timeout|timed out|abort|socket|network|fetch failed|ECONNRESET|ETIMEDOUT|EAI_AGAIN/i.test(
+    errorMessage(error),
+  );
+}
+
 const NON_TERMINAL: readonly GenerationRunStatus[] = ['queued', 'orchestrating', 'rendering'];
 
+// 'submitting' (the F2 claim state) is deliberately NON-terminal here: a job
+// whose claiming slice crashed keeps the run open until the run deadline
+// fails + refunds it (advanceRun's deadline check / the sweeper cron).
 function isTerminalJob(j: GenerationJobRow): boolean {
   return j.status === 'complete' || j.status === 'failed';
 }
@@ -371,27 +393,34 @@ async function harvestJob(
     }
 
     const modelConfig = (AI_MODELS as Record<string, { id: string } | undefined>)[run.model];
-    await generation.insertImage(userId, {
-      runId: run.id,
-      jobId: job.id,
-      conceptKey: job.conceptKey,
-      view: job.view,
-      storagePath,
-      previewPath,
-      width: image.width || dims.width,
-      height: image.height || dims.height,
-      provider: run.provider,
-      model: run.model,
-      providerRequestId: job.providerRequestId ?? undefined,
-      costUsd: state.costUsd,
-      provenance: {
+    try {
+      await generation.insertImage(userId, {
+        runId: run.id,
+        jobId: job.id,
+        conceptKey: job.conceptKey,
+        view: job.view,
+        storagePath,
+        previewPath,
+        width: image.width || dims.width,
+        height: image.height || dims.height,
         provider: run.provider,
-        model: modelConfig?.id ?? run.model,
-        requestId: job.providerRequestId,
-        promptVersion: parseRunDirections(run.directions)?.promptVersion ?? '',
-        falRequestId: job.providerRequestId,
-      },
-    });
+        model: run.model,
+        providerRequestId: job.providerRequestId ?? undefined,
+        costUsd: state.costUsd,
+        provenance: {
+          provider: run.provider,
+          model: modelConfig?.id ?? run.model,
+          requestId: job.providerRequestId,
+          promptVersion: parseRunDirections(run.directions)?.promptVersion ?? '',
+          falRequestId: job.providerRequestId,
+        },
+      });
+    } catch (error) {
+      // Review fix F3: a concurrent harvest raced us past the listImages
+      // read and the generation_images_job_once unique fired (P2002). The
+      // image exists — converge to completion instead of throwing.
+      if (!generation.uniqueViolationTarget(error)) throw error;
+    }
   }
   await generation.completeJob(userId, job.id, { costUsd: state.costUsd });
 }
@@ -427,22 +456,51 @@ async function renderSlice(userId: string, run: GenerationRunRow): Promise<void>
       processed += 1;
       try {
         if (job.status === 'pending' && !job.providerRequestId) {
+          // PER-JOB SUBMIT CLAIM (review fix F2): CAS pending→submitting
+          // BEFORE the provider call. Exactly one concurrent slice wins;
+          // losers skip — two racing polls can never double-submit a job.
+          const claimed = await generation.claimJob(userId, job.id);
+          if (!claimed) continue; // another slice holds (or held) the claim
+
           // Conditioning image: the PRE-GENERATED clean view render in the
           // public templates bucket (rendered by db:render-views).
           const conditioningUrl = storage.templatePublicUrl(
             `views/${project.vehicleId}/${job.view}.png`,
           );
-          const submission = await provider.submit({
-            modelKey,
-            prompt: job.prompt,
-            imageUrls: [conditioningUrl],
-            width: dims.width,
-            height: dims.height,
-            seed: seedFor(job.id),
-          });
-          // RESUBMIT GUARD: the request id is persisted BEFORE any polling.
-          // If this CAS loses (another slice submitted first), we change
-          // nothing — the winner's id is the job's identity from here on.
+          let submission;
+          try {
+            submission = await provider.submit({
+              modelKey,
+              prompt: job.prompt,
+              imageUrls: [conditioningUrl],
+              width: dims.width,
+              height: dims.height,
+              seed: seedFor(job.id),
+            });
+          } catch (submitError) {
+            Sentry.captureException(submitError, {
+              tags: { feature: 'ai-generation' },
+              extra: { runId: run.id, jobId: job.id, jobStatus: 'submitting' },
+            });
+            if (isAmbiguousSubmitError(submitError)) {
+              // AMBIGUOUS (timeout/abort/network): the submission may exist
+              // provider-side. Re-claiming could double-spend, so fail the
+              // job conservatively — the run's cost estimate keeps counting
+              // the maybe-spent dollars against the daily cap.
+              await generation.failJob(
+                userId,
+                job.id,
+                `submit ambiguous: ${errorMessage(submitError).slice(0, 400)}`,
+              );
+            } else {
+              // DEFINITE rejection — nothing exists provider-side. Release
+              // the claim (submitting→pending) so a later poll retries.
+              await generation.releaseJobClaim(userId, job.id);
+            }
+            continue;
+          }
+          // RESUBMIT GUARD: the request id is persisted in the CAS that
+          // flips submitting→submitted, BEFORE any polling.
           await generation.markJobSubmitted(
             userId,
             job.id,
@@ -519,6 +577,17 @@ async function signedPreviewUrl(previewPath: string): Promise<string | null> {
   }
 }
 
+// Review fix F7: the snapshot is CUSTOMER-facing. Raw failure text (provider
+// errors, validation issues, dev-speak) stays server-side — Sentry/PostHog
+// get it via failRunLoudly; the client only ever sees friendly copy.
+function friendlySnapshotError(error: string | null): string | null {
+  if (!error) return null;
+  if (/timeout|deadline|swept/i.test(error)) {
+    return 'This run took longer than expected and was stopped. Any credits were refunded — please try again.';
+  }
+  return 'Something went wrong generating your designs. Any credits were refunded — please try again.';
+}
+
 async function buildSnapshot(userId: string, run: GenerationRunRow): Promise<RunSnapshot> {
   const jobs = await generation.listJobs(userId, run.id);
   const parsed = parseRunDirections(run.directions);
@@ -527,7 +596,7 @@ async function buildSnapshot(userId: string, run: GenerationRunRow): Promise<Run
     runId: run.id,
     status: run.status,
     kind: run.kind,
-    error: run.error,
+    error: friendlySnapshotError(run.error),
     jobs: jobs.map((j) => ({ conceptKey: j.conceptKey, view: j.view, status: j.status })),
   };
   if (parsed) {

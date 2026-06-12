@@ -23,7 +23,11 @@ import { pgQuoteLiteral, withSystem, withUser, type TxClient } from '../client.j
 
 export type GenerationRunKind = 'initial' | 'iteration' | 'final';
 export type GenerationRunStatus = 'queued' | 'orchestrating' | 'rendering' | 'complete' | 'failed';
-export type GenerationJobStatus = 'pending' | 'submitted' | 'complete' | 'failed';
+// 'submitting' is the per-job submit claim (review fix F2): pending →
+// submitting (claimJob, BEFORE provider.submit) → submitted (markJobSubmitted,
+// persisting the provider request id). Non-terminal — an orphaned claim is
+// reaped by the run deadline/sweeper.
+export type GenerationJobStatus = 'pending' | 'submitting' | 'submitted' | 'complete' | 'failed';
 
 export const NON_TERMINAL_RUN_STATUSES = ['queued', 'orchestrating', 'rendering'] as const;
 
@@ -443,12 +447,17 @@ export async function startRun(userId: string, input: StartRunInput): Promise<St
       if (tokenRun) return { ok: true, run: toRunRow(tokenRun), deduped: true };
 
       if (input.kind === 'final' && input.parentRunId && input.conceptKey) {
+        // Mirrors generation_runs_final_once_per_concept, which excludes
+        // failed finals (review fix F1): a failed final does not brick its
+        // concept, so the probe must ignore it too or every retry after a
+        // failure would be misreported as final_already_exists.
         const existingFinal = await withUser(userId, (db) =>
           db.generationRun.findFirst({
             where: {
               kind: 'final',
               parentRunId: input.parentRunId,
               conceptKey: input.conceptKey,
+              status: { not: 'failed' },
             },
             select: { id: true },
           }),
@@ -579,8 +588,36 @@ export async function recordJobs(
   });
 }
 
+// THE submit claim (review fix F2). CAS pending→submitting, only while no
+// provider request id exists. Exactly ONE concurrent slice wins this claim,
+// and ONLY the winner may call provider.submit — the structural guarantee
+// that two racing polls can never double-submit (and double-bill) a job.
+export async function claimJob(userId: string, jobId: string): Promise<boolean> {
+  return withUser(userId, async (db) => {
+    const updated = await db.generationJob.updateMany({
+      where: { id: jobId, status: 'pending', providerRequestId: null },
+      data: { status: 'submitting' },
+    });
+    return updated.count > 0;
+  });
+}
+
+// Release a submit claim after a DEFINITE provider rejection (the submission
+// certainly does not exist provider-side): CAS submitting→pending so a later
+// slice can re-claim and retry. Ambiguous failures (timeouts) must NOT
+// release — the pipeline fails the job instead (see run-pipeline.ts).
+export async function releaseJobClaim(userId: string, jobId: string): Promise<boolean> {
+  return withUser(userId, async (db) => {
+    const updated = await db.generationJob.updateMany({
+      where: { id: jobId, status: 'submitting', providerRequestId: null },
+      data: { status: 'pending' },
+    });
+    return updated.count > 0;
+  });
+}
+
 // THE resubmit guard. Persists the provider's request id in the same CAS that
-// flips pending→submitted, and only while provider_request_id IS NULL — a
+// flips submitting→submitted, and only while provider_request_id IS NULL — a
 // resumed slice that lost the race finds count=0, re-reads the job, and
 // HARVESTS by the stored id instead of resubmitting (double-spend guard).
 export async function markJobSubmitted(
@@ -591,7 +628,7 @@ export async function markJobSubmitted(
 ): Promise<boolean> {
   return withUser(userId, async (db) => {
     const updated = await db.generationJob.updateMany({
-      where: { id: jobId, status: 'pending', providerRequestId: null },
+      where: { id: jobId, status: 'submitting', providerRequestId: null },
       data: { status: 'submitted', providerRequestId, costUsd },
     });
     return updated.count > 0;
@@ -617,10 +654,12 @@ export async function completeJob(
   });
 }
 
+// 'submitting' included: an AMBIGUOUS submit failure (timeout — the request
+// may exist provider-side) is conservatively failed from the claim state.
 export async function failJob(userId: string, jobId: string, error: string): Promise<boolean> {
   return withUser(userId, async (db) => {
     const updated = await db.generationJob.updateMany({
-      where: { id: jobId, status: { in: ['pending', 'submitted'] } },
+      where: { id: jobId, status: { in: ['pending', 'submitting', 'submitted'] } },
       data: { status: 'failed', error },
     });
     return updated.count > 0;

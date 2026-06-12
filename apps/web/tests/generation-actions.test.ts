@@ -131,6 +131,8 @@ describe('startGenerationRunAction — gate ORDER', () => {
     });
     expect(h.spendTodayMock).not.toHaveBeenCalled();
     expect(h.startRunMock).not.toHaveBeenCalled();
+    // F8: a refused attempt must not leave an orphan brief-snapshot version.
+    expect(h.snapshotBriefMock).not.toHaveBeenCalled();
   });
 
   it('GATE 2 second: the global daily spend cap refuses + emits ai_spend_cap_hit', async () => {
@@ -149,6 +151,8 @@ describe('startGenerationRunAction — gate ORDER', () => {
       }),
     );
     expect(h.startRunMock).not.toHaveBeenCalled();
+    // F8: gates run BEFORE the snapshot — no orphan snapshot on refusal.
+    expect(h.snapshotBriefMock).not.toHaveBeenCalled();
   });
 
   it('GATE 3 last: insufficient credits comes back as a friendly typed result', async () => {

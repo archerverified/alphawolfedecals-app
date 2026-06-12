@@ -28,18 +28,25 @@ export const maxDuration = 60;
 // fail + refund every healthy in-flight run; see generation.sweepStaleRuns).
 const SWEEP_TTL_MINUTES = 15;
 
-function isAuthorized(request: Request): boolean {
-  if (request.headers.get('x-vercel-cron')) return true;
+// Review note F6: CRON_SECRET IS set in prod, so the bearer path is live for
+// ops. The x-vercel-cron header path is platform-trust only — if generation_
+// swept events ever arrive with auth:'header' while CRON_SECRET is expected
+// to gate everything, that should ALERT (PostHog: filter generation_swept by
+// the `auth` property). Returning which path authorized the call makes that
+// distinction observable per event.
+function authorizedVia(request: Request): 'header' | 'bearer' | null {
+  if (request.headers.get('x-vercel-cron')) return 'header';
   const secret = process.env.CRON_SECRET?.trim();
-  if (!secret) return false; // fail closed
-  return request.headers.get('authorization') === `Bearer ${secret}`;
+  if (!secret) return null; // fail closed
+  return request.headers.get('authorization') === `Bearer ${secret}` ? 'bearer' : null;
 }
 
 export async function GET(request: Request): Promise<NextResponse> {
-  if (!isAuthorized(request)) {
+  const auth = authorizedVia(request);
+  if (!auth) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
   }
   const swept = await generation.sweepStaleRuns(SWEEP_TTL_MINUTES);
-  await captureServerEvent('generation_swept', 'system', { count: swept });
+  await captureServerEvent('generation_swept', 'system', { count: swept, auth });
   return NextResponse.json({ ok: true, swept });
 }

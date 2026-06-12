@@ -168,15 +168,17 @@ export async function startGenerationRunAction(
   const views = resolveRunViews(vehicle.panels, parsed.data);
   if (views.length === 0) return fail('invalid');
 
-  // Freeze the brief the run renders from (provenance: every concept traces
-  // to an immutable snapshot version).
-  const snapshot = await briefs.snapshotBrief(user.id, brief.id, 'generation_run');
-  if (!snapshot.ok) return fail('not_found');
-
+  // Gates BEFORE the snapshot (review fix F8): a rate-limited or spend-capped
+  // attempt must not accumulate orphan brief-snapshot versions.
   const modelKey = AI_CONFIG.defaults.draft;
   const estimatedCostUsd = estimateRunCostUsd(modelKey, 'initial', views.length);
   const gate = await checkSharedGates(user.id, projectId, estimatedCostUsd);
   if (gate) return gate;
+
+  // Freeze the brief the run renders from (provenance: every concept traces
+  // to an immutable snapshot version).
+  const snapshot = await briefs.snapshotBrief(user.id, brief.id, 'generation_run');
+  if (!snapshot.ok) return fail('not_found');
 
   // GATE 3 — startRun enforces the monthly plan gate + credit balance
   // atomically (one tx, per-user advisory lock).
