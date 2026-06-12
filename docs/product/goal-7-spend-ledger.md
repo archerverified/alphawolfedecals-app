@@ -4,6 +4,6 @@ Hard ceiling for this goal: **$6.00 fal + $3.00 Anthropic** (leaves headroom und
 
 | # | When (UTC) | Provider | What | Est. cost | Cum. fal | Cum. Anthropic |
 |---|---|---|---|---|---|---|
-| — | — | — | (no real calls yet) | — | $0.00 | $0.00 |
+| 0 | 2026-06-12 07:24 | fal | Bake-off attempt #1: 18 invocations ALL refused before submit (ledger MIME bug; fail-closed rail held — zero provider calls, verified in runtime logs) | $0.00 | $0.00 | $0.00 |
 
 **Totals: fal $0.00 / $6.00 · Anthropic $0.00 / $3.00**
