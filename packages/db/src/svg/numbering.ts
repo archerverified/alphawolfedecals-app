@@ -151,9 +151,9 @@ export type NumberedViews<P> = {
  * that feeds panelNumbers must exist exactly once, or the sheets could
  * disagree on numbers.
  */
-export function numberViews<
-  P extends { name: string; outlinePath: string; installOrder: number },
->(views: Array<{ view: string; panels: P[] }>): NumberedViews<P> {
+export function numberViews<P extends { name: string; outlinePath: string; installOrder: number }>(
+  views: Array<{ view: string; panels: P[] }>,
+): NumberedViews<P> {
   const flat = views.flatMap((v) =>
     v.panels.map((p) => ({
       view: v.view,
