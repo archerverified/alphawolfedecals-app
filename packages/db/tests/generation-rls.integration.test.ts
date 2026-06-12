@@ -13,6 +13,12 @@
 // and the per-run partial unique blocks a double-spend; app_refund_credits is
 // idempotent (second call returns false) and works GUC-less from the system
 // sweeper; the spend-sign CHECK rejects a positive 'spend' row.
+//
+// Review-fix proofs (PR #148 round 1): cross-user job/image INSERTs into a
+// foreign run are denied by WITH CHECK; the lineage CHECKs reject finals/
+// iterations without a parent; an UPDATE cannot re-point a run at a foreign
+// project; a forged parent_run_id pointing at another tenant's run is denied;
+// app_refund_credits refuses while the run is non-terminal.
 
 import { afterAll, beforeAll, describe, expect, test } from 'vitest';
 import { _resetClientForTests, withSystem, withUser } from '../src/client';
@@ -368,5 +374,115 @@ describe('money rails — refund idempotency, ledger lockout, sign CHECK', () =>
     const viaSystem = await generation.spendTodaySystem();
     expect(viaUser).toBeGreaterThanOrEqual(1);
     expect(viaSystem).toBeGreaterThanOrEqual(1);
+  });
+});
+
+describe('review fixes — lineage CHECKs, parent ownership, terminal refund guard', () => {
+  // By this point: aRunId is failed (terminal) with 2 jobs; A's balance is
+  // GRANT; B owns bProjectId with a swept (failed) run and a balance of 2.
+
+  test('B cannot insert a JOB into A’s run (WITH CHECK on the run-owner join)', async () => {
+    await expect(
+      generation.recordJobs(bId, aRunId, [{ conceptKey: 'cx', view: 'rear', prompt: 'forged' }]),
+    ).rejects.toThrow(/row-level security/i);
+    expect(await generation.listJobs(aId, aRunId)).toHaveLength(2); // unchanged
+  });
+
+  test('B cannot insert an IMAGE into A’s run (WITH CHECK on the run-owner join)', async () => {
+    const [job] = await generation.listJobs(aId, aRunId);
+    await expect(
+      generation.insertImage(bId, {
+        runId: aRunId,
+        jobId: job.id,
+        conceptKey: 'c1',
+        view: 'driver',
+        storagePath: 'generated/b/forged.png',
+        width: 1,
+        height: 1,
+        provider: 'mock',
+        model: 'mock-v1',
+        costUsd: 0,
+      }),
+    ).rejects.toThrow(/row-level security/i);
+  });
+
+  test('final-lineage CHECK rejects kind=final without parent/concept', async () => {
+    await expect(
+      generation.startRun(
+        aId,
+        runInput({ clientToken: 'tok-bad-final', kind: 'final', creditCost: 0 }),
+      ),
+    ).rejects.toThrow(/chk_generation_runs_final_lineage|constraint/i);
+  });
+
+  test('iteration-lineage CHECK rejects kind=iteration without a parent', async () => {
+    await expect(
+      generation.startRun(
+        aId,
+        runInput({ clientToken: 'tok-bad-iter', kind: 'iteration', creditCost: 0 }),
+      ),
+    ).rejects.toThrow(/chk_generation_runs_iteration_lineage|constraint/i);
+  });
+
+  test('UPDATE cannot re-point a run at a foreign project (WITH CHECK)', async () => {
+    await expect(
+      withUser(aId, (db) =>
+        db.generationRun.updateMany({ where: { id: aRunId }, data: { projectId: bProjectId } }),
+      ),
+    ).rejects.toThrow(/row-level security/i);
+    const run = await generation.getRun(aId, aRunId);
+    expect(run?.projectId).toBe(aProjectId); // unchanged
+  });
+
+  test('B cannot attach parent_run_id = A’s run (parent-ownership WITH CHECK)', async () => {
+    const forged = await generation.startRun(
+      bId,
+      runInput({
+        projectId: bProjectId,
+        clientToken: 'tok-b-parent-forge',
+        kind: 'iteration',
+        parentRunId: aRunId,
+        conceptKey: 'c1',
+        creditCost: 0,
+      }),
+    );
+    // RLS WITH CHECK rejection maps to the same typed result as a foreign
+    // project — indistinguishable by design.
+    expect(forged).toEqual({ ok: false, reason: 'project_not_found' });
+  });
+
+  test('startRun throws on a negative estimatedCostUsd (caller bug, not a typed result)', async () => {
+    await expect(
+      generation.startRun(
+        aId,
+        runInput({ clientToken: 'tok-negative', estimatedCostUsd: -1, creditCost: 0 }),
+      ),
+    ).rejects.toThrow(/estimatedCostUsd must be >= 0/);
+  });
+
+  test('app_refund_credits refuses while the run is still in flight', async () => {
+    const started = await generation.startRun(
+      bId,
+      runInput({ projectId: bProjectId, clientToken: 'tok-b-inflight', creditCost: 1 }),
+    );
+    expect(started.ok).toBe(true);
+    if (!started.ok) return;
+    expect(await credits.getCreditBalance(bId)).toBe(1);
+
+    // Direct refund attempt on the queued (non-terminal) run: the definer fn
+    // refuses — only failed runs are refundable.
+    await expect(
+      withUser(bId, (db) =>
+        db.$queryRawUnsafe(`SELECT app_refund_credits('${started.run.id}'::uuid)`),
+      ),
+    ).rejects.toThrow(/not in a terminal failed status/i);
+    expect(await credits.getCreditBalance(bId)).toBe(1); // nothing refunded
+
+    // failRun CASes to failed THEN refunds in the same tx — still works.
+    expect(await generation.failRun(bId, started.run.id, 'cleanup')).toEqual({
+      failed: true,
+      refunded: true,
+    });
+    expect(await credits.getCreditBalance(bId)).toBe(2);
   });
 });

@@ -126,6 +126,19 @@ CREATE UNIQUE INDEX "generation_runs_final_once_per_concept"
   ON "generation_runs"("parent_run_id", "concept_key")
   WHERE "kind" = 'final';
 
+-- Lineage CHECKs (review round 1, major 1): a unique index treats NULLs as
+-- distinct, so a 'final' inserted with NULL parent_run_id/concept_key would
+-- bypass generation_runs_final_once_per_concept entirely (unlimited free
+-- finals). Enforce the lineage shape structurally: finals require BOTH a
+-- parent and a concept; iterations require a parent. (Lineage is always
+-- same-project in the app, so the parent FK's ON DELETE SET NULL only fires
+-- in same-statement cascades where the child is deleted too.)
+ALTER TABLE "generation_runs" ADD CONSTRAINT "chk_generation_runs_final_lineage"
+  CHECK ("kind" <> 'final' OR ("parent_run_id" IS NOT NULL AND "concept_key" IS NOT NULL));
+
+ALTER TABLE "generation_runs" ADD CONSTRAINT "chk_generation_runs_iteration_lineage"
+  CHECK ("kind" <> 'iteration' OR "parent_run_id" IS NOT NULL);
+
 -- AddForeignKey
 ALTER TABLE "generation_runs" ADD CONSTRAINT "generation_runs_project_id_fkey" FOREIGN KEY ("project_id") REFERENCES "projects"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

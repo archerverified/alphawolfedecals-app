@@ -740,7 +740,11 @@ end $$;
 -- a parameter: that lets the system sweeper (withSystem — no GUC) refund on the
 -- owner's behalf without ever choosing the beneficiary. When a session user IS
 -- present (withUser), the spend must belong to them — a customer cannot trigger
--- another tenant's refund. Returns true iff a refund row was inserted.
+-- another tenant's refund. The run must already be in the terminal 'failed'
+-- status (security second opinion): both callers (failRun, sweepStaleRuns) CAS
+-- the run to failed in the SAME transaction before calling this, so a refund
+-- can never land on a run that goes on to complete. Returns true iff a refund
+-- row was inserted.
 create or replace function app_refund_credits(p_run_id uuid) returns boolean
   language plpgsql
   security definer
@@ -762,6 +766,16 @@ create or replace function app_refund_credits(p_run_id uuid) returns boolean
 
     if v_session is not null and v_spend.user_id <> v_session then
       raise exception 'app_refund_credits: spend row does not belong to session user';
+    end if;
+
+    -- Refunds compensate FAILED work only. Reading the run inside the caller's
+    -- transaction sees the just-CAS'd 'failed' status; an in-flight or
+    -- completed run is never refundable.
+    if not exists (
+      select 1 from generation_runs r
+      where r.id = p_run_id and r.status = 'failed'
+    ) then
+      raise exception 'app_refund_credits: run is not in a terminal failed status';
     end if;
 
     insert into credit_ledger (user_id, delta, source, reason, run_id)
@@ -791,8 +805,15 @@ end $$;
 -- Today's GLOBAL generation spend (UTC day), for the daily spend cap (D7).
 -- SECURITY DEFINER on purpose: the cap is across ALL users, and app_user's
 -- RLS view of generation_runs is owner-scoped — without definer the sum would
--- silently only cover the caller's own runs. Discloses a single aggregate
--- number, no per-row data.
+-- silently only cover the caller's own runs. INTENTIONALLY exposes only a
+-- single global scalar (today's total estimated spend) — no per-row, per-user,
+-- or per-run data crosses the definer boundary (security second opinion:
+-- accepted disclosure, keep it scalar-only).
+--
+-- UTC boundary: `now() at time zone 'utc'` yields a naked timestamp; comparing
+-- it to a timestamptz would re-attach the SESSION time zone, drifting the day
+-- boundary on any non-UTC connection. The second `at time zone 'utc'` converts
+-- the truncated value back to an absolute timestamptz at UTC midnight.
 create or replace function app_generation_spend_today() returns numeric
   language sql
   stable
@@ -801,7 +822,7 @@ create or replace function app_generation_spend_today() returns numeric
   as $$
     select coalesce(sum(cost_usd), 0)
     from generation_runs
-    where created_at >= date_trunc('day', now() at time zone 'utc');
+    where created_at >= (date_trunc('day', now() at time zone 'utc') at time zone 'utc');
   $$;
 
 revoke all on function app_generation_spend_today() from public;
@@ -818,12 +839,59 @@ begin
   end if;
 end $$;
 
+-- SECURITY DEFINER run-ownership check (review round 1, major 3). Mirrors
+-- app_is_shop_member exactly: it discloses only a boolean about the CURRENT
+-- session user (the app.current_user_id GUC) — a caller probing arbitrary
+-- p_run_id values only learns whether THEY own that run, never whose it is.
+-- SECURITY DEFINER is REQUIRED here, not a convenience: the generation_runs
+-- policies below must validate parent_run_id ownership, and an inline EXISTS
+-- against generation_runs inside generation_runs' own policy re-enters the
+-- same policy => 42P17 infinite recursion (the exact failure app_is_shop_member
+-- was built to break on memberships). search_path pinned per the SECURITY
+-- DEFINER hardening guideline. Fails closed: returns false when the GUC is
+-- unset.
+--
+-- DEFINED HERE, ABOVE its first callers (the generation_runs policies below):
+-- Postgres resolves a policy's function references at CREATE POLICY time, so a
+-- clean `db:apply-sql` needs the function to already exist.
+create or replace function app_owns_generation_run(p_run_id uuid) returns boolean
+  language sql
+  stable
+  security definer
+  set search_path = public, pg_temp
+  as $$
+    select exists (
+      select 1 from generation_runs r
+      where r.id = p_run_id
+        and r.user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
+    );
+  $$;
+
+-- Lock down EXECUTE (same rationale + role-existence guards as
+-- app_is_shop_member): policy-internal helper, never callable via the
+-- PostgREST data API.
+revoke all on function app_owns_generation_run(uuid) from public;
+do $$
+begin
+  if exists (select 1 from pg_roles where rolname = 'anon') then
+    execute 'revoke all on function app_owns_generation_run(uuid) from anon';
+  end if;
+  if exists (select 1 from pg_roles where rolname = 'authenticated') then
+    execute 'revoke all on function app_owns_generation_run(uuid) from authenticated';
+  end if;
+  if exists (select 1 from pg_roles where rolname = 'app_user') then
+    execute 'grant execute on function app_owns_generation_run(uuid) to app_user';
+  end if;
+end $$;
+
 -- generation_runs --------------------------------------------------------------
 -- The run state machine. Owner-scoped SELECT/INSERT/UPDATE; NO DELETE policy and
 -- the grant is revoked — runs are audit records (cost provenance), even for
--- their owner. INSERT WITH CHECK verifies BOTH the row's user_id is the session
+-- their owner. INSERT WITH CHECK verifies the row's user_id is the session
 -- user AND the session user owns the target project (design_briefs_owner_all
--- shape) — a guessed foreign projectId plants nothing.
+-- shape) AND any parent_run_id points at the session user's OWN run — a guessed
+-- foreign projectId plants nothing, and a forged parent_run_id can't graft a
+-- lineage onto (or farm finals from) another tenant's run.
 alter table generation_runs enable row level security;
 alter table generation_runs force row level security;
 
@@ -844,11 +912,15 @@ create policy generation_runs_owner_insert on generation_runs
       where p.id = generation_runs.project_id
         and p.owner_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
     )
+    and (
+      generation_runs.parent_run_id is null
+      or app_owns_generation_run(generation_runs.parent_run_id)
+    )
   );
 
 -- UPDATE drives the CAS status transitions (advance/fail/true-up). WITH CHECK
 -- repeats the insert predicate so an update can't re-point a run at a foreign
--- project or another user.
+-- project, another user, or another tenant's parent run.
 drop policy if exists generation_runs_owner_update on generation_runs;
 create policy generation_runs_owner_update on generation_runs
   for update
@@ -859,6 +931,10 @@ create policy generation_runs_owner_update on generation_runs
       select 1 from projects p
       where p.id = generation_runs.project_id
         and p.owner_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
+    )
+    and (
+      generation_runs.parent_run_id is null
+      or app_owns_generation_run(generation_runs.parent_run_id)
     )
   );
 

@@ -116,7 +116,10 @@ export type StartRunResult =
         | 'monthly_runs'
         | 'active_run_exists'
         | 'final_already_exists'
-        | 'project_not_found';
+        | 'project_not_found'
+        // The clientToken unique fired but the RLS re-read found no run: the
+        // token belongs to ANOTHER user. Caller should mint a fresh token.
+        | 'token_conflict';
     };
 
 // ---------------------------------------------------------------------------
@@ -136,6 +139,17 @@ export function staleCutoff(now: Date, ttlMinutes: number): Date {
 /** Ledger `reason` for a run kind's spend row (refunds append '_refund'). */
 export function spendReasonForKind(kind: GenerationRunKind): string {
   return kind === 'iteration' ? 'iteration_run' : 'generation_run';
+}
+
+/**
+ * Throws on a negative or non-finite estimated cost — a caller bug, never a
+ * customer input. cost_usd is the conservative number the daily spend cap
+ * sums, so a negative estimate would silently widen the cap for everyone.
+ */
+export function assertValidEstimatedCost(estimatedCostUsd: number): void {
+  if (!Number.isFinite(estimatedCostUsd) || estimatedCostUsd < 0) {
+    throw new Error(`[generation] estimatedCostUsd must be >= 0 (got ${estimatedCostUsd})`);
+  }
 }
 
 function errorText(error: unknown): string {
@@ -343,8 +357,19 @@ export async function getRunContext(userId: string, projectId: string): Promise<
 // A clientToken replay returns the EXISTING run ({deduped: true}) — the
 // double-click path spends nothing twice.
 export async function startRun(userId: string, input: StartRunInput): Promise<StartRunResult> {
+  assertValidEstimatedCost(input.estimatedCostUsd);
   try {
     return await withUser(userId, async (db) => {
+      // Per-user serialization for EVERYTHING below — same advisory-lock key
+      // as app_spend_credits (re-entrant when the spend re-takes it later in
+      // this tx; xact-scoped, so pooler-safe). Taking it before the monthly
+      // count closes the gate race: two parallel submits by the same user
+      // serialize here, so the second one counts the first one's committed
+      // run instead of both passing the gate.
+      await db.$queryRawUnsafe(
+        `SELECT pg_advisory_xact_lock(hashtext('credit_spend'), hashtext(${pgQuoteLiteral(userId)}))`,
+      );
+
       // Idempotency fast path: this token already produced a run.
       const existing = await db.generationRun.findFirst({
         where: { clientToken: input.clientToken },
@@ -353,9 +378,9 @@ export async function startRun(userId: string, input: StartRunInput): Promise<St
       if (existing) return { ok: true as const, run: toRunRow(existing), deduped: true };
 
       // Monthly gate for metered (initial) runs, counted in the same tx as
-      // the insert. The unique-violation path below backstops the race two
-      // parallel submits could still create (one will conflict on the
-      // one-active-per-project partial unique or dedupe on its token).
+      // the insert, under the advisory lock above. The unique-violation path
+      // below backstops any residual conflict (token dedupe race against a
+      // DIFFERENT connection's committed insert, one-active-per-project).
       if (input.kind === 'initial' && input.monthlyRunLimit !== undefined) {
         const runsThisMonth = await db.generationRun.count({
           where: { userId, kind: 'initial', createdAt: { gte: monthStartUtc(new Date()) } },
@@ -410,6 +435,10 @@ export async function startRun(userId: string, input: StartRunInput): Promise<St
           }),
         );
         if (run) return { ok: true, run: toRunRow(run), deduped: true };
+        // Unique fired but the RLS-scoped re-read sees nothing: the token
+        // collides with ANOTHER user's run. Typed failure, not a raw rethrow
+        // — the caller mints a fresh token and retries.
+        return { ok: false, reason: 'token_conflict' };
       }
       if (unique.includes('final_once_per_concept')) {
         return { ok: false, reason: 'final_already_exists' };
@@ -636,7 +665,11 @@ export async function insertImage(
 
 // Replace the run's ESTIMATED cost with the sum of its jobs' actuals (review
 // item 4: estimate at insert, true up at completion) and stamp completed_at
-// once the run is complete. Returns the trued-up total.
+// once the run is complete. TERMINAL runs only: pre-terminal, cost_usd is the
+// conservative estimate the daily spend cap sums — lowering it mid-run would
+// let concurrent runs slip under the cap (the TOCTOU the estimate exists to
+// close). A non-terminal run is left untouched. Returns the jobs' actual total
+// either way.
 export async function trueUpRunCost(userId: string, runId: string): Promise<number> {
   return withUser(userId, async (db) => {
     const agg = await db.generationJob.aggregate({
@@ -644,7 +677,10 @@ export async function trueUpRunCost(userId: string, runId: string): Promise<numb
       _sum: { costUsd: true },
     });
     const total = Number(agg._sum.costUsd ?? 0);
-    await db.generationRun.updateMany({ where: { id: runId }, data: { costUsd: total } });
+    await db.generationRun.updateMany({
+      where: { id: runId, status: { in: ['complete', 'failed'] } },
+      data: { costUsd: total },
+    });
     await db.generationRun.updateMany({
       where: { id: runId, status: 'complete', completedAt: null },
       data: { completedAt: new Date() },
@@ -672,28 +708,39 @@ export async function spendTodaySystem(): Promise<number> {
 // the spend row, so no user identity is ever supplied from system code.
 // ---------------------------------------------------------------------------
 
+// SECURITY NOTE (advisory): when this is wired to cron, ttlMinutes must stay a
+// SERVER constant — never derived from request input. A caller-supplied tiny
+// TTL would fail (and refund) every healthy in-flight run in the system.
 export async function sweepStaleRuns(ttlMinutes: number): Promise<number> {
-  return withSystem(async (db) => {
-    const now = new Date();
-    const cutoff = staleCutoff(now, ttlMinutes);
-    const stale = await db.generationRun.findMany({
+  const now = new Date();
+  const cutoff = staleCutoff(now, ttlMinutes);
+
+  // List read in its OWN transaction, then ONE withSystem transaction PER
+  // stale run: a backlog (e.g. cron resuming after an outage) must not pile
+  // every CAS+refund into a single 15s interactive tx that times out and
+  // rolls back ALL of them. Per-run, a partial sweep keeps its progress.
+  const stale = await withSystem((db) =>
+    db.generationRun.findMany({
       where: {
         status: { in: [...NON_TERMINAL_RUN_STATUSES] },
         OR: [{ deadlineAt: { lt: now } }, { deadlineAt: null, updatedAt: { lt: cutoff } }],
       },
       select: { id: true },
-    });
+    }),
+  );
 
-    let swept = 0;
-    for (const { id } of stale) {
+  let swept = 0;
+  for (const { id } of stale) {
+    const didSweep = await withSystem(async (db) => {
       const updated = await db.generationRun.updateMany({
         where: { id, status: { in: [...NON_TERMINAL_RUN_STATUSES] } },
         data: { status: 'failed', error: 'timeout: swept after deadline', completedAt: now },
       });
-      if (updated.count === 0) continue; // a poll slice completed it under us
+      if (updated.count === 0) return false; // a poll slice completed it under us
       await callRefundCredits(db, id);
-      swept += 1;
-    }
-    return swept;
-  });
+      return true;
+    });
+    if (didSweep) swept += 1;
+  }
+  return swept;
 }

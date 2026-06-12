@@ -3,6 +3,7 @@
 
 import { describe, expect, test } from 'vitest';
 import {
+  assertValidEstimatedCost,
   isInsufficientCreditsError,
   isRlsViolationError,
   monthStartUtc,
@@ -48,6 +49,22 @@ describe('spendReasonForKind', () => {
     // 'final' is free (creditCost 0) so this rarely fires, but it must not
     // invent a third reason if a cost is ever configured for finals.
     expect(spendReasonForKind('final')).toBe('generation_run');
+  });
+});
+
+describe('assertValidEstimatedCost', () => {
+  test('accepts zero (free finals) and positive estimates', () => {
+    expect(() => assertValidEstimatedCost(0)).not.toThrow();
+    expect(() => assertValidEstimatedCost(0.5)).not.toThrow();
+  });
+
+  test('throws on a negative estimate (would widen the daily spend cap)', () => {
+    expect(() => assertValidEstimatedCost(-0.01)).toThrow(/estimatedCostUsd must be >= 0/);
+  });
+
+  test('throws on non-finite estimates (NaN / Infinity are caller bugs)', () => {
+    expect(() => assertValidEstimatedCost(Number.NaN)).toThrow(/estimatedCostUsd/);
+    expect(() => assertValidEstimatedCost(Number.POSITIVE_INFINITY)).toThrow(/estimatedCostUsd/);
   });
 });
 

@@ -738,6 +738,10 @@ model GenerationRun {
   //     project+kind.
   //   * generation_runs_final_once_per_concept — UNIQUE(parent_run_id,
   //     concept_key) WHERE kind='final': free-final farming guard.
+  // Plus two raw-SQL lineage CHECKs (chk_generation_runs_final_lineage /
+  // chk_generation_runs_iteration_lineage): finals require parent_run_id AND
+  // concept_key, iterations require parent_run_id — NULL lineage (which a
+  // unique index treats as distinct) can never bypass the final-once guard.
 
   project       Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
   user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
