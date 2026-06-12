@@ -28,12 +28,14 @@
 //     for placed uploads (the editor re-signs nothing on load today).
 
 import {
+  VIEW_ORDER,
   briefs,
   generation,
   projects,
   storage,
   vehicles,
   type GenerationImageRow,
+  type ProjectRow,
 } from '@alphawolf/db';
 import { factory, deserializeDocument, serializeDocument } from '@alphawolf/canvas';
 import type { CanvasDocument, ImageElement, PanelId, VehicleView } from '@alphawolf/canvas';
@@ -49,7 +51,15 @@ import {
   type PanelGeom,
 } from '../generation/placement';
 
-const VEHICLE_VIEWS: ReadonlySet<string> = new Set(['front', 'driver', 'back', 'passenger', 'top']);
+// THE canonical view set (PR #142): consumers must not drift from VIEW_ORDER.
+const VEHICLE_VIEWS: ReadonlySet<string> = new Set(VIEW_ORDER);
+
+// Inserted srcUrls are signed READ urls persisted into the canvas document.
+// The editor does not re-sign on load (UploadPanel convention), so locked AI
+// layers get a LONG TTL — 30 days, vs the 24h default — to keep the design
+// visible across normal revisit gaps. Known limitation, documented in the PR:
+// the durable fix is signing at document load.
+const CANVAS_SRC_TTL_SECONDS = 30 * 24 * 60 * 60;
 
 export type FinalizeResult =
   | { ok: true; assetsRegistered: number; canvasUpdated: boolean; alreadyDone: boolean }
@@ -84,46 +94,52 @@ export async function finalizeFinalRunAction(
 
   // ---- (a) register renders as project assets (idempotent on sourceUrl) ----
   const existingAssets = await projects.listAssets(user.id, projectId);
-  const bySourceUrl = new Map(existingAssets.map((a) => [a.sourceUrl, a.assetId]));
+  const bySourceUrl = new Map(existingAssets.map((a) => [a.sourceUrl, a]));
 
   let registered = 0;
   const assetIdByImage = new Map<string, string>();
   for (const img of images) {
     const existing = bySourceUrl.get(img.storagePath);
-    if (existing) {
-      assetIdByImage.set(img.id, existing);
-      continue;
+    let assetId = existing?.assetId ?? null;
+    if (!assetId) {
+      assetId = (
+        await projects.createAsset(user.id, {
+          projectId,
+          mimeType: mimeTypeForPath(img.storagePath),
+          sourceUrl: img.storagePath,
+        })
+      ).assetId;
+      registered += 1;
     }
-    const { assetId } = await projects.createAsset(user.id, {
-      projectId,
-      mimeType: mimeTypeForPath(img.storagePath),
-      sourceUrl: img.storagePath,
-    });
     // The render is already a finished raster — mark it parsed so every
-    // consumer that requires parsedUrl (export pack, editor placement) sees it.
-    await projects.setAssetParseResult(user.id, {
-      assetId,
-      parseStatus: 'parsed',
-      parsedUrl: img.storagePath,
-      parseMetadata: {
-        generated: true,
-        runId,
-        conceptKey: img.conceptKey,
-        view: img.view,
-        naturalWidth: img.width,
-        naturalHeight: img.height,
-        provenance: (img.provenance ?? null) as Record<string, unknown> | null,
-      },
-    });
+    // consumer that requires parsedUrl (export pack, editor placement) sees
+    // it. Also runs for an EXISTING row that isn't parsed yet: a crash
+    // between create and this write must be repairable on retry (no parse
+    // worker will ever claim a generated asset).
+    if (!existing || existing.parseStatus !== 'parsed' || !existing.parsedUrl) {
+      await projects.setAssetParseResult(user.id, {
+        assetId,
+        parseStatus: 'parsed',
+        parsedUrl: img.storagePath,
+        parseMetadata: {
+          generated: true,
+          runId,
+          conceptKey: img.conceptKey,
+          view: img.view,
+          naturalWidth: img.width,
+          naturalHeight: img.height,
+          provenance: (img.provenance ?? null) as Record<string, unknown> | null,
+        },
+      });
+    }
     assetIdByImage.set(img.id, assetId);
-    registered += 1;
   }
   const alreadyDone = registered === 0;
 
   // ---- (b) canvas insertion — best-effort, never blocks completion ---------
   let canvasUpdated = false;
   try {
-    canvasUpdated = await insertIntoCanvas(user.id, projectId, images, assetIdByImage);
+    canvasUpdated = await insertIntoCanvas(user.id, project, images, assetIdByImage);
   } catch {
     // Approximation documented above: a failed insertion leaves the assets
     // registered; the customer can place them from the editor manually.
@@ -145,12 +161,11 @@ export async function finalizeFinalRunAction(
 
 async function insertIntoCanvas(
   userId: string,
-  projectId: string,
+  project: ProjectRow,
   images: GenerationImageRow[],
   assetIdByImage: Map<string, string>,
 ): Promise<boolean> {
-  const project = await projects.getProject(userId, projectId);
-  if (!project) return false;
+  const projectId = project.id;
   const vehicle = await vehicles.getPublishedDetail(project.vehicleId);
   if (!vehicle) return false;
 
@@ -166,6 +181,29 @@ async function insertIntoCanvas(
   const parsedBrief = parseBriefData(brief?.data ?? {});
   const logo = parsedBrief.ok ? parsedBrief.data.logo : undefined;
 
+  // Signing + asset reads hoisted OUT of the retry loop: none of them depend
+  // on the canvas rev, and each signedAssetReadUrl is a storage-API round trip.
+  const signedByImageId = new Map<string, string>(
+    await Promise.all(
+      images.map(
+        async (img) =>
+          [img.id, await storage.signedAssetReadUrl(img.storagePath, CANVAS_SRC_TTL_SECONDS)] as [
+            string,
+            string,
+          ],
+      ),
+    ),
+  );
+  const logoAsset =
+    logo?.assetId && (logo.zonePanelIds?.length ?? 0) > 0
+      ? await projects.getAsset(userId, logo.assetId)
+      : null;
+  const logoKey = logoAsset?.parsedUrl ?? logoAsset?.sourceUrl ?? null;
+  const logoSrcUrl =
+    logoAsset && logoAsset.projectId === projectId && logoKey
+      ? await storage.signedAssetReadUrl(logoKey, CANVAS_SRC_TTL_SECONDS)
+      : null;
+
   // Two attempts: optimistic-concurrency save can lose to an open editor tab.
   for (let attempt = 0; attempt < 2; attempt++) {
     const working = await projects.getWorkingVersion(userId, projectId);
@@ -178,7 +216,6 @@ async function insertIntoCanvas(
       return factory.elementId(`el-${seq}-${label}`);
     };
 
-    const elements: Record<string, ImageElement> = {};
     let changed = false;
 
     // Per-view final render → LOCKED element at the BACK of the largest panel.
@@ -189,8 +226,15 @@ async function insertIntoCanvas(
       const box = viewBbox(viewPanels);
       if (!panel || !box) continue;
       const assetId = assetIdByImage.get(img.id);
-      if (!assetId) continue;
-      if (hasElementForAsset(doc, panel.id, assetId)) continue; // idempotent
+      const srcUrl = signedByImageId.get(img.id);
+      if (!assetId || !srcUrl) continue;
+      // Idempotency, two keys: same asset already placed (normal retry), OR a
+      // locked AI layer with this view's name already exists (two concurrent
+      // sweeps registered DUPLICATE asset rows with different ids — the rev
+      // CAS forces the loser to re-read, and this name check stops its copy).
+      const layerName = `AI design — ${img.view}`;
+      if (hasElementForAsset(doc, panel.id, assetId)) continue;
+      if (hasLockedLayerNamed(doc, panel.id, layerName)) continue;
 
       const placement = coverPlacement(box, img.width, img.height);
       const el = factory.newImage(
@@ -199,7 +243,7 @@ async function insertIntoCanvas(
           panelId: factory.panelId(panel.id),
           view: img.view as VehicleView,
           assetId: factory.assetId(assetId),
-          srcUrl: await storage.signedAssetReadUrl(img.storagePath),
+          srcUrl,
           naturalW: img.width,
           naturalH: img.height,
         },
@@ -209,54 +253,51 @@ async function insertIntoCanvas(
           scaleX: placement.scale,
           scaleY: placement.scale,
           locked: true,
-          name: `AI design — ${img.view}`,
+          name: layerName,
         },
       );
       insertElement(doc, el, 'back');
-      elements[el.id] = el;
       changed = true;
     }
 
     // Logo on its brief-assigned zones — UNLOCKED, on top, exact uploaded art.
-    if (logo?.assetId && (logo.zonePanelIds?.length ?? 0) > 0) {
-      const asset = await projects.getAsset(userId, logo.assetId);
-      const logoKey = asset?.parsedUrl ?? asset?.sourceUrl ?? null;
-      if (asset && asset.projectId === projectId && logoKey) {
-        const meta = (asset.parseMetadata ?? {}) as Record<string, unknown>;
-        const naturalW = typeof meta.naturalWidth === 'number' ? meta.naturalWidth : 1000;
-        const naturalH = typeof meta.naturalHeight === 'number' ? meta.naturalHeight : 1000;
-        const srcUrl = await storage.signedAssetReadUrl(logoKey);
-        for (const zoneId of logo.zonePanelIds ?? []) {
-          const panel = panelGeoms.find((p) => p.id === zoneId);
-          if (!panel || !VEHICLE_VIEWS.has(panel.view)) continue;
-          if (hasElementForAsset(doc, panel.id, logo.assetId)) continue; // idempotent
-          const box = viewBbox([panel]);
-          if (!box) continue;
-          const placement = centeredPlacement(box, naturalW, naturalH);
-          const el = factory.newImage(
-            {
-              id: mint('logo'),
-              panelId: factory.panelId(panel.id),
-              view: panel.view as VehicleView,
-              assetId: factory.assetId(logo.assetId),
-              srcUrl,
-              naturalW,
-              naturalH,
-            },
-            {
-              x: placement.x,
-              y: placement.y,
-              scaleX: placement.scale,
-              scaleY: placement.scale,
-              locked: false,
-              raster: asset.mimeType !== 'image/svg+xml',
-              name: 'Your logo',
-            },
-          );
-          insertElement(doc, el, 'front');
-          elements[el.id] = el;
-          changed = true;
-        }
+    // APPROXIMATION: naturalW/H come from parseMetadata; SVG logos parsed via
+    // passthrough carry no dimensions, so they fall back to a 1000×1000 square
+    // (possible aspect distortion). The element is unlocked — the customer can
+    // resize — and the render itself is the exact uploaded artwork.
+    if (logoAsset && logoSrcUrl && logo?.assetId) {
+      const meta = (logoAsset.parseMetadata ?? {}) as Record<string, unknown>;
+      const naturalW = typeof meta.naturalWidth === 'number' ? meta.naturalWidth : 1000;
+      const naturalH = typeof meta.naturalHeight === 'number' ? meta.naturalHeight : 1000;
+      for (const zoneId of logo.zonePanelIds ?? []) {
+        const panel = panelGeoms.find((p) => p.id === zoneId);
+        if (!panel || !VEHICLE_VIEWS.has(panel.view)) continue;
+        if (hasElementForAsset(doc, panel.id, logo.assetId)) continue; // idempotent
+        const box = viewBbox([panel]);
+        if (!box) continue;
+        const placement = centeredPlacement(box, naturalW, naturalH);
+        const el = factory.newImage(
+          {
+            id: mint('logo'),
+            panelId: factory.panelId(panel.id),
+            view: panel.view as VehicleView,
+            assetId: factory.assetId(logo.assetId),
+            srcUrl: logoSrcUrl,
+            naturalW,
+            naturalH,
+          },
+          {
+            x: placement.x,
+            y: placement.y,
+            scaleX: placement.scale,
+            scaleY: placement.scale,
+            locked: false,
+            raster: logoAsset.mimeType !== 'image/svg+xml',
+            name: 'Your logo',
+          },
+        );
+        insertElement(doc, el, 'front');
+        changed = true;
       }
     }
 
@@ -274,6 +315,16 @@ async function insertIntoCanvas(
     // more against the fresh rev.
   }
   return false;
+}
+
+/** True when the panel already holds a LOCKED image layer with this name. */
+function hasLockedLayerNamed(doc: CanvasDocument, panelId: string, name: string): boolean {
+  const panelState = doc.panels[panelId];
+  if (!panelState) return false;
+  return panelState.elementIds.some((id) => {
+    const el = doc.elements[id];
+    return el?.type === 'image' && el.locked && el.name === name;
+  });
 }
 
 /** True when the panel already holds an image element for this asset. */

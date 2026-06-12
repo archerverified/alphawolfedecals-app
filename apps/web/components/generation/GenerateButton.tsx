@@ -17,8 +17,11 @@ import { WaitlistSheet } from './WaitlistSheet';
 interface Props {
   projectId: string;
   creditBalance: number;
-  /** Flush pending autosaves so the run snapshots the latest brief. */
-  beforeStart?: () => void;
+  /**
+   * Flush pending autosaves so the run snapshots the latest brief. AWAITED
+   * before the start action — the snapshot must not race the brief PATCH.
+   */
+  beforeStart?: () => void | Promise<void>;
 }
 
 export function GenerateButton({ projectId, creditBalance, beforeStart }: Props) {
@@ -34,7 +37,7 @@ export function GenerateButton({ projectId, creditBalance, beforeStart }: Props)
     }
     setBusy(true);
     try {
-      beforeStart?.();
+      await beforeStart?.();
       const clientToken = crypto.randomUUID();
       const res = await startGenerationRunAction(projectId, clientToken);
       if (res.ok) {

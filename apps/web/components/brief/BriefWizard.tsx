@@ -99,7 +99,7 @@ export function BriefWizard({
 
   const saveBrief = useCallback(() => {
     setSavingBrief(true);
-    autosave.flushNow();
+    void autosave.flushNow();
     void (async () => {
       try {
         const res = await snapshotBriefAction({ projectId, briefId });

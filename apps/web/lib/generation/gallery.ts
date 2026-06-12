@@ -3,6 +3,9 @@
 // these. The shapes mirror GenerationRunSummary (lib/actions/generation.ts)
 // and RunSnapshot (lib/ai/run-pipeline.ts) without importing server modules.
 
+// Mirrors VIEW_ORDER (packages/db svg/numbering.ts — THE canonical order).
+// Duplicated here because this module ships in the CLIENT bundle and must not
+// import @alphawolf/db; keep in sync when a view is ever added.
 export const VIEW_LABELS: ReadonlyArray<{ key: string; label: string }> = [
   { key: 'front', label: 'Front' },
   { key: 'driver', label: 'Driver side' },
@@ -115,9 +118,11 @@ export function progressCopy(snap: ProgressSnapshot): string {
     return 'Preparing your final design…';
   }
   if (snap.status === 'rendering') {
+    // Jobs are per-(concept, view) units — an initial run has views × 3
+    // concepts of them, so the copy says "renders", never "views".
     const total = snap.jobs.length;
     const done = snap.jobs.filter((j) => j.status === 'complete').length;
-    const progress = total > 0 ? ` — ${done} of ${total} views done` : '';
+    const progress = total > 0 ? ` — ${done} of ${total} renders done` : '';
     if (snap.kind === 'initial') return `Painting your concepts${progress}…`;
     if (snap.kind === 'iteration') return `Repainting the views your tweak touches${progress}…`;
     return `Rendering at full quality${progress}…`;

@@ -39,8 +39,14 @@ export interface SpecPackData {
     lengthMm: number;
     widthMm: number;
     heightMm: number;
-    /** PNG bytes of the template render; absent → text-only cover. */
+    /** Hero image bytes (template render or AI final); absent → text-only cover. */
     heroPng?: Uint8Array;
+    /**
+     * Encoding of heroPng. The fal provider returns JPEG by default, so AI
+     * final heroes are usually 'jpg'; template thumbs are 'png'. Defaults to
+     * 'png' when omitted.
+     */
+    heroKind?: 'png' | 'jpg';
   };
   panels: BriefPanel[];
   brief: BriefData;
@@ -192,6 +198,12 @@ function includedPanels(data: SpecPackData): BriefPanel[] {
   return ids === null ? data.panels : data.panels.filter((p) => ids.includes(p.id));
 }
 
+/** Embed the hero respecting its encoding (AI finals from fal are JPEG). */
+function embedHero(doc: PDFDocument, data: SpecPackData) {
+  const bytes = data.vehicle.heroPng!;
+  return data.vehicle.heroKind === 'jpg' ? doc.embedJpg(bytes) : doc.embedPng(bytes);
+}
+
 export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   // AI provenance + identity metadata (PRD v1.1 §4.4 requirement).
@@ -247,7 +259,7 @@ export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
 
     if (data.vehicle.heroPng) {
       try {
-        const img = await doc.embedPng(data.vehicle.heroPng);
+        const img = await embedHero(doc, data);
         const maxW = PAGE_W - 2 * MARGIN;
         const maxH = 300;
         const scale = Math.min(maxW / img.width, maxH / img.height);
@@ -298,7 +310,7 @@ export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
     y -= 10;
     if (v.heroPng) {
       try {
-        const img = await doc.embedPng(v.heroPng);
+        const img = await embedHero(doc, data);
         const maxW = PAGE_W - 2 * MARGIN;
         const maxH = y - 120;
         const scale = Math.min(maxW / img.width, maxH / img.height, 1.2);

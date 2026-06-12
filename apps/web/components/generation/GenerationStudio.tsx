@@ -75,11 +75,28 @@ export function GenerationStudio({
   const [confirmConcept, setConfirmConcept] = useState<ConceptCard | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // Final runs whose editor/export handoff already ran (or is running) this
+  // session — the sweep effect below retries on failure and on every visit.
   const finalizedRef = useRef<Set<string>>(new Set());
+  // Runs this session actually WATCHED in a non-terminal state — money/result
+  // toasts fire only for those, so revisiting a stale ?run= URL of a long-
+  // finished run never re-announces a refund or a fresh final.
+  const watchedRunsRef = useRef<Set<string>>(new Set());
+  // First-seen preview URL per (run, concept, view): every poll snapshot
+  // mints FRESH signed URLs, and a changing src would re-download the same
+  // preview on every 2.5s tick.
+  const livePreviewUrlsRef = useRef<Map<string, string>>(new Map());
 
   useEffect(() => {
     capture('generation_viewed', { projectId });
   }, [projectId]);
+
+  // The Generate button can land here via a SAME-ROUTE push (?run=… from the
+  // studio's own empty state) — the component instance survives, so useState's
+  // initializer never re-reads the prop. Arm the poll whenever it changes.
+  useEffect(() => {
+    if (initialRunId) setActiveRunId(initialRunId);
+  }, [initialRunId]);
 
   const refreshContext = useCallback(async () => {
     try {
@@ -109,28 +126,23 @@ export function GenerationStudio({
           return;
         }
         setSnapshot(res.run);
-        if (res.run.status === 'complete' || res.run.status === 'failed') {
+        if (res.run.status !== 'complete' && res.run.status !== 'failed') {
+          watchedRunsRef.current.add(res.run.runId);
+        } else {
           setActiveRunId(null);
           setPendingConceptKey(null);
-          if (res.run.status === 'failed') {
+          // Toasts only for runs we watched happen — a stale ?run= URL whose
+          // run finished long ago must not re-announce results on revisit.
+          const watched = watchedRunsRef.current.has(res.run.runId);
+          if (res.run.status === 'failed' && watched) {
             toast.error(
               "That run didn't work out. Your credit is back in your balance — try again.",
             );
-          } else if (res.run.kind === 'final' && !finalizedRef.current.has(res.run.runId)) {
-            // Editor/export handoff (D6) — server-side idempotent; the toast
-            // tells the customer where their design went.
-            finalizedRef.current.add(res.run.runId);
-            try {
-              const fin = await finalizeFinalRunAction(projectId, res.run.runId);
-              if (fin.ok) {
-                toast.success(
-                  'Final design ready! It’s in your editor and on your spec pack cover.',
-                );
-              }
-            } catch {
-              // Handoff is retried on next visit; the renders are already safe.
-            }
+          } else if (res.run.status === 'complete' && res.run.kind === 'final' && watched) {
+            toast.success('Final design ready! It’s in your editor and on your spec pack cover.');
           }
+          // refreshContext surfaces the final run → the handoff sweep effect
+          // below performs the (idempotent) editor/export registration.
           await refreshContext();
           if (res.run.status === 'complete') setSnapshot(null);
         }
@@ -151,6 +163,27 @@ export function GenerationStudio({
 
   const concepts = useMemo(() => deriveConcepts(ctx.runs), [ctx.runs]);
 
+  // Editor/export handoff sweep (D6): every complete FINAL run gets its
+  // (idempotent, server-side) finalize call — on live completion AND on every
+  // later visit, so a crash or closed tab mid-handoff is repaired the next
+  // time the customer opens the studio. Silent: the result toast belongs to
+  // the watched completion above.
+  useEffect(() => {
+    for (const c of concepts) {
+      const runId = c.finalRunId;
+      if (!runId || finalizedRef.current.has(runId)) continue;
+      finalizedRef.current.add(runId); // claims it; released on failure
+      void (async () => {
+        try {
+          const fin = await finalizeFinalRunAction(projectId, runId);
+          if (!fin.ok) finalizedRef.current.delete(runId);
+        } catch {
+          finalizedRef.current.delete(runId); // next refresh/visit retries
+        }
+      })();
+    }
+  }, [concepts, projectId]);
+
   const views = useMemo(() => {
     const keys = new Set<string>(Object.keys(stockViews));
     for (const c of concepts) {
@@ -163,8 +196,15 @@ export function GenerationStudio({
   const view = selectedView && views.includes(selectedView) ? selectedView : (views[0] ?? null);
 
   const runBusy = Boolean(activeRunId);
-  const initialRunActive =
-    runBusy && (snapshot === null || (snapshot.kind === 'initial' && snapshot.status !== 'failed'));
+
+  /** Stable preview URL for the live grid (see livePreviewUrlsRef). */
+  const stableLiveUrl = (runId: string, conceptKey: string, viewKey: string, url: string) => {
+    const key = `${runId}:${conceptKey}:${viewKey}`;
+    const cached = livePreviewUrlsRef.current.get(key);
+    if (cached) return cached;
+    livePreviewUrlsRef.current.set(key, url);
+    return url;
+  };
 
   const startIteration = useCallback(
     async (concept: ConceptCard) => {
@@ -288,17 +328,18 @@ export function GenerationStudio({
       ) : null}
 
       {/* Live first-run preview: direction titles + thumbnails as they land. */}
-      {runBusy && initialRunActive && snapshot?.directions?.length ? (
+      {runBusy && snapshot?.kind === 'initial' && snapshot.directions?.length ? (
         <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           {snapshot.directions.map((d) => {
             const imgs = (snapshot.images ?? []).filter((i) => i.conceptKey === d.key);
+            const first = imgs[0];
             return (
               <div key={d.key} className="rounded-lg border border-zinc-200 bg-white p-3">
                 <p className="text-sm font-medium">{d.title}</p>
                 <p className="mb-2 text-xs text-zinc-500">{d.summary}</p>
-                {imgs.length > 0 ? (
+                {first ? (
                   <img
-                    src={imgs[0]!.previewUrl}
+                    src={stableLiveUrl(snapshot.runId, d.key, first.view, first.previewUrl)}
                     alt={`${d.title} — first preview`}
                     className="w-full rounded-md"
                   />

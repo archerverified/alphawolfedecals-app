@@ -19,7 +19,14 @@ export type BriefSaveStatus = 'idle' | 'pending' | 'saving' | 'saved' | 'error';
 export interface BriefAutosaveHandle {
   status: BriefSaveStatus;
   lastSavedAt: number | null;
-  flushNow: () => void;
+  /**
+   * Save immediately. The returned promise resolves when THIS save attempt
+   * settles, so callers that snapshot the brief server-side right after
+   * (Generate, Goal 7) can await it instead of racing the PATCH. When a save
+   * is already in flight the promise resolves early and the queued follow-up
+   * save carries the newest data — a best-effort, not a barrier.
+   */
+  flushNow: () => Promise<void>;
 }
 
 interface Params {
@@ -144,9 +151,7 @@ export function useBriefAutosave({
   }, [doSave]);
   scheduleRef.current = schedule;
 
-  const flushNow = useCallback(() => {
-    void doSave();
-  }, [doSave]);
+  const flushNow = useCallback(() => doSave(), [doSave]);
 
   useEffect(() => {
     if (data === savedDataRef.current) return;

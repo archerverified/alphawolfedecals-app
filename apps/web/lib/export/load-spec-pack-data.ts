@@ -3,6 +3,7 @@
 // authenticated userId and every read is RLS-scoped (withUser) — a
 // non-owner's loads return null and the route 404s.
 
+import * as Sentry from '@sentry/nextjs';
 import { briefs, generation, projects, storage, vehicles } from '@alphawolf/db';
 import { parseBriefData, type BriefData } from '@/lib/brief/schema';
 import type { AiProvenance, SpecPackData, SpecPackPhoto } from './spec-pack';
@@ -34,25 +35,32 @@ async function fetchHeroPng(url: string | null): Promise<Uint8Array | undefined>
 
 // Goal 7 D6: the pack cover prefers the customer's CHOSEN design — the newest
 // complete FINAL run's largest render — over the stock template thumb. PNG
-// only (the builder embeds PNG); a non-PNG final falls back to the template
+// and JPEG only (what pdf-lib can embed; the fal provider returns JPEG by
+// default, the mock returns PNG); a webp final falls back to the template
 // hero rather than failing the pack.
 async function loadFinalHero(
   userId: string,
   projectId: string,
-): Promise<{ png: Uint8Array; provenance: AiProvenance } | null> {
+): Promise<{ png: Uint8Array; kind: 'png' | 'jpg'; provenance: AiProvenance } | null> {
   try {
     const runs = await generation.listRunsForProject(userId, projectId);
     const finalRun = runs.find(
       (r) => r.kind === 'final' && r.status === 'complete' && r.images.length > 0,
     );
     if (!finalRun) return null;
-    const candidates = finalRun.images.filter((i) => i.storagePath.endsWith('.png'));
+    const candidates = finalRun.images.filter(
+      (i) => i.storagePath.endsWith('.png') || i.storagePath.endsWith('.jpg'),
+    );
     if (candidates.length === 0) return null;
     const hero = candidates.reduce((a, b) => (b.width * b.height > a.width * a.height ? b : a));
     const bytes = await storage.downloadAssetObject(hero.storagePath);
+    // The pack is emailed as an attachment (B2C-010) — an outsized render must
+    // not balloon the PDF. Past the cap, fall back to the template thumb.
+    if (bytes.byteLength > 8 * 1024 * 1024) return null;
     const prov = (hero.provenance ?? {}) as Record<string, unknown>;
     return {
       png: new Uint8Array(bytes),
+      kind: hero.storagePath.endsWith('.jpg') ? ('jpg' as const) : ('png' as const),
       provenance: {
         provider: typeof prov.provider === 'string' ? prov.provider : finalRun.provider,
         model: typeof prov.model === 'string' ? prov.model : finalRun.model,
@@ -60,8 +68,11 @@ async function loadFinalHero(
         promptVersion: typeof prov.promptVersion === 'string' ? prov.promptVersion : '',
       },
     };
-  } catch {
-    // A missing object / transient storage error never blocks the pack.
+  } catch (error) {
+    // A missing object / transient storage error never blocks the pack — but
+    // it must not be INVISIBLE either (e.g. generation tables missing on a
+    // surface = the whole hero feature silently dead).
+    Sentry.captureException(error, { tags: { feature: 'spec-pack-hero' } });
     return null;
   }
 }
@@ -125,6 +136,7 @@ export async function loadSpecPackData(
       widthMm: vehicle.widthMm,
       heightMm: vehicle.heightMm,
       heroPng,
+      heroKind: finalHero?.kind ?? 'png',
     },
     panels: vehicle.panels.map((p) => ({
       id: p.id,

@@ -1,5 +1,6 @@
-// Pure placement math for the final-run editor handoff (Goal 7 D6). Server
-// and unit tests share these; no DB or storage imports.
+// Pure placement math for the final-run editor handoff (Goal 7 D6). Used by
+// the finalize server action and unit tests; no storage or Prisma access
+// (outlineBbox is a pure helper re-exported by @alphawolf/db).
 //
 // Coordinate model (ADR-0006 + CanvasStage): element x/y are "panel-local" in
 // the schema's words, but panel groups add NO translation of their own — the
@@ -8,7 +9,7 @@
 // generated view render therefore covers the view when placed at the view's
 // content-bbox origin and uniformly scaled to cover the bbox.
 
-import { geometry } from '@alphawolf/canvas';
+import { outlineBbox } from '@alphawolf/db';
 
 export type PanelGeom = {
   id: string;
@@ -19,20 +20,18 @@ export type PanelGeom = {
 
 export type Box = { minX: number; minY: number; width: number; height: number };
 
+// THE canonical degenerate-safe bbox policy (packages/db svg/numbering.ts) —
+// the same one panel numbering and layout sheets use, so placement can never
+// disagree with them about a malformed path.
 function panelBbox(p: PanelGeom): Box | null {
-  try {
-    const rings = geometry.parsePath(p.svgPath);
-    if (rings.length === 0) return null;
-    const b = geometry.bbox(rings);
-    const width = b.maxX - b.minX;
-    const height = b.maxY - b.minY;
-    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
-      return null;
-    }
-    return { minX: b.minX, minY: b.minY, width, height };
-  } catch {
+  const b = outlineBbox(p.svgPath);
+  if (!b) return null;
+  const width = b.maxX - b.minX;
+  const height = b.maxY - b.minY;
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
     return null;
   }
+  return { minX: b.minX, minY: b.minY, width, height };
 }
 
 /** Union content bbox of a view's panels (template space, mm×10). */

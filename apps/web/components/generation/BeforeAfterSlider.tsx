@@ -30,10 +30,9 @@ export function BeforeAfterSlider({ beforeUrl, afterUrl, alt }: Props) {
     setPos(Math.min(100, Math.max(0, next)));
   }, []);
 
-  const compare = Boolean(beforeUrl) && !beforeBroken;
-
-  if (!compare) {
-    // No stock render available — show the generated image plain.
+  if (!beforeUrl || beforeBroken) {
+    // No stock render available (or it 404'd) — show the generated image
+    // plain. Early return narrows beforeUrl to string below.
     return (
       <div className="relative overflow-hidden rounded-md bg-zinc-100" data-testid="before-after">
         {/* Signed/storage URLs — next/image's optimizer can't fetch them. */}
@@ -63,7 +62,7 @@ export function BeforeAfterSlider({ beforeUrl, afterUrl, alt }: Props) {
       }}
     >
       <img
-        src={beforeUrl ?? ''}
+        src={beforeUrl}
         alt=""
         aria-hidden
         className="block w-full"
