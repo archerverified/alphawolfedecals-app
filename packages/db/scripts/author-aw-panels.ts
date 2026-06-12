@@ -35,14 +35,12 @@ import {
   buildQcOverlaySvg,
   defaultAxisForView,
   mmPerUnitFor,
-  panelUnionBounds,
+  SHEET_FORMAT,
   validateOutlineSvg,
-  viewScanWindows,
   wrapSafeZoneFor,
   type OutlineViewSpec,
-  type QcOverlayView,
 } from '../src/svg/index.js';
-import { measureArtBounds } from './lib/art-bounds.js';
+import { buildMeasuredQcViews } from './lib/qc-views.js';
 import { setVehiclePanels, type PanelInput } from '../src/repos/vehicles.js';
 import { createSource, listForVehicle } from '../src/repos/template-sources.js';
 import { findUserByEmailForAuth } from '../src/repos/users.js';
@@ -98,9 +96,9 @@ async function wrappedSheetPng(vehicleId: string, storageKey: string): Promise<B
     .toBuffer();
 }
 
-// The wrapped sheets put their header band above y≈64 and the footer rule at
-// y≈988 — dimension callouts must stay inside that band.
-const SHEET_CONTENT_BAND = { top: 70, bottom: 984 };
+// The wrapped sheets carry the AW sheet chrome — dimension callouts must stay
+// inside the band between the header and the footer rule.
+const SHEET_CONTENT_BAND = SHEET_FORMAT.contentBand;
 
 async function overlaySvg(
   def: TemplateDef,
@@ -110,31 +108,12 @@ async function overlaySvg(
 ): Promise<string> {
   // AW panels are authored sheet-absolute (translate 0,0), so panel geometry
   // composites 1:1; callouts anchor on the measured ink extent of each view.
-  const byView = new Map<string, PanelInput[]>();
-  for (const p of panels) {
-    byView.set(p.view, [...(byView.get(p.view) ?? []), p]);
-  }
-  const views: QcOverlayView[] = [];
-  for (const [view, vp] of byView) {
-    const qcPanels = vp.map((p) => ({
-      name: p.name,
-      outlinePath: p.svgPath,
-      wrapSafePath: (p.wrapSafeZone as { clip_path: string }).clip_path,
-      installOrder: p.installOrder,
-    }));
-    const bounds = panelUnionBounds(qcPanels);
-    if (!bounds) continue;
-    views.push({ view, panels: qcPanels, artBounds: bounds });
-  }
-  const windows = viewScanWindows(
-    views.map((v) => ({ view: v.view, bounds: v.artBounds })),
-    def.viewBox,
-    SHEET_CONTENT_BAND,
-  );
-  const measured = await measureArtBounds(basePng, def.viewBox, windows);
-  for (const v of views) {
-    v.artBounds = measured[v.view] ?? v.artBounds;
-  }
+  const views = await buildMeasuredQcViews({
+    panels,
+    viewBox: def.viewBox,
+    band: SHEET_CONTENT_BAND,
+    basePng,
+  });
   return buildQcOverlaySvg({
     viewBox: def.viewBox,
     dims,
@@ -193,6 +172,7 @@ async function main(): Promise<void> {
       lengthMm: vehicle.lengthMm,
       widthMm: vehicle.widthMm,
       heightMm: vehicle.heightMm,
+      wheelbaseMm: vehicle.wheelbaseMm,
     };
 
     // Per-view calibration + wrap-safe generation.
@@ -255,12 +235,9 @@ async function main(): Promise<void> {
     // QC overlay.
     if (vehicle.svgStorageKey) {
       const base = await wrappedSheetPng(def.vehicleId, vehicle.svgStorageKey);
-      const overlay = await sharp(
-        Buffer.from(
-          await overlaySvg(def, panels, { ...dims, wheelbaseMm: vehicle.wheelbaseMm }, base),
-        ),
-        { density: 96 },
-      )
+      const overlay = await sharp(Buffer.from(await overlaySvg(def, panels, dims, base)), {
+        density: 96,
+      })
         .resize(1920, 1080, { fit: 'fill' })
         .png()
         .toBuffer();
@@ -295,7 +272,7 @@ async function main(): Promise<void> {
           yearLabel: String(vehicle.year),
           code: vehicle.alphaWolfTplId,
           scaleDenom: vehicle.scaleDenom,
-          dims: { ...dims, wheelbaseMm: vehicle.wheelbaseMm },
+          dims,
         },
         panels,
       );

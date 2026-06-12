@@ -15,8 +15,14 @@
 // pure string assembly.
 
 import { geometry } from '@alphawolf/canvas';
-import { defaultAxisForView } from './calibrate.js';
-import { brand, dimensionCallout, dimensionText, renderDimensionCallout } from './theme.js';
+import {
+  annotationsForView,
+  brand,
+  dimensionCallout,
+  escXml,
+  r2,
+  renderDimensionCallout,
+} from './theme.js';
 
 export type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 
@@ -50,19 +56,10 @@ export type QcOverlayInput = {
 };
 
 const PANEL_FILL = '#2563eb';
-const XML_ESCAPES: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&apos;',
-};
-const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => XML_ESCAPES[c]!);
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 /** Union bbox of a view's panel outlines in sheet coordinates. Null if none parse. */
 export function panelUnionBounds(
-  panels: QcPanel[],
+  panels: Array<{ outlinePath: string }>,
   translate?: { x: number; y: number },
 ): Bounds | null {
   const tx = translate?.x ?? 0;
@@ -72,8 +69,8 @@ export function panelUnionBounds(
   let maxX = -Infinity;
   let maxY = -Infinity;
   for (const p of panels) {
-    // Degenerate paths yield zero bboxes that would anchor the union at the
-    // origin — same filter as the layout sheet's viewBounds.
+    // parsePath never throws — but a degenerate path yields an empty/short
+    // ring whose zero-bbox would silently anchor the union at the origin.
     const rings = geometry.parsePath(p.outlinePath).filter((r) => r.length >= 3);
     if (rings.length === 0) continue;
     const b = geometry.bbox(rings);
@@ -86,10 +83,12 @@ export function panelUnionBounds(
 }
 
 /**
- * Per-view raster scan windows: each view's panel bbox grown by a margin (art
- * extends past panels — wheels, roof, bumpers), clipped to the sheet and
- * against neighbouring views at the midline between their panel bboxes so one
- * view's wheels never leak into another view's measurement.
+ * Per-view raster scan windows: each view's panel bbox grown sideways and the
+ * full content band vertically (art runs far past panels — glasshouse above,
+ * wheels below), clipped against neighbouring views at the midline between
+ * their panel bboxes. The windows are ASSIGNMENT regions for the measured ink
+ * components — midline clipping decides ownership, the component analysis
+ * keeps protruding drawings whole (see scripts/lib/art-bounds.ts).
  */
 export function viewScanWindows(
   views: Array<{ view: string; bounds: Bounds }>,
@@ -97,19 +96,12 @@ export function viewScanWindows(
   contentBand?: { top: number; bottom: number },
 ): Record<string, Bounds> {
   const u = viewBox.width / 1920;
-  const grow = (v: { view: string; bounds: Bounds }): Bounds => {
-    // Art can run far past the panel union — wheels and bumpers below/beside
-    // it, and the entire glasshouse above it (glass isn't a panel). Extend
-    // each window the full content band vertically and generously sideways;
-    // the midline clipping below is what actually separates neighbours.
-    const mx = 200 * u;
-    return {
-      minX: Math.max(0, v.bounds.minX - mx),
-      minY: contentBand?.top ?? 0,
-      maxX: Math.min(viewBox.width, v.bounds.maxX + mx),
-      maxY: contentBand?.bottom ?? viewBox.height,
-    };
-  };
+  const grow = (v: { view: string; bounds: Bounds }): Bounds => ({
+    minX: Math.max(0, v.bounds.minX - 200 * u),
+    minY: contentBand?.top ?? 0,
+    maxX: Math.min(viewBox.width, v.bounds.maxX + 200 * u),
+    maxY: contentBand?.bottom ?? viewBox.height,
+  });
   const wins = views.map((v) => ({ view: v.view, b: v.bounds, w: grow(v) }));
   for (let i = 0; i < wins.length; i++) {
     for (let j = i + 1; j < wins.length; j++) {
@@ -137,80 +129,103 @@ export function viewScanWindows(
 
 function calloutsFor(view: QcOverlayView, input: QcOverlayInput, u: number): string {
   const t = dimensionCallout;
-  const { dims } = input;
   const band = input.contentBand ?? { top: 0, bottom: input.viewBox.height };
   const art = view.artBounds;
-  const axis = defaultAxisForView(view.view);
+  const anns = annotationsForView(view.view, input.dims);
+  const length = anns.find((a) => a.kind === 'length');
+  const wheelbase = anns.find((a) => a.kind === 'wheelbase');
+  const height = anns.find((a) => a.kind === 'height');
   const parts: string[] = [];
 
-  if (axis === 'length' || axis === 'height') {
-    // Profile (and top) views: overall length below the art, wheelbase under it.
-    // The callout stack must clear BOTH the sheet chrome and any view whose
-    // art sits below this one (stacked profile views): the floor is the
-    // highest such obstruction.
+  if (length) {
+    // Obstruction limits above and below: the sheet chrome plus any
+    // neighbouring view's art that horizontally overlaps this one.
     let floor = band.bottom;
+    let ceiling = band.top;
     for (const w of input.views) {
       if (w === view) continue;
       const o = w.artBounds;
       const overlapsX = o.minX < art.maxX && art.minX < o.maxX;
-      if (overlapsX && o.minY > art.maxY) floor = Math.min(floor, o.minY - 8 * u);
+      if (!overlapsX) continue;
+      if (o.minY > art.maxY) floor = Math.min(floor, o.minY - 8 * u);
+      if (o.maxY < art.minY) ceiling = Math.max(ceiling, o.maxY + 8 * u);
     }
     // Each extra row needs rowGap; a row's text needs label.gap + ~0.6 em
-    // below its line. Drop the wheelbase row on views too tight to fit it —
-    // it still renders under any profile view with room.
+    // past its line. Prefer below the art (the classic spot); flip above only
+    // when even a single row cannot fit below. The wheelbase row is dropped
+    // on views too tight to fit it — it still renders wherever there is room
+    // and always on the layout sheet.
     const minStack = (rows: number): number =>
       (8 + (rows - 1) * t.rowGap + t.label.gap + t.label.fontSize * 0.6) * u;
-    const wheelbase = Boolean(dims.wheelbaseMm) && art.maxY + minStack(2) <= floor;
-    const rows = wheelbase ? 2 : 1;
+    const below = art.maxY + minStack(1) <= floor;
+    const side: 1 | -1 = below ? 1 : -1;
+    const edge = below ? art.maxY : art.minY;
+    const room = below ? floor - art.maxY : art.minY - ceiling;
+    const withWheelbase = Boolean(wheelbase) && minStack(2) <= room;
+    const rows = withWheelbase ? 2 : 1;
     const stack = (t.offset + (rows - 1) * t.rowGap + t.label.gap + t.label.fontSize + 4) * u;
-    // Pull the first line up if the sheet leaves less room than the default
-    // offset wants.
-    const squeeze = Math.max(0, art.maxY + stack - floor);
-    const offset = Math.max(8, t.offset - squeeze / u);
+    const offset = Math.max(8, t.offset - Math.max(0, stack - room) / u);
     parts.push(
       renderDimensionCallout({
         orientation: 'horizontal',
         span: [art.minX, art.maxX],
-        edge: art.maxY,
-        side: 1,
-        label: dimensionText('Overall length', dims.lengthMm),
+        edge,
+        side,
+        label: length.label,
         unitScale: u,
         offsetPx: offset,
       }),
     );
-    if (wheelbase && dims.wheelbaseMm) {
+    if (withWheelbase && wheelbase) {
       // Axle positions aren't in the data model, so the wheelbase row is a
       // calibrated span centred under the length — drawn without extension
       // lines so it doesn't claim specific anchor points on the art.
-      const ratio = dims.wheelbaseMm / dims.lengthMm;
       const mid = (art.minX + art.maxX) / 2;
-      const half = ((art.maxX - art.minX) * ratio) / 2;
+      const half = ((art.maxX - art.minX) * wheelbase.ratio) / 2;
       parts.push(
         renderDimensionCallout({
           orientation: 'horizontal',
           span: [mid - half, mid + half],
-          edge: art.maxY,
-          side: 1,
-          label: dimensionText('Wheelbase', dims.wheelbaseMm),
+          edge,
+          side,
+          label: wheelbase.label,
           unitScale: u,
           offsetPx: offset + t.rowGap,
           extensionLines: false,
         }),
       );
     }
-  } else {
-    // Front/rear elevations: overall height beside the art. Prefer the left
-    // side; fall back to the right when the art sits at the sheet edge.
+  }
+
+  if (height) {
+    // Free lateral room per side: the sheet edge or the nearest neighbouring
+    // view's art that vertically overlaps this one. Prefer the left side;
+    // take the right when it has the room (or more of it).
+    let leftEdge = 0;
+    let rightEdge = input.viewBox.width;
+    for (const w of input.views) {
+      if (w === view) continue;
+      const o = w.artBounds;
+      const overlapsY = o.minY < art.maxY && art.minY < o.maxY;
+      if (!overlapsY) continue;
+      if (o.maxX <= art.minX) leftEdge = Math.max(leftEdge, o.maxX + 8 * u);
+      if (o.minX >= art.maxX) rightEdge = Math.min(rightEdge, o.minX - 8 * u);
+    }
     const room = (t.offset + t.extensionOvershoot + t.label.gap + t.label.fontSize + 4) * u;
-    const side: 1 | -1 = art.minX - room >= 0 ? -1 : 1;
+    const leftRoom = art.minX - leftEdge;
+    const rightRoom = rightEdge - art.maxX;
+    const side: 1 | -1 = leftRoom >= room || leftRoom >= rightRoom ? -1 : 1;
+    const avail = side === -1 ? leftRoom : rightRoom;
+    const offset = Math.max(8, t.offset - Math.max(0, room - avail) / u);
     parts.push(
       renderDimensionCallout({
         orientation: 'vertical',
         span: [art.minY, art.maxY],
         edge: side === -1 ? art.minX : art.maxX,
         side,
-        label: dimensionText('Overall height', dims.heightMm),
+        label: height.label,
         unitScale: u,
+        offsetPx: offset,
       }),
     );
   }
@@ -233,15 +248,15 @@ export function buildQcOverlaySvg(input: QcOverlayInput): string {
     for (const p of v.panels) {
       // The blue zone rendering is unchanged by design — only the red panel
       // boxes were removed and the label switched from red to sheet ink.
-      lines.push(`<path d="${esc(p.outlinePath)}" fill="${PANEL_FILL}" fill-opacity="0.13"/>`);
+      lines.push(`<path d="${escXml(p.outlinePath)}" fill="${PANEL_FILL}" fill-opacity="0.13"/>`);
       lines.push(
-        `<path d="${esc(p.wrapSafePath)}" fill="none" stroke="${PANEL_FILL}" stroke-width="${r2(1.5 * u)}" stroke-dasharray="${r2(7 * u)} ${r2(5 * u)}"/>`,
+        `<path d="${escXml(p.wrapSafePath)}" fill="none" stroke="${PANEL_FILL}" stroke-width="${r2(1.5 * u)}" stroke-dasharray="${r2(7 * u)} ${r2(5 * u)}"/>`,
       );
       const rings = geometry.parsePath(p.outlinePath).filter((r) => r.length >= 3);
       if (rings.length > 0) {
         const b = geometry.bbox(rings);
         lines.push(
-          `<text x="${r2((b.minX + b.maxX) / 2)}" y="${r2((b.minY + b.maxY) / 2)}" text-anchor="middle" font-size="${r2(17 * u)}" font-family="Helvetica, Arial, sans-serif" font-weight="700" fill="${brand.ink}">${esc(`${p.installOrder}. ${p.name}`)}</text>`,
+          `<text x="${r2((b.minX + b.maxX) / 2)}" y="${r2((b.minY + b.maxY) / 2)}" text-anchor="middle" font-size="${r2(17 * u)}" font-family="Helvetica, Arial, sans-serif" font-weight="700" fill="${brand.ink}">${escXml(`${p.installOrder}. ${p.name}`)}</text>`,
         );
       }
     }

@@ -9,8 +9,16 @@
 // Pure string assembly; rasterisation (PNG) happens in storage.uploadLayoutSheet.
 
 import { geometry } from '@alphawolf/canvas';
-import { defaultAxisForView } from './calibrate.js';
-import { brand, dimensionCallout, dimensionText, renderDimensionCallout } from './theme.js';
+import { panelUnionBounds } from './qc-overlay.js';
+import {
+  annotationsForView,
+  brand,
+  dimensionCallout,
+  escXml as esc,
+  r2,
+  renderDimensionCallout,
+  type DimensionAnnotation,
+} from './theme.js';
 
 const SHEET_W = 1920;
 const SHEET_H = 1080;
@@ -18,20 +26,23 @@ const HEADER_H = 64;
 const FOOTER_Y = 988;
 const CONTENT = { x: 60, y: 100, w: SHEET_W - 120, h: FOOTER_Y - 140 };
 
+/**
+ * The AW sheet format, for consumers that draw against (or composite over)
+ * sheets in this layout: canonical size plus the vertical band between the
+ * header and the footer rule that content/annotations must stay inside.
+ * Values are sheet px — scale by viewBoxHeight / SHEET_FORMAT.height when the
+ * art's viewBox uses other units.
+ */
+export const SHEET_FORMAT = {
+  width: SHEET_W,
+  height: SHEET_H,
+  contentBand: { top: HEADER_H + 6, bottom: FOOTER_Y - 4 },
+} as const;
+
 const INK = brand.ink;
 const MUTED = '#8b93a7';
 const PANEL_STROKE = '#15181d';
 const WRAP_SAFE = '#2563eb';
-
-const XML_ESCAPES: Record<string, string> = {
-  '&': '&amp;',
-  '<': '&lt;',
-  '>': '&gt;',
-  '"': '&quot;',
-  "'": '&apos;',
-};
-const esc = (s: string): string => s.replace(/[&<>"']/g, (c) => XML_ESCAPES[c]!);
-const r2 = (n: number): number => Math.round(n * 100) / 100;
 
 export type LayoutSheetPanel = {
   name: string;
@@ -39,17 +50,6 @@ export type LayoutSheetPanel = {
   wrapSafePath: string;
   installOrder: number;
 };
-
-/**
- * Pattern-sheet dimension annotation for one view. Geometry policy lives in
- * the renderer: `length` spans the view's content bbox below it; `wheelbase`
- * and `height` are calibrated spans (bbox span × ratio) — wheelbase centred
- * under the length row, height as a vertical callout beside the view.
- */
-export type DimensionAnnotation =
-  | { kind: 'length'; label: string }
-  | { kind: 'wheelbase'; label: string; ratio: number }
-  | { kind: 'height'; label: string; ratio: number };
 
 export type LayoutSheetView = {
   view: string;
@@ -74,25 +74,6 @@ export type LayoutSheetInput = {
 };
 
 type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
-
-function viewBounds(view: LayoutSheetView): Bounds | null {
-  let minX = Infinity;
-  let minY = Infinity;
-  let maxX = -Infinity;
-  let maxY = -Infinity;
-  for (const p of view.panels) {
-    // parsePath never throws — but a degenerate path yields an empty/short ring
-    // whose zero-bbox would silently anchor the union at the origin. Filter.
-    const rings = geometry.parsePath(p.outlinePath).filter((r) => r.length >= 3);
-    if (rings.length === 0) continue;
-    const b = geometry.bbox(rings);
-    minX = Math.min(minX, b.minX + view.translate.x);
-    minY = Math.min(minY, b.minY + view.translate.y);
-    maxX = Math.max(maxX, b.maxX + view.translate.x);
-    maxY = Math.max(maxY, b.maxY + view.translate.y);
-  }
-  return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;
-}
 
 // --- assembly from panel rows -------------------------------------------------
 // Panel rows store view-local geometry only (no sheet placement), so views are
@@ -119,35 +100,6 @@ export type LayoutPanelRow = {
   wrapSafeZone: unknown;
   installOrder: number;
 };
-
-// Which annotations a view carries (Archer, 2026-06-12): overall length below
-// profile/top views (+ wheelbase when known), overall height beside front/rear
-// elevations. Height/wheelbase spans are calibrated off the view's horizontal
-// content span, which the panel union approximates within a few percent (the
-// known panels-stop-short-of-bumpers shortfall — see calibrate.ts).
-function annotationsFor(view: string, dims: LayoutSheetMeta['dims']): DimensionAnnotation[] {
-  const axis = defaultAxisForView(view);
-  if (axis === 'width') {
-    return [
-      {
-        kind: 'height',
-        label: dimensionText('Overall height', dims.heightMm),
-        ratio: dims.heightMm / dims.widthMm,
-      },
-    ];
-  }
-  const out: DimensionAnnotation[] = [
-    { kind: 'length', label: dimensionText('Overall length', dims.lengthMm) },
-  ];
-  if (dims.wheelbaseMm) {
-    out.push({
-      kind: 'wheelbase',
-      label: dimensionText('Wheelbase', dims.wheelbaseMm),
-      ratio: dims.wheelbaseMm / dims.lengthMm,
-    });
-  }
-  return out;
-}
 
 const titleCase = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
 
@@ -189,7 +141,7 @@ export function assembleLayoutSheetFromRows(
         wrapSafePath: (p.wrapSafeZone as { clip_path?: string } | null)?.clip_path ?? p.svgPath,
         installOrder: p.installOrder,
       })),
-      annotations: annotationsFor(view, meta.dims),
+      annotations: annotationsForView(view, meta.dims),
     });
     cursorX += maxX - minX + VIEW_GUTTER;
   }
@@ -212,7 +164,7 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
   // Union bounds of all placed view content, with headroom below each view
   // for its label + dimension callout.
   const perView = input.views
-    .map((v) => ({ v, b: viewBounds(v) }))
+    .map((v) => ({ v, b: panelUnionBounds(v.panels, v.translate) }))
     .filter((x): x is { v: LayoutSheetView; b: Bounds } => x.b !== null);
   if (perView.length === 0) {
     throw new Error('[svg] buildLayoutSheetSvg: no drawable panel content');
@@ -237,18 +189,23 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
 
   // Sheet-pixel room reserved around the content: below for the view labels +
   // horizontal dimension rows, left when the leftmost view carries a vertical
-  // height callout. Constants are sheet px, so the annotation style stays the
-  // same size regardless of the art's unit scale.
+  // height callout. Derived from the theme tokens so a style tune cannot
+  // outgrow the reservation; constants are sheet px, so the annotation style
+  // stays the same size regardless of the art's unit scale.
+  const t = dimensionCallout;
   const VIEW_LABEL_OFFSET = 30;
   const LENGTH_ROW_OFFSET = 56;
+  const VERT_CALLOUT_ROOM = t.offset + t.extensionOvershoot + t.label.gap + t.label.fontSize + 11;
   const roomBottom = Math.max(
     ...perView.map(({ v }) => {
       const rows = v.annotations?.filter((x) => x.kind !== 'height').length ?? 0;
-      return rows > 0 ? LENGTH_ROW_OFFSET + (rows - 1) * 44 + 40 : 50;
+      return rows > 0
+        ? LENGTH_ROW_OFFSET + (rows - 1) * t.rowGap + t.label.gap + t.label.fontSize + 10
+        : VIEW_LABEL_OFFSET + 20;
     }),
   );
   const leftmost = perView.reduce((m, x) => (x.b.minX < m.b.minX ? x : m), perView[0]!);
-  const roomLeft = leftmost.v.annotations?.some((x) => x.kind === 'height') ? 80 : 0;
+  const roomLeft = leftmost.v.annotations?.some((x) => x.kind === 'height') ? VERT_CALLOUT_ROOM : 0;
 
   const cw = union.maxX - union.minX;
   const ch = union.maxY - union.minY;
@@ -347,6 +304,18 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
         );
       } else {
         const half = ((b.maxX - b.minX) * ann.ratio) / 2;
+        // Mid-row views live off the gutter, not the reserved left room —
+        // squeeze the callout toward the view when the previous view is close
+        // (large unit scales shrink the fixed content-unit gutter).
+        let prevMaxX = -Infinity;
+        for (const o of perView) {
+          if (o.b.maxX <= b.minX) prevMaxX = Math.max(prevMaxX, o.b.maxX);
+        }
+        const availPx = Number.isFinite(prevMaxX) ? (b.minX - prevMaxX) * s - 8 : Infinity;
+        const offsetPx =
+          availPx < VERT_CALLOUT_ROOM
+            ? Math.max(8, t.offset - (VERT_CALLOUT_ROOM - availPx))
+            : undefined;
         lines.push(
           '    ' +
             renderDimensionCallout({
@@ -356,6 +325,7 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
               side: -1,
               label: ann.label,
               unitScale: u,
+              offsetPx,
             }),
         );
       }

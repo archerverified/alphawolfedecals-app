@@ -21,23 +21,16 @@ import {
   assembleLayoutSheetFromRows,
   buildLayoutSheetSvg,
   buildQcOverlaySvg,
-  panelUnionBounds,
-  viewScanWindows,
-  type Bounds,
-  type QcOverlayView,
+  SHEET_FORMAT,
 } from '../src/svg/index.js';
 import { templatePublicUrl, uploadLayoutSheet } from '../src/storage/supabase.js';
-import { measureArtBounds } from './lib/art-bounds.js';
+import { buildMeasuredQcViews } from './lib/qc-views.js';
 
 const QC_DIR = process.env.AW_QC_DIR ?? '/tmp/aw-qc';
 const upload = process.argv.includes('--upload');
 const vehicleIds = process.argv
   .map((a, i) => (a === '--vehicle' ? process.argv[i + 1] : null))
   .filter((x): x is string => Boolean(x));
-
-// Header band / footer rule of the 1920×1080 sheet formats, scaled to the
-// art's own viewBox height. Outline-only art has no chrome (full band).
-const SHEET_CONTENT_BAND = { top: 70, bottom: 984 };
 
 const slugify = (s: string): string =>
   s
@@ -113,6 +106,7 @@ async function main(): Promise<void> {
   );
   if (vehicles.length === 0) throw new Error('no matching vehicles with panels');
 
+  let failed = 0;
   for (const v of vehicles) {
     const slug = `${v.id.slice(0, 8)}-${slugify(`${v.make} ${v.model}`)}`;
     console.log(`\n== ${slug} (${v.panels.length} panels)`);
@@ -120,103 +114,126 @@ async function main(): Promise<void> {
       console.log('   no panels — skipped');
       continue;
     }
-
-    const dims = {
-      lengthMm: v.lengthMm,
-      widthMm: v.widthMm,
-      heightMm: v.heightMm,
-      wheelbaseMm: v.wheelbaseMm,
-    };
-
-    // --- QC overlay over the vehicle's own art -----------------------------
-    const artUrl = v.svgStorageKey ? templatePublicUrl(v.svgStorageKey) : v.outlineSvgUrl;
-    const rawArtSvg = await fetchText(artUrl);
-    const artSvg = v.svgStorageKey ? rawArtSvg : styleOutlineBackdrop(rawArtSvg);
-    const viewBox = parseViewBox(artSvg);
-    // Wrapped sheets carry their own 1920-format chrome; outline art doesn't.
-    const band = v.svgStorageKey ? SHEET_CONTENT_BAND : { top: 0, bottom: viewBox.height };
-    const translates = v.svgStorageKey ? {} : parseViewTranslates(artSvg);
-
-    const byView = new Map<string, typeof v.panels>();
-    for (const p of v.panels) {
-      byView.set(p.view, [...(byView.get(p.view) ?? []), p]);
-    }
-    const views: QcOverlayView[] = [];
-    for (const [view, vp] of byView) {
-      const qcPanels = vp.map((p) => ({
-        name: p.name,
-        outlinePath: p.svgPath,
-        wrapSafePath: (p.wrapSafeZone as { clip_path?: string } | null)?.clip_path ?? p.svgPath,
-        installOrder: p.installOrder,
-      }));
-      const translate = translates[view] ?? { x: 0, y: 0 };
-      const bounds = panelUnionBounds(qcPanels, translate);
-      if (!bounds) continue;
-      views.push({ view, translate, panels: qcPanels, artBounds: bounds });
-    }
-
-    const pngW = 1920;
-    const pngH = Math.round((1920 * viewBox.height) / viewBox.width);
-    const basePng = await sharp(Buffer.from(artSvg), { density: 96 })
-      .resize(pngW, pngH, { fit: 'fill' })
-      .png()
-      .toBuffer();
-    const windows = viewScanWindows(
-      views.map((x) => ({ view: x.view, bounds: x.artBounds })),
-      viewBox,
-      band,
-    );
-    const measured = await measureArtBounds(basePng, viewBox, windows);
-    for (const x of views) {
-      x.artBounds = (measured[x.view] ?? x.artBounds) as Bounds;
-    }
-
-    const overlay = await sharp(
-      Buffer.from(buildQcOverlaySvg({ viewBox, dims, views, contentBand: band })),
-      { density: 96 },
-    )
-      .resize(pngW, pngH, { fit: 'fill' })
-      .png()
-      .toBuffer();
-    const overlayOut = path.join(QC_DIR, `${slug}-overlay.png`);
-    await sharp(basePng)
-      .composite([{ input: overlay }])
-      .png()
-      .toFile(overlayOut);
-    console.log(`   QC overlay   -> ${overlayOut}`);
-
-    // --- 1/20 layout sheet --------------------------------------------------
-    const sheetSvg = buildLayoutSheetSvg(
-      assembleLayoutSheetFromRows(
-        {
-          title: `${v.make} ${v.model}${v.trim ? ` ${v.trim}` : ''}`,
-          yearLabel: String(v.year),
-          code: v.alphaWolfTplId,
-          scaleDenom: v.scaleDenom,
-          dims,
-        },
-        v.panels.map((p) => ({
-          name: p.name,
-          view: p.view,
-          svgPath: p.svgPath,
-          wrapSafeZone: p.wrapSafeZone,
-          installOrder: p.installOrder,
-        })),
-      ),
-    );
-    const sheetOut = path.join(QC_DIR, `${slug}-layout-sheet.png`);
-    await sharp(Buffer.from(sheetSvg), { density: 96 })
-      .resize(1920, 1080, { fit: 'fill' })
-      .png()
-      .toFile(sheetOut);
-    console.log(`   layout sheet -> ${sheetOut}`);
-
-    if (upload) {
-      const urls = await uploadLayoutSheet(v.id, sheetSvg);
-      console.log(`   UPLOADED     -> ${urls.layoutSheetSvgUrl}`);
+    // One bad row (unknown view name, dead art URL) must not abort the whole
+    // batch — log, count, and keep regenerating the rest of the catalogue.
+    try {
+      await regenOne(v, slug);
+    } catch (err) {
+      failed++;
+      console.error(`   FAILED ${slug}:`, err instanceof Error ? err.message : err);
     }
   }
+  if (failed > 0) {
+    console.error(`\n${failed} vehicle(s) failed — see errors above.`);
+    process.exitCode = 1;
+  }
   if (!upload) console.log('\nDry run — no storage writes (pass --upload to publish sheets).');
+}
+
+type VehicleRow = {
+  id: string;
+  year: number;
+  make: string;
+  model: string;
+  trim: string | null;
+  lengthMm: number;
+  widthMm: number;
+  heightMm: number;
+  wheelbaseMm: number | null;
+  scaleDenom: number;
+  alphaWolfTplId: string | null;
+  svgStorageKey: string | null;
+  outlineSvgUrl: string;
+  panels: Array<{
+    name: string;
+    view: string;
+    svgPath: string;
+    wrapSafeZone: unknown;
+    installOrder: number;
+  }>;
+};
+
+async function regenOne(v: VehicleRow, slug: string): Promise<void> {
+  const dims = {
+    lengthMm: v.lengthMm,
+    widthMm: v.widthMm,
+    heightMm: v.heightMm,
+    wheelbaseMm: v.wheelbaseMm,
+  };
+
+  // --- QC overlay over the vehicle's own art -----------------------------
+  const artUrl = v.svgStorageKey ? templatePublicUrl(v.svgStorageKey) : v.outlineSvgUrl;
+  const rawArtSvg = await fetchText(artUrl);
+  const artSvg = v.svgStorageKey ? rawArtSvg : styleOutlineBackdrop(rawArtSvg);
+  const viewBox = parseViewBox(artSvg);
+  // Wrapped sheets carry the AW sheet chrome scaled to their viewBox height;
+  // outline art has no chrome (full band).
+  const band = v.svgStorageKey
+    ? {
+        top: (SHEET_FORMAT.contentBand.top * viewBox.height) / SHEET_FORMAT.height,
+        bottom: (SHEET_FORMAT.contentBand.bottom * viewBox.height) / SHEET_FORMAT.height,
+      }
+    : { top: 0, bottom: viewBox.height };
+  const translates = v.svgStorageKey ? {} : parseViewTranslates(artSvg);
+
+  const pngW = 1920;
+  const pngH = Math.round((1920 * viewBox.height) / viewBox.width);
+  const basePng = await sharp(Buffer.from(artSvg), { density: 96 })
+    .resize(pngW, pngH, { fit: 'fill' })
+    .png()
+    .toBuffer();
+  const views = await buildMeasuredQcViews({
+    panels: v.panels,
+    viewBox,
+    band,
+    basePng,
+    translates,
+  });
+
+  const overlay = await sharp(
+    Buffer.from(buildQcOverlaySvg({ viewBox, dims, views, contentBand: band })),
+    { density: 96 },
+  )
+    .resize(pngW, pngH, { fit: 'fill' })
+    .png()
+    .toBuffer();
+  const overlayOut = path.join(QC_DIR, `${slug}-overlay.png`);
+  await sharp(basePng)
+    .composite([{ input: overlay }])
+    .png()
+    .toFile(overlayOut);
+  console.log(`   QC overlay   -> ${overlayOut}`);
+
+  // --- 1/20 layout sheet --------------------------------------------------
+  const sheetSvg = buildLayoutSheetSvg(
+    assembleLayoutSheetFromRows(
+      {
+        title: `${v.make} ${v.model}${v.trim ? ` ${v.trim}` : ''}`,
+        yearLabel: String(v.year),
+        code: v.alphaWolfTplId,
+        scaleDenom: v.scaleDenom,
+        dims,
+      },
+      v.panels.map((p) => ({
+        name: p.name,
+        view: p.view,
+        svgPath: p.svgPath,
+        wrapSafeZone: p.wrapSafeZone,
+        installOrder: p.installOrder,
+      })),
+    ),
+  );
+  const sheetOut = path.join(QC_DIR, `${slug}-layout-sheet.png`);
+  await sharp(Buffer.from(sheetSvg), { density: 96 })
+    .resize(SHEET_FORMAT.width, SHEET_FORMAT.height, { fit: 'fill' })
+    .png()
+    .toFile(sheetOut);
+  console.log(`   layout sheet -> ${sheetOut}`);
+
+  if (upload) {
+    const urls = await uploadLayoutSheet(v.id, sheetSvg);
+    console.log(`   UPLOADED     -> ${urls.layoutSheetSvgUrl}`);
+  }
 }
 
 main().catch((err) => {

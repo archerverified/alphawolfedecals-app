@@ -8,6 +8,8 @@
 // the vehicle art — extension lines + double-headed arrows in EXACTLY
 // brand.cyan, labels in black, no boxes or fills behind text.
 
+import { defaultAxisForView } from './calibrate.js';
+
 export const brand = {
   /** Alpha Wolf annotation cyan. Dimension callouts draw in exactly this. */
   cyan: '#00AEEF',
@@ -47,6 +49,66 @@ const mmToInches = (mm: number): string => (mm / 25.4).toFixed(1);
 export const dimensionText = (name: string, mm: number): string =>
   `${name} ${fmtMm(mm)} mm · ${mmToInches(mm)} in`;
 
+// Shared SVG string helpers — one escaping/rounding policy for every
+// annotation surface.
+const XML_ESCAPES: Record<string, string> = {
+  '&': '&amp;',
+  '<': '&lt;',
+  '>': '&gt;',
+  '"': '&quot;',
+  "'": '&apos;',
+};
+export const escXml = (s: string): string => s.replace(/[&<>"']/g, (c) => XML_ESCAPES[c]!);
+export const r2 = (n: number): number => Math.round(n * 100) / 100;
+
+/**
+ * Pattern-sheet dimension annotation for one view. Geometry policy lives in
+ * the renderers: `length` spans the view's measured content below it;
+ * `wheelbase` and `height` carry calibrated ratios — wheelbase centred under
+ * the length row, height as a vertical callout beside the view.
+ */
+export type DimensionAnnotation =
+  | { kind: 'length'; label: string }
+  | { kind: 'wheelbase'; label: string; ratio: number }
+  | { kind: 'height'; label: string; ratio: number };
+
+export type AnnotationDims = {
+  lengthMm: number;
+  widthMm: number;
+  heightMm: number;
+  wheelbaseMm?: number | null;
+};
+
+/**
+ * Which annotations a view carries (Archer, 2026-06-12): overall length below
+ * profile/top views (+ wheelbase when known), overall height beside front/rear
+ * elevations. ONE policy for every surface — the QC overlay and the layout
+ * sheet consume this same list so they can never disagree on what a view
+ * shows; only fit/placement is per-surface.
+ */
+export function annotationsForView(view: string, dims: AnnotationDims): DimensionAnnotation[] {
+  if (defaultAxisForView(view) === 'width') {
+    return [
+      {
+        kind: 'height',
+        label: dimensionText('Overall height', dims.heightMm),
+        ratio: dims.heightMm / dims.widthMm,
+      },
+    ];
+  }
+  const out: DimensionAnnotation[] = [
+    { kind: 'length', label: dimensionText('Overall length', dims.lengthMm) },
+  ];
+  if (dims.wheelbaseMm) {
+    out.push({
+      kind: 'wheelbase',
+      label: dimensionText('Wheelbase', dims.wheelbaseMm),
+      ratio: dims.wheelbaseMm / dims.lengthMm,
+    });
+  }
+  return out;
+}
+
 export type DimensionCalloutSpec = {
   /** horizontal = measures along x (line is horizontal); vertical = along y. */
   orientation: 'horizontal' | 'vertical';
@@ -70,10 +132,6 @@ export type DimensionCalloutSpec = {
   /** Skip extension lines (stacked rows reuse the first row's). */
   extensionLines?: boolean;
 };
-
-const r2 = (n: number): number => Math.round(n * 100) / 100;
-const escText = (s: string): string =>
-  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /**
  * One classic pattern-sheet dimension callout: two extension lines springing
@@ -122,12 +180,12 @@ export function renderDimensionCallout(spec: DimensionCalloutSpec): string {
     // side -1 puts the label above the line; baseline shift keeps the gap true.
     const y = dir === 1 ? labelPos + fs * 0.35 : labelPos;
     parts.push(
-      `<text x="${r2(mid)}" y="${r2(y)}" text-anchor="middle" fill="${t.label.fill}" font-family="${t.label.fontFamily}" font-size="${fs}">${escText(spec.label)}</text>`,
+      `<text x="${r2(mid)}" y="${r2(y)}" text-anchor="middle" fill="${t.label.fill}" font-family="${t.label.fontFamily}" font-size="${fs}">${escXml(spec.label)}</text>`,
     );
   } else {
     const x = dir === 1 ? labelPos + fs * 0.35 : labelPos;
     parts.push(
-      `<text x="${r2(x)}" y="${r2(mid)}" text-anchor="middle" fill="${t.label.fill}" font-family="${t.label.fontFamily}" font-size="${fs}" transform="rotate(-90 ${r2(x)} ${r2(mid)})">${escText(spec.label)}</text>`,
+      `<text x="${r2(x)}" y="${r2(mid)}" text-anchor="middle" fill="${t.label.fill}" font-family="${t.label.fontFamily}" font-size="${fs}" transform="rotate(-90 ${r2(x)} ${r2(mid)})">${escXml(spec.label)}</text>`,
     );
   }
   return parts.join('');
