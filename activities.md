@@ -47,6 +47,38 @@ DB this session).
   intentionally unapplied there — run it post-merge after `db:migrate` +
   `db:apply-sql`. Verified locally: db lint/typecheck/build green, 97/97 db
   unit tests, web typecheck green, 100/101 web tests (1 pre-existing skip).
+## 2026-06-12 — Goal 7 D3: Haiku orchestrator (brief → 3 concept directions, iteration parsing) — PR #147
+
+**Status:** PR #147 open vs main (branch goal/7-orchestrator), fresh-context review done + findings fixed in-branch, NOT merged (gated on CI + Archer).
+
+**What shipped.** `apps/web/lib/ai/orchestrator/` — the Claude Haiku 4.5 brain of the
+generation pipeline: `compileBrief()` turns a brief snapshot into per-view image
+prompts for 3 directions (literal / bolder / minimal); `compileIteration()` parses
+"hood matte black" into affected views + a Kontext-style edit prompt; `ITERATION_CHIPS`
+(6 customer-voice chips, client-importable). Versioned prompts (v1) with a sha256 pin
+test so prompt edits can't ship without a version bump. Anthropic structured outputs
+(json_schema, per-request schemas for the dynamic view set) + zod re-validation (B8),
+one repair retry then typed `OrchestratorError`; SDK transport errors propagate as
+`Anthropic.APIError` for the pipeline's refund/retry decisions. Hard rules enforced and
+unit-tested against the actual request payload: logo NEVER described to the image model
+(clear space reserved instead), no text of any kind, geometry/windows/background
+unchanged, excluded zones = factory paint. Usage tokens + estimated USD returned for the
+spend ledger (AI_CONFIG.orchestrator pricing).
+
+**Review (CLAUDE.md §3, 7 finder angles → 6 verifier passes, recorded in the PR body).**
+Fixed in-branch: canonical view order now imported from shared `VIEW_ORDER` (@alphawolf/db,
+named re-export added — no drift vs panel numbering); orchestrator maxTokens 4096 → 8192
+(output-cap headroom for 5-view briefs); prompt-hash provenance pin; dotNumber/tint
+omissions documented as deliberate. Refuted: prompt caching (system prompt is below
+Haiku's 4096-token min cacheable prefix — would not engage).
+
+**Verification.** web lint/typecheck/test green (112 tests, 13 new); db green (86 tests).
+One real Haiku call via the env-gated integration test: schema-valid on first attempt,
+**$0.005425** (1,740 in / 737 out tokens) — Goal 7 budget barely dented. Vercel preview
+initially ERRORed at 'Deploying outputs' — pre-existing invalid_max_duration already
+fixed on main by PR #145; resolved by rebasing this branch onto main.
+
+## 2026-06-12 — Panel-number unification in the UI (Archer rider spec, PR #144)
 
 **Status:** PR #144 OPEN, awaiting review/merge — fresh-context review recorded
 in the PR body (verdict: approve, no blockers).

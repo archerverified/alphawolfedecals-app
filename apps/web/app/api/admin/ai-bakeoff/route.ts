@@ -49,7 +49,11 @@ const PER_MODEL_TIMEOUT_MS = 45_000;
 
 const ledgerStore: LedgerStore = {
   download: (key) => storage.downloadAssetObject(key),
-  upload: (key, data) => storage.uploadAssetObject(key, data, 'application/json').then(() => {}),
+  // project-assets allowlists octet-stream but NOT application/json (learned
+  // 2026-06-12: the bucket's allowed_mime_types rejected the ledger write —
+  // which the fail-closed rail correctly turned into spend-refused 500s).
+  upload: (key, data) =>
+    storage.uploadAssetObject(key, data, 'application/octet-stream').then(() => {}),
 };
 
 // Serialize invocations per instance so concurrent POSTs can't race the
