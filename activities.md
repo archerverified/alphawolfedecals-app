@@ -6,6 +6,55 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-12 — Studio dimension-callout restyle (Archer change spec, PR #141)
+
+**Status:** ✅ one reviewed PR, squash-merged (d4cec2d), prod deploy READY.
+Full protocol: 7-angle fresh-context review, every confirmed finding fixed
+in-branch before merge, verdict + before/after thumbnails in the PR body.
+
+**What changed.**
+
+- QC overlays: red dimension rectangles/boxes over the vehicle art REMOVED;
+  blue panel zones (translucent fill + dashed wrap-safe) untouched; panel
+  labels red → sheet ink.
+- Classic pattern-sheet dimension callouts OUTSIDE the silhouette, in
+  EXACTLY **#00AEEF**: extension lines + double-headed arrows, labels in
+  black, no boxes/fills behind text. Overall length below profile views,
+  overall height beside front/rear elevations, wheelbase as a second row
+  when the vehicle has one and the whitespace fits it (always on layout
+  sheets; QC overlays drop it on views too tight — X3 driver, Transit).
+- ONE shared theme: `packages/db/src/svg/theme.ts` — `brand.cyan` token,
+  callout stroke/typography constants, `renderDimensionCallout()`, and
+  `annotationsForView()` (THE policy for what a view shows). Both renderers
+  (QC overlay + 1/20 layout sheet) import it; future surfaces (export PDFs)
+  reuse the same annotation style. Never hardcode the hex.
+- QC callouts anchor on RASTER-MEASURED art bounds: connected-component ink
+  analysis assigns each blob to its view (midline scan windows decide
+  ownership) — arrows hug the true silhouette and placement is collision-
+  aware (floor/ceiling vs neighbouring views + sheet chrome, side selection
+  by free room). A plain window scan fails on the boat (wakeboard tower
+  crosses the row midline) — that's why components.
+- NEW `pnpm db:regen-artifacts [--vehicle <id>]... [--upload]`: regenerates
+  QC overlay + layout sheet from DB rows for any vehicle — wrapped-art
+  backdrop for AW templates, styled outline-art backdrop + per-view
+  translate parsing for outline-only vehicles. Storage writes only with
+  --upload; ZERO panel/DB writes; skips retired vehicles; one bad row
+  cannot abort the batch.
+
+**Artifacts replaced.** AW-TPL-0001/2/3 layout sheets re-uploaded + the
+Transit's FIRST layout sheet uploaded (vehicle-templates bucket, 2026-06-12);
+docs/deployment/screenshots/2026-06-11-goal-6/ refreshed: 4 QC overlays
+(Transit's added) + 4 layout-sheet PNGs. These are the files for Archer's
+visual approval pass.
+
+**Notes.** Found 7 `Ford Studio E2E *` vehicles on prod from earlier e2e runs
+— all already status=retired, so the no-published-test-vehicles rule was
+honoured; nothing exercised against prod Studio this session, nothing to
+retire. Review-refuted non-issues recorded in the PR: "overall width
+disappeared" (spec replaces it with height beside front/rear) and "red stroke
+was the QC boundary marker" (the dashed wrap-safe inset still traces every
+panel).
+
 ## 2026-06-11 — Goal 6 — Template Studio + AW panel data (CLOSEOUT)
 
 **Status:** ✅ Studio pipeline merged via reviewed PRs; the 3 AW catalogue
