@@ -8,6 +8,7 @@ import { vehicles } from '@alphawolf/db';
 import { requireAdmin } from '../../../../lib/admin/guard';
 import { getOrCreateFormCsrfToken } from '../../../../lib/csrf';
 import { bodyTypeLabel, formatDimensions, vehicleTitle } from '../../../../lib/vehicles/format';
+import { numberedPanels } from '../../../../lib/vehicles/panel-numbers';
 import { OutlinePreview } from '../../../../components/vehicles/OutlinePreview';
 import { StatusBadge } from '../../../../components/admin/StatusBadge';
 import {
@@ -103,10 +104,12 @@ export default async function AdminVehicleDetailPage({
           Body panels ({v.panels.length})
         </h2>
         <ul className="mt-3 divide-y divide-zinc-200 rounded-lg border border-zinc-200 bg-white">
-          {v.panels.map((p) => (
+          {/* Numbers match the template sheet's panel numerals (numberViews),
+              NOT installOrder — one number = one panel, everywhere. */}
+          {numberedPanels(v.panels).map(({ n, panel: p }) => (
             <li key={p.id} className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
               <span className="font-medium text-zinc-800">
-                {p.installOrder}. {p.name}
+                {n}. {p.name}
               </span>
               <span className="text-xs text-zinc-500">
                 {p.view} · {p.finishHint}

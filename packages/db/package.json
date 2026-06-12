@@ -10,6 +10,11 @@
       "types": "./src/index.ts",
       "node": "./dist/index.js",
       "default": "./src/index.ts"
+    },
+    "./svg/numbering": {
+      "types": "./src/svg/numbering.ts",
+      "node": "./dist/svg/numbering.js",
+      "default": "./src/svg/numbering.ts"
     }
   },
   "files": [
