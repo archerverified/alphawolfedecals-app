@@ -21,6 +21,7 @@ import {
   assembleLayoutSheetFromRows,
   buildLayoutSheetSvg,
   buildQcOverlaySvg,
+  legendMetrics,
   SHEET_FORMAT,
 } from '../src/svg/index.js';
 import { templatePublicUrl, uploadLayoutSheet } from '../src/storage/supabase.js';
@@ -190,15 +191,19 @@ async function regenOne(v: VehicleRow, slug: string): Promise<void> {
     translates,
   });
 
+  // The overlay's viewBox is taller than the art by the legend strip; extend
+  // the base canvas to match (legend px == sheet px at the 1920-wide raster).
+  const legendPx = legendMetrics(v.panels.length).height;
   const overlay = await sharp(
     Buffer.from(buildQcOverlaySvg({ viewBox, dims, views, contentBand: band })),
     { density: 96 },
   )
-    .resize(pngW, pngH, { fit: 'fill' })
+    .resize(pngW, pngH + legendPx, { fit: 'fill' })
     .png()
     .toBuffer();
   const overlayOut = path.join(QC_DIR, `${slug}-overlay.png`);
   await sharp(basePng)
+    .extend({ bottom: legendPx, background: '#f8f8f6' })
     .composite([{ input: overlay }])
     .png()
     .toFile(overlayOut);

@@ -34,6 +34,7 @@ import {
   buildOutlineSvg,
   buildQcOverlaySvg,
   defaultAxisForView,
+  legendMetrics,
   mmPerUnitFor,
   SHEET_FORMAT,
   validateOutlineSvg,
@@ -232,17 +233,20 @@ async function main(): Promise<void> {
       );
     }
 
-    // QC overlay.
+    // QC overlay. The overlay's viewBox is taller than the art by the legend
+    // strip; extend the base canvas to match (legend px == sheet px here).
     if (vehicle.svgStorageKey) {
       const base = await wrappedSheetPng(def.vehicleId, vehicle.svgStorageKey);
+      const legendPx = legendMetrics(panels.length).height;
       const overlay = await sharp(Buffer.from(await overlaySvg(def, panels, dims, base)), {
         density: 96,
       })
-        .resize(1920, 1080, { fit: 'fill' })
+        .resize(1920, 1080 + legendPx, { fit: 'fill' })
         .png()
         .toBuffer();
       const out = path.join(QC_DIR, `${file.replace('.json', '')}-overlay.png`);
       await sharp(base)
+        .extend({ bottom: legendPx, background: '#f8f8f6' })
         .composite([{ input: overlay }])
         .png()
         .toFile(out);

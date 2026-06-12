@@ -9,19 +9,29 @@
 // length sits below profile views, overall height beside front/rear views,
 // wheelbase (when known) as a second row under the length.
 //
+// Panel labeling (Archer, 2026-06-12): no text inside the vehicle art. Each
+// panel carries only a subtle low-opacity numeral (stable numbering from
+// numbering.ts) and a legend strip mapping number → part name is APPENDED
+// below the art — the overlay's viewBox is taller than the art by
+// `legendMetrics(panelCount).height * (viewBox.width / 1920)`; compositors
+// extend the base canvas by the same amount (see scripts).
+//
 // Callouts anchor on `artBounds` — the measured ink extent of each view's
 // art, not the panel union (panels stop short of bumpers/roof/wheels). The
 // raster measurement lives with the scripts (it needs sharp); this module is
 // pure string assembly.
 
 import { geometry } from '@alphawolf/canvas';
+import { panelNumbers } from './numbering.js';
 import {
   annotationsForView,
-  brand,
   dimensionCallout,
   escXml,
+  legendMetrics,
   r2,
   renderDimensionCallout,
+  renderPanelLegend,
+  renderPanelNumber,
 } from './theme.js';
 
 export type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
@@ -237,32 +247,75 @@ export function buildQcOverlaySvg(input: QcOverlayInput): string {
     throw new Error('[svg] buildQcOverlaySvg: at least one view is required');
   }
   const u = input.viewBox.width / 1920;
+  const band = input.contentBand ?? { top: 0, bottom: input.viewBox.height };
+
+  // Stable numbering across the whole template (view order, then position).
+  const flat = input.views.flatMap((v) =>
+    v.panels.map((p) => ({
+      view: v.view,
+      name: p.name,
+      installOrder: p.installOrder,
+      outlinePath: p.outlinePath,
+      panel: p,
+    })),
+  );
+  const numbers = panelNumbers(flat);
+  const numberOf = new Map(flat.map((f, i) => [f.panel, numbers[i]!]));
+
+  const legendH = legendMetrics(flat.length).height * u;
   const lines: string[] = [];
   lines.push(
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${input.viewBox.width} ${input.viewBox.height}">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${input.viewBox.width} ${r2(input.viewBox.height + legendH)}">`,
   );
   for (const v of input.views) {
     const tx = v.translate?.x ?? 0;
     const ty = v.translate?.y ?? 0;
+    // The numeral's leader fallback must stay inside the drawable band,
+    // expressed in this view's local coordinates.
+    const clamp = {
+      minX: -tx,
+      minY: band.top - ty,
+      maxX: input.viewBox.width - tx,
+      maxY: band.bottom - ty,
+    };
     lines.push(`<g transform="translate(${r2(tx)},${r2(ty)})">`);
     for (const p of v.panels) {
-      // The blue zone rendering is unchanged by design — only the red panel
-      // boxes were removed and the label switched from red to sheet ink.
+      // The blue zone rendering is unchanged by design — panel names moved
+      // off the art entirely; only the subtle numeral remains.
       lines.push(`<path d="${escXml(p.outlinePath)}" fill="${PANEL_FILL}" fill-opacity="0.13"/>`);
       lines.push(
         `<path d="${escXml(p.wrapSafePath)}" fill="none" stroke="${PANEL_FILL}" stroke-width="${r2(1.5 * u)}" stroke-dasharray="${r2(7 * u)} ${r2(5 * u)}"/>`,
       );
       const rings = geometry.parsePath(p.outlinePath).filter((r) => r.length >= 3);
       if (rings.length > 0) {
-        const b = geometry.bbox(rings);
         lines.push(
-          `<text x="${r2((b.minX + b.maxX) / 2)}" y="${r2((b.minY + b.maxY) / 2)}" text-anchor="middle" font-size="${r2(17 * u)}" font-family="Helvetica, Arial, sans-serif" font-weight="700" fill="${brand.ink}">${escXml(`${p.installOrder}. ${p.name}`)}</text>`,
+          renderPanelNumber({
+            bbox: geometry.bbox(rings),
+            n: numberOf.get(p)!,
+            unitScale: u,
+            clamp,
+          }),
         );
       }
     }
     lines.push('</g>');
     lines.push(calloutsFor(v, input, u));
   }
+
+  // Legend strip appended below the art (its own paper background — the strip
+  // is new canvas, not vehicle art).
+  lines.push(
+    `<rect x="0" y="${input.viewBox.height}" width="${input.viewBox.width}" height="${r2(legendH)}" fill="#f8f8f6"/>`,
+  );
+  lines.push(
+    renderPanelLegend({
+      entries: flat.map((f, i) => ({ n: numbers[i]!, name: f.name })),
+      x: 64 * u,
+      y: input.viewBox.height,
+      width: input.viewBox.width - 128 * u,
+      unitScale: u,
+    }),
+  );
   lines.push('</svg>');
   return lines.join('\n');
 }

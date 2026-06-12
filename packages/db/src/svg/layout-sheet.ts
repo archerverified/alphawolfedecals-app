@@ -9,14 +9,18 @@
 // Pure string assembly; rasterisation (PNG) happens in storage.uploadLayoutSheet.
 
 import { geometry } from '@alphawolf/canvas';
+import { panelNumbers, VIEW_ORDER } from './numbering.js';
 import { panelUnionBounds } from './qc-overlay.js';
 import {
   annotationsForView,
   brand,
   dimensionCallout,
   escXml as esc,
+  legendMetrics,
   r2,
   renderDimensionCallout,
+  renderPanelLegend,
+  renderPanelNumber,
   type DimensionAnnotation,
 } from './theme.js';
 
@@ -82,7 +86,6 @@ type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 // dimensions (the calibrated source of truth), not document units. Shared by
 // the Studio publish action (apps/web) and the AW panel-authoring script.
 
-const VIEW_ORDER = ['front', 'driver', 'back', 'passenger', 'top'];
 const VIEW_GUTTER = 600;
 
 export type LayoutSheetMeta = {
@@ -207,11 +210,28 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
   const leftmost = perView.reduce((m, x) => (x.b.minX < m.b.minX ? x : m), perView[0]!);
   const roomLeft = leftmost.v.annotations?.some((x) => x.kind === 'height') ? VERT_CALLOUT_ROOM : 0;
 
+  // Stable numbering + the legend strip (the ONE placement rule: a full-width
+  // strip below the views, here reserved between the content and the footer).
+  const flat = input.views.flatMap((v) =>
+    v.panels.map((p) => ({
+      view: v.view,
+      name: p.name,
+      installOrder: p.installOrder,
+      outlinePath: p.outlinePath,
+      panel: p,
+    })),
+  );
+  const numbers = panelNumbers(flat);
+  const numberOf = new Map(flat.map((f, i) => [f.panel, numbers[i]!]));
+  const LEGEND_GAP = 18;
+  const legendH = legendMetrics(flat.length).height;
+  const contentH = CONTENT.h - legendH - LEGEND_GAP;
+
   const cw = union.maxX - union.minX;
   const ch = union.maxY - union.minY;
-  const s = Math.min((CONTENT.w - roomLeft) / cw, (CONTENT.h - roomBottom) / ch);
+  const s = Math.min((CONTENT.w - roomLeft) / cw, (contentH - roomBottom) / ch);
   const ox = CONTENT.x + roomLeft + (CONTENT.w - roomLeft - cw * s) / 2 - union.minX * s;
-  const oy = CONTENT.y + (CONTENT.h - roomBottom - ch * s) / 2 - union.minY * s;
+  const oy = CONTENT.y + (contentH - roomBottom - ch * s) / 2 - union.minY * s;
 
   // Font sizes are computed in sheet units (the outer coordinate space) so the
   // sheet stays legible regardless of the art's unit scale.
@@ -249,15 +269,14 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
       lines.push(
         `      <path d="${esc(p.wrapSafePath)}" fill="${WRAP_SAFE}" fill-opacity="0.05" stroke="${WRAP_SAFE}" stroke-width="1.5" stroke-dasharray="6 5" vector-effect="non-scaling-stroke"/>`,
       );
-      // Panel label at the outline bbox centre, sized in content units.
+      // No names on the art — only the subtle numeral (legend carries names).
       try {
         const pb = geometry.bbox(geometry.parsePath(p.outlinePath));
-        const fs = Math.min(15 / s, (pb.maxY - pb.minY) / 4);
         lines.push(
-          `      <text x="${r2((pb.minX + pb.maxX) / 2)}" y="${r2((pb.minY + pb.maxY) / 2)}" text-anchor="middle" fill="#3f4658" font-size="${r2(fs)}">${p.installOrder}. ${esc(p.name)}</text>`,
+          '      ' + renderPanelNumber({ bbox: pb, n: numberOf.get(p)!, unitScale: 1 / s }),
         );
       } catch {
-        // No label for unparseable outlines.
+        // No numeral for unparseable outlines (the legend row still lists it).
       }
     }
     lines.push('    </g>');
@@ -332,6 +351,17 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
     }
     lines.push('  </g>');
   }
+
+  // Legend strip: number → part name, pinned above the footer rule.
+  lines.push(
+    '  ' +
+      renderPanelLegend({
+        entries: flat.map((f, i) => ({ n: numbers[i]!, name: f.name })),
+        x: CONTENT.x,
+        y: CONTENT.y + contentH + LEGEND_GAP,
+        width: CONTENT.w,
+      }),
+  );
 
   // Footer.
   lines.push(

@@ -7,5 +7,6 @@ export * from './validate.js';
 export * from './build-outline.js';
 export * from './calibrate.js';
 export * from './layout-sheet.js';
+export * from './numbering.js';
 export * from './qc-overlay.js';
 export * from './theme.js';
