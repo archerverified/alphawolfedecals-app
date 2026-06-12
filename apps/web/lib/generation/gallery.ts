@@ -107,7 +107,9 @@ export function deriveConcepts(runs: GalleryRun[]): ConceptCard[] {
 export type ProgressSnapshot = {
   kind: 'initial' | 'iteration' | 'final';
   status: 'queued' | 'orchestrating' | 'rendering' | 'complete' | 'failed';
-  jobs: Array<{ status: 'pending' | 'submitted' | 'complete' | 'failed' }>;
+  // 'submitting' = claimed-but-not-yet-submitted (PR #150 F2 claim step);
+  // progress copy treats it like any other in-flight state.
+  jobs: Array<{ status: 'pending' | 'submitting' | 'submitted' | 'complete' | 'failed' }>;
 };
 
 /** Friendly, customer-voice progress line for the active run. */
