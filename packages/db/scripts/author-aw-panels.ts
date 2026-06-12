@@ -32,12 +32,15 @@ import {
   assembleLayoutSheetFromRows,
   buildLayoutSheetSvg,
   buildOutlineSvg,
+  buildQcOverlaySvg,
   defaultAxisForView,
   mmPerUnitFor,
+  SHEET_FORMAT,
   validateOutlineSvg,
   wrapSafeZoneFor,
   type OutlineViewSpec,
 } from '../src/svg/index.js';
+import { buildMeasuredQcViews } from './lib/qc-views.js';
 import { setVehiclePanels, type PanelInput } from '../src/repos/vehicles.js';
 import { createSource, listForVehicle } from '../src/repos/template-sources.js';
 import { findUserByEmailForAuth } from '../src/repos/users.js';
@@ -93,19 +96,30 @@ async function wrappedSheetPng(vehicleId: string, storageKey: string): Promise<B
     .toBuffer();
 }
 
-function overlaySvg(def: TemplateDef, panels: PanelInput[]): string {
-  const shapes = panels
-    .map((p) => {
-      const zone = p.wrapSafeZone as { clip_path: string };
-      const b = geometry.bbox(geometry.parsePath(p.svgPath));
-      return (
-        `<path d="${p.svgPath}" fill="#2563eb" fill-opacity="0.13" stroke="#dc2626" stroke-width="2.5"/>` +
-        `<path d="${zone.clip_path}" fill="none" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="7 5"/>` +
-        `<text x="${(b.minX + b.maxX) / 2}" y="${(b.minY + b.maxY) / 2}" text-anchor="middle" font-size="17" font-family="Helvetica" font-weight="700" fill="#dc2626">${p.installOrder}. ${p.name.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</text>`
-      );
-    })
-    .join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${def.viewBox.width} ${def.viewBox.height}" width="1920" height="1080">${shapes}</svg>`;
+// The wrapped sheets carry the AW sheet chrome — dimension callouts must stay
+// inside the band between the header and the footer rule.
+const SHEET_CONTENT_BAND = SHEET_FORMAT.contentBand;
+
+async function overlaySvg(
+  def: TemplateDef,
+  panels: PanelInput[],
+  dims: { lengthMm: number; widthMm: number; heightMm: number; wheelbaseMm?: number | null },
+  basePng: Buffer,
+): Promise<string> {
+  // AW panels are authored sheet-absolute (translate 0,0), so panel geometry
+  // composites 1:1; callouts anchor on the measured ink extent of each view.
+  const views = await buildMeasuredQcViews({
+    panels,
+    viewBox: def.viewBox,
+    band: SHEET_CONTENT_BAND,
+    basePng,
+  });
+  return buildQcOverlaySvg({
+    viewBox: def.viewBox,
+    dims,
+    views,
+    contentBand: SHEET_CONTENT_BAND,
+  });
 }
 
 async function main(): Promise<void> {
@@ -135,6 +149,7 @@ async function main(): Promise<void> {
           lengthMm: true,
           widthMm: true,
           heightMm: true,
+          wheelbaseMm: true,
           svgStorageKey: true,
           viewCount: true,
           year: true,
@@ -157,6 +172,7 @@ async function main(): Promise<void> {
       lengthMm: vehicle.lengthMm,
       widthMm: vehicle.widthMm,
       heightMm: vehicle.heightMm,
+      wheelbaseMm: vehicle.wheelbaseMm,
     };
 
     // Per-view calibration + wrap-safe generation.
@@ -219,7 +235,10 @@ async function main(): Promise<void> {
     // QC overlay.
     if (vehicle.svgStorageKey) {
       const base = await wrappedSheetPng(def.vehicleId, vehicle.svgStorageKey);
-      const overlay = await sharp(Buffer.from(overlaySvg(def, panels)))
+      const overlay = await sharp(Buffer.from(await overlaySvg(def, panels, dims, base)), {
+        density: 96,
+      })
+        .resize(1920, 1080, { fit: 'fill' })
         .png()
         .toBuffer();
       const out = path.join(QC_DIR, `${file.replace('.json', '')}-overlay.png`);

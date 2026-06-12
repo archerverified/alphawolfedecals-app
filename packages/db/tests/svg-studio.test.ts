@@ -6,7 +6,13 @@ import { parseSync } from 'svgson';
 import { describe, expect, test } from 'vitest';
 import { buildOutlineSvg, type BuildOutlineInput } from '../src/svg/build-outline';
 import { defaultAxisForView, mmPerUnitFor } from '../src/svg/calibrate';
-import { buildLayoutSheetSvg, type LayoutSheetInput } from '../src/svg/layout-sheet';
+import {
+  assembleLayoutSheetFromRows,
+  buildLayoutSheetSvg,
+  type LayoutSheetInput,
+} from '../src/svg/layout-sheet';
+import { buildQcOverlaySvg, viewScanWindows } from '../src/svg/qc-overlay';
+import { brand, dimensionText, renderDimensionCallout } from '../src/svg/theme';
 import { validateOutlineSvg } from '../src/svg/validate';
 
 const BOAT_INPUT: BuildOutlineInput = {
@@ -153,7 +159,7 @@ describe('buildLayoutSheetSvg', () => {
         wrapSafePath: p.wrapSafePath,
         installOrder: p.installOrder ?? i + 1,
       })),
-      dimensionLabel: '11,125 mm · 437.9 in overall',
+      annotations: [{ kind: 'length' as const, label: 'Overall length 11,125 mm · 437.9 in' }],
     })),
   };
 
@@ -163,12 +169,190 @@ describe('buildLayoutSheetSvg', () => {
     expect(svg).toContain('AW-TPL-0002');
     expect(svg).toContain('1 : 20');
     expect(svg).toContain('ALPHA WOLF');
-    expect(svg).toContain('11,125 mm · 437.9 in overall');
+    expect(svg).toContain('Overall length 11,125 mm · 437.9 in');
     expect(svg).toContain('DRIVER');
     expect(svg).toContain('NOT FOR REDISTRIBUTION');
   });
 
+  test('dimension callouts use the brand cyan with black labels — no red boxes', () => {
+    const svg = buildLayoutSheetSvg(SHEET);
+    expect(svg).toContain(brand.cyan);
+    // Label text is black with no box/fill behind it.
+    expect(svg).toMatch(/fill="#000000"[^>]*>Overall length/);
+    // The retired styles: red panel boxes and the old grey tick-line callout.
+    expect(svg).not.toContain('#dc2626');
+    expect(svg).not.toContain('#9aa3b5"><line');
+  });
+
   test('throws on empty input', () => {
     expect(() => buildLayoutSheetSvg({ ...SHEET, views: [] })).toThrow(/at least one view/);
+  });
+});
+
+describe('assembleLayoutSheetFromRows annotations', () => {
+  const ROWS = [
+    {
+      name: 'Hood',
+      view: 'front',
+      svgPath: 'M0 0 L200 0 L200 100 L0 100 Z',
+      wrapSafeZone: { clip_path: 'M10 10 L190 10 L190 90 L10 90 Z' },
+      installOrder: 1,
+    },
+    {
+      name: 'Door',
+      view: 'driver',
+      svgPath: 'M0 0 L500 0 L500 100 L0 100 Z',
+      wrapSafeZone: { clip_path: 'M10 10 L490 10 L490 90 L10 90 Z' },
+      installOrder: 2,
+    },
+  ];
+  const META = {
+    title: 'BMW X3',
+    yearLabel: '2024',
+    code: 'AW-TPL-0001',
+    scaleDenom: 20,
+    dims: { lengthMm: 4708, widthMm: 1891, heightMm: 1676, wheelbaseMm: 2864 },
+  };
+
+  test('profile views get length + wheelbase; elevations get height beside', () => {
+    const sheet = assembleLayoutSheetFromRows(META, ROWS);
+    const front = sheet.views.find((v) => v.view === 'front')!;
+    expect(front.annotations).toEqual([
+      {
+        kind: 'height',
+        label: 'Overall height 1,676 mm · 66.0 in',
+        ratio: 1676 / 1891,
+      },
+    ]);
+    const driver = sheet.views.find((v) => v.view === 'driver')!;
+    expect(driver.annotations?.map((a) => a.kind)).toEqual(['length', 'wheelbase']);
+    expect(driver.annotations?.[1]?.label).toBe('Wheelbase 2,864 mm · 112.8 in');
+    const svg = buildLayoutSheetSvg(sheet);
+    expect(() => parseSync(svg)).not.toThrow();
+    expect(svg).toContain('Wheelbase 2,864 mm');
+    expect(svg).toContain('Overall height 1,676 mm');
+  });
+
+  test('no wheelbase row when the vehicle has none', () => {
+    const sheet = assembleLayoutSheetFromRows(
+      { ...META, dims: { ...META.dims, wheelbaseMm: null } },
+      ROWS,
+    );
+    const driver = sheet.views.find((v) => v.view === 'driver')!;
+    expect(driver.annotations?.map((a) => a.kind)).toEqual(['length']);
+  });
+});
+
+describe('buildQcOverlaySvg', () => {
+  const INPUT = {
+    viewBox: { width: 1920, height: 1080 },
+    dims: { lengthMm: 4708, widthMm: 1891, heightMm: 1676, wheelbaseMm: 2864 },
+    contentBand: { top: 70, bottom: 980 },
+    views: [
+      {
+        view: 'driver',
+        panels: [
+          {
+            name: 'Front Door',
+            outlinePath: 'M700 200 L1700 200 L1700 350 L700 350 Z',
+            wrapSafePath: 'M710 210 L1690 210 L1690 340 L710 340 Z',
+            installOrder: 1,
+          },
+        ],
+        artBounds: { minX: 690, minY: 120, maxX: 1715, maxY: 420 },
+      },
+      {
+        view: 'front',
+        panels: [
+          {
+            name: 'Hood & Fascia',
+            outlinePath: 'M230 645 L615 645 L615 845 L230 845 Z',
+            wrapSafePath: 'M240 655 L605 655 L605 835 L240 835 Z',
+            installOrder: 2,
+          },
+        ],
+        artBounds: { minX: 228, minY: 560, maxX: 615, maxY: 900 },
+      },
+    ],
+  };
+
+  test('keeps blue zones, drops red boxes, draws cyan callouts outside the art', () => {
+    const svg = buildQcOverlaySvg(INPUT);
+    expect(() => parseSync(svg)).not.toThrow();
+    // Blue zone rendering unchanged; red gone entirely.
+    expect(svg).toContain('fill="#2563eb" fill-opacity="0.13"');
+    expect(svg).not.toContain('#dc2626');
+    // Callouts: brand cyan strokes, black labels, both dimensions + wheelbase.
+    expect(svg).toContain(brand.cyan);
+    expect(svg).toContain(dimensionText('Overall length', 4708));
+    expect(svg).toContain(dimensionText('Wheelbase', 2864));
+    expect(svg).toContain(dimensionText('Overall height', 1676));
+    expect(svg).toMatch(/fill="#000000"[^>]*>Overall length/);
+    // The length dimension line sits below the art, inside the content band.
+    const dim = svg.match(/<line x1="690" y1="([\d.]+)" x2="1715" y2="([\d.]+)"\/>/);
+    expect(dim).not.toBeNull();
+    expect(Number(dim![1])).toBeGreaterThan(420);
+    expect(Number(dim![1])).toBeLessThan(980);
+    // XML-hostile panel names are escaped.
+    expect(svg).toContain('Hood &amp; Fascia');
+  });
+
+  test('escapes label text and survives degenerate panel paths', () => {
+    const svg = buildQcOverlaySvg({
+      ...INPUT,
+      views: [
+        {
+          ...INPUT.views[0]!,
+          panels: [{ ...INPUT.views[0]!.panels[0]!, outlinePath: 'M0 0 Z' }],
+        },
+      ],
+    });
+    expect(() => parseSync(svg)).not.toThrow();
+  });
+});
+
+describe('viewScanWindows', () => {
+  test('clips neighbouring windows at the midline between panel bboxes', () => {
+    const wins = viewScanWindows(
+      [
+        { view: 'back', bounds: { minX: 240, minY: 210, maxX: 600, maxY: 400 } },
+        { view: 'front', bounds: { minX: 230, minY: 645, maxX: 615, maxY: 845 } },
+      ],
+      { width: 1920, height: 1080 },
+      { top: 70, bottom: 980 },
+    );
+    // Vertically adjacent: both windows meet at the midline (between 400 and 645).
+    expect(wins.back!.maxY).toBeLessThanOrEqual(522.5);
+    expect(wins.front!.minY).toBeGreaterThanOrEqual(522.5);
+    // And never escape the sheet's content band.
+    expect(wins.back!.minY).toBeGreaterThanOrEqual(70);
+    expect(wins.front!.maxY).toBeLessThanOrEqual(980);
+  });
+});
+
+describe('renderDimensionCallout', () => {
+  test('horizontal callout: extension lines, outward arrows, black label', () => {
+    const g = renderDimensionCallout({
+      orientation: 'horizontal',
+      span: [100, 900],
+      edge: 500,
+      side: 1,
+      label: 'Overall length 4,708 mm · 185.4 in',
+    });
+    expect(() => parseSync(`<svg>${g}</svg>`)).not.toThrow();
+    expect(g).toContain(`stroke="${brand.cyan}"`);
+    expect(g.match(/<polygon/g)).toHaveLength(2);
+    expect(g).toMatch(/fill="#000000"/);
+  });
+
+  test('vertical callout rotates its label', () => {
+    const g = renderDimensionCallout({
+      orientation: 'vertical',
+      span: [100, 400],
+      edge: 200,
+      side: -1,
+      label: 'Overall height 1,676 mm · 66.0 in',
+    });
+    expect(g).toContain('rotate(-90');
   });
 });

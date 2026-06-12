@@ -13,7 +13,12 @@ export function assembleLayoutSheet(vehicle: VehicleDetail): LayoutSheetInput {
       yearLabel: String(vehicle.year),
       code: vehicle.alphaWolfTplId,
       scaleDenom: vehicle.scaleDenom,
-      dims: { lengthMm: vehicle.lengthMm, widthMm: vehicle.widthMm, heightMm: vehicle.heightMm },
+      dims: {
+        lengthMm: vehicle.lengthMm,
+        widthMm: vehicle.widthMm,
+        heightMm: vehicle.heightMm,
+        wheelbaseMm: vehicle.wheelbaseMm,
+      },
     },
     vehicle.panels.map((p) => ({
       name: p.name,
