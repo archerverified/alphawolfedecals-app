@@ -413,6 +413,8 @@ model TemplateSource {
   createdBy User                    @relation("TemplateSourceCreatedBy", fields: [createdById], references: [id])
 
   @@index([vehicleId], map: "template_sources_vehicle_idx")
+  @@index([requestId], map: "template_sources_request_idx")
+  @@index([createdById], map: "template_sources_created_by_idx")
   @@map("template_sources")
 }
 

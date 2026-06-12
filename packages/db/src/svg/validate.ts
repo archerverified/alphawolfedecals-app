@@ -100,6 +100,28 @@ function findAll(root: INode, predicate: (n: INode) => boolean): INode[] {
   return out;
 }
 
+// svgson does NOT decode XML entities in attribute values, so an authored
+// name like "Bow &amp; Mid" would otherwise be stored verbatim. Decode the
+// named + numeric entities on the free-text fields we extract (name, notes);
+// path data and view names are charset-constrained and validated, so entities
+// there fail their own rules.
+const XML_ENTITY_DECODES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+};
+
+function decodeXmlEntities(value: string): string {
+  return value.replace(/&(amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);/g, (_, ent: string) => {
+    if (ent[0] !== '#') return XML_ENTITY_DECODES[ent]!;
+    const code =
+      ent[1] === 'x' ? Number.parseInt(ent.slice(2), 16) : Number.parseInt(ent.slice(1), 10);
+    return Number.isFinite(code) ? String.fromCodePoint(code) : `&${ent};`;
+  });
+}
+
 // --- path-data grammar (rule 7) --------------------------------------------
 
 const PATH_ARITY: Record<string, number> = {
@@ -269,7 +291,9 @@ export function validateOutlineSvg(
     for (const panel of panelGroups) {
       const outline = findAll(panel, (n) => n.name === 'path' && hasClass(n, 'outline'))[0];
       const wrapSafe = findAll(panel, (n) => n.name === 'path' && hasClass(n, 'wrap-safe'))[0];
-      const label = panel.attributes['data-name'] ?? panel.attributes.id ?? `${view} panel`;
+      const label = decodeXmlEntities(
+        panel.attributes['data-name'] ?? panel.attributes.id ?? `${view} panel`,
+      );
       if (!outline) {
         errors.push({ rule: 'panels', message: `Panel "${label}" is missing its .outline path.` });
       }
@@ -291,7 +315,10 @@ export function validateOutlineSvg(
         wrapSafePath: wrapSafe?.attributes.d ?? '',
         finishHint,
         installOrder: Number.isFinite(installRaw) ? installRaw : ++installSeq,
-        notes: panel.attributes['data-notes'] ?? null,
+        notes:
+          panel.attributes['data-notes'] != null
+            ? decodeXmlEntities(panel.attributes['data-notes'])
+            : null,
       });
     }
   }

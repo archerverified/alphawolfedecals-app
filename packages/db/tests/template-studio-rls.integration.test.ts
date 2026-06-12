@@ -57,7 +57,12 @@ async function deleteFixtureUser(email: string): Promise<void> {
 
 async function cleanup(): Promise<void> {
   await withSystem(async (db) => {
-    await db.templateSource.deleteMany({ where: { vehicleId: VEHICLE_ID } });
+    // Sweep by storage key too: if a prior run died between the vehicle delete
+    // and the source delete, the FK's ON DELETE SET NULL leaves orphans that a
+    // vehicleId-scoped delete never sees.
+    await db.templateSource.deleteMany({
+      where: { OR: [{ vehicleId: VEHICLE_ID }, { storageKey: { startsWith: VEHICLE_ID } }] },
+    });
     await db.vehicle.deleteMany({ where: { id: VEHICLE_ID } });
   });
   await Promise.all([deleteFixtureUser(EMAIL_USER), deleteFixtureUser(EMAIL_ADMIN)]);
@@ -127,7 +132,8 @@ test('non-admin cannot insert a template_sources row (fail-closed)', async () =>
         },
       }),
     ),
-  ).rejects.toThrow();
+    // Assert the RLS denial specifically, not just "something threw".
+  ).rejects.toThrow(/row-level security/);
 });
 
 test('non-admin sees zero template_sources rows', async () => {
@@ -166,10 +172,12 @@ test('admin creates and lists template_sources via the repo', async () => {
 });
 
 test('non-admin cannot replace a panel set', async () => {
-  await expect(setVehiclePanels(userId, VEHICLE_ID, PANELS)).rejects.toThrow();
+  // The published fixture vehicle is visible to the non-admin (public read),
+  // so the failure must be the vehicle_panels write policy, not "not found".
+  await expect(setVehiclePanels(userId, VEHICLE_ID, PANELS)).rejects.toThrow(/row-level security/);
 });
 
-test('admin replaces a panel set atomically (replace-all, not merge)', async () => {
+test('admin syncs a panel set; matching (view, name) panels KEEP their UUID', async () => {
   await setVehiclePanels(adminId, VEHICLE_ID, PANELS);
   const first = await withSystem(async (db) =>
     db.vehiclePanel.findMany({
@@ -178,15 +186,36 @@ test('admin replaces a panel set atomically (replace-all, not merge)', async () 
     }),
   );
   expect(first.map((p) => p.name)).toEqual(['Port Hull', 'Starboard Hull']);
+  const portId = first.find((p) => p.name === 'Port Hull')!.id;
 
-  // Replacing with a single panel leaves exactly that panel.
-  await setVehiclePanels(adminId, VEHICLE_ID, [PANELS[0]!]);
+  // Re-author: same identities, updated geometry/areas → UUIDs must survive
+  // (saved canvas documents key artwork by panel UUID).
+  await setVehiclePanels(
+    adminId,
+    VEHICLE_ID,
+    PANELS.map((p) => ({ ...p, printableAreaMm2: 9999 })),
+  );
   const second = await withSystem(async (db) =>
+    db.vehiclePanel.findMany({
+      where: { vehicleId: VEHICLE_ID },
+      orderBy: { installOrder: 'asc' },
+    }),
+  );
+  expect(second.find((p) => p.name === 'Port Hull')!.id).toBe(portId);
+  expect(second.every((p) => p.printableAreaMm2 === 9999)).toBe(true);
+
+  // Dropping a panel from the set deletes only that panel.
+  await setVehiclePanels(adminId, VEHICLE_ID, [PANELS[0]!]);
+  const third = await withSystem(async (db) =>
     db.vehiclePanel.findMany({ where: { vehicleId: VEHICLE_ID } }),
   );
-  expect(second.map((p) => p.name)).toEqual(['Port Hull']);
+  expect(third.map((p) => p.name)).toEqual(['Port Hull']);
+  expect(third[0]!.id).toBe(portId);
 });
 
-test('setVehiclePanels refuses an empty replacement set', async () => {
+test('setVehiclePanels refuses an empty set and duplicate identities', async () => {
   await expect(setVehiclePanels(adminId, VEHICLE_ID, [])).rejects.toThrow(/empty set/);
+  await expect(
+    setVehiclePanels(adminId, VEHICLE_ID, [PANELS[0]!, { ...PANELS[0]!, installOrder: 9 }]),
+  ).rejects.toThrow(/duplicate/);
 });

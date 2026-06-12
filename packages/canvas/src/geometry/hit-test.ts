@@ -70,9 +70,10 @@ function orient(ax: number, ay: number, bx: number, by: number, cx: number, cy: 
 /**
  * True when segments p1-p2 and p3-p4 cross at an interior point (proper
  * intersection). Collinear/endpoint-touching does NOT count — an element edge
- * lying flush along the clip boundary is allowed.
+ * lying flush along the clip boundary is allowed. (Also used by offset.ts to
+ * reject self-intersecting inset rings.)
  */
-function segmentsProperlyCross(
+export function segmentsProperlyCross(
   p1x: number,
   p1y: number,
   p2x: number,

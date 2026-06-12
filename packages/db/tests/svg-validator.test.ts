@@ -244,6 +244,23 @@ describe('validateOutlineSvg — declared views (Goal 6)', () => {
   });
 });
 
+describe('XML entity decoding in extracted fields', () => {
+  test('escaped & / quotes in data-name and data-notes come back decoded', () => {
+    const inner =
+      '<g class="panel" id="p-front" data-name="Bow &amp; Mid &quot;A&quot;" data-notes="keep &lt;numbers&gt; clear" data-install-order="1">' +
+      '<path class="outline" d="M10 10 L100 10 L100 100 Z"/>' +
+      '<path class="wrap-safe" d="M20 20 L90 20 L90 90 Z"/></g>';
+    const svgText = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4800 1200">${viewGroup('front', inner)}${viewGroup('driver')}${viewGroup('back')}${viewGroup('passenger')}</svg>`;
+    const result = validateOutlineSvg(svgText, DIMS);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const p = result.panels.find((x) => x.view === 'front')!;
+      expect(p.name).toBe('Bow & Mid "A"');
+      expect(p.notes).toBe('keep <numbers> clear');
+    }
+  });
+});
+
 describe('real seed file', () => {
   test('the shipped Tier-1 Transit SVG passes validation', () => {
     const svg = readFileSync(

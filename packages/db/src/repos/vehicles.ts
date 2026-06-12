@@ -417,12 +417,20 @@ export async function createVehicle(adminId: string, input: CreateVehicleInput):
   });
 }
 
-// Replace a vehicle's entire panel set (Goal 6 Template Studio). The AW
-// catalogue rows shipped published with ZERO panels (wrapped display art only);
-// the Studio authors panels onto the EXISTING row so its id, AW-TPL code, and
-// any projects pointing at it survive. Replace-all (not merge) keeps the panel
-// set exactly what the authored outline SVG says — withUser wraps the delete +
-// insert in one transaction, and RLS admin policies gate both statements.
+// Sync a vehicle's panel set to an authored set (Goal 6 Template Studio). The
+// AW catalogue rows shipped published with ZERO panels (wrapped display art
+// only); the Studio authors panels onto the EXISTING row so its id, AW-TPL
+// code, and projects pointing at it survive.
+//
+// ⚠️ PANEL IDENTITY: saved canvas documents key placed artwork by
+// vehicle_panels.id (the editor's PanelId — see components/editor/contract.ts),
+// so this is an IDENTITY-PRESERVING sync, not a delete-all: a panel whose
+// (view, name) matches an existing row is UPDATED in place and keeps its UUID
+// (existing artwork stays attached); only genuinely removed panels are deleted
+// and genuinely new ones created. Renaming a panel therefore detaches artwork
+// placed on it — the re-authoring workflow keeps names stable and the Studio
+// UI says so. withUser wraps the whole sync in one transaction; RLS admin
+// policies gate every statement.
 export async function setVehiclePanels(
   adminId: string,
   vehicleId: string,
@@ -431,13 +439,31 @@ export async function setVehiclePanels(
   if (panels.length === 0) {
     throw new Error('[db] setVehiclePanels: refusing to replace panels with an empty set');
   }
+  const keyOf = (p: { view: string; name: string }): string => `${p.view} ${p.name}`;
+  const dupes = panels.filter((p, i) => panels.findIndex((q) => keyOf(q) === keyOf(p)) !== i);
+  if (dupes.length > 0) {
+    throw new Error(
+      `[db] setVehiclePanels: duplicate (view, name) pairs: ${dupes.map((p) => `${p.view}/${p.name}`).join(', ')}`,
+    );
+  }
   await withUser(adminId, async (db) => {
     const exists = await db.vehicle.findUnique({ where: { id: vehicleId }, select: { id: true } });
     if (!exists) throw new Error('[db] setVehiclePanels: vehicle not found');
-    await db.vehiclePanel.deleteMany({ where: { vehicleId } });
-    await db.vehiclePanel.createMany({
-      data: panels.map((p) => ({
-        vehicleId,
+
+    const existing = await db.vehiclePanel.findMany({
+      where: { vehicleId },
+      select: { id: true, name: true, view: true },
+    });
+    const existingByKey = new Map(existing.map((e) => [keyOf(e), e.id]));
+    const incomingKeys = new Set(panels.map(keyOf));
+
+    const staleIds = existing.filter((e) => !incomingKeys.has(keyOf(e))).map((e) => e.id);
+    if (staleIds.length > 0) {
+      await db.vehiclePanel.deleteMany({ where: { id: { in: staleIds } } });
+    }
+
+    for (const p of panels) {
+      const data = {
         name: p.name,
         view: p.view,
         svgPath: p.svgPath,
@@ -446,8 +472,17 @@ export async function setVehiclePanels(
         finishHint: p.finishHint,
         installOrder: p.installOrder,
         notes: p.notes ?? null,
-      })),
-    });
+      };
+      const id = existingByKey.get(keyOf(p));
+      if (id) {
+        await db.vehiclePanel.update({ where: { id }, data });
+      } else {
+        await db.vehiclePanel.create({ data: { ...data, vehicleId } });
+      }
+    }
+
+    // Surface the panel-set change to caches/consumers watching the vehicle row.
+    await db.vehicle.update({ where: { id: vehicleId }, data: { updatedAt: new Date() } });
   });
 }
 
