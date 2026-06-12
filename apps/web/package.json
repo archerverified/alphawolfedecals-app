@@ -20,6 +20,7 @@
     "@alphawolf/observability": "workspace:*",
     "@alphawolf/parse": "workspace:^",
     "@alphawolf/ui": "workspace:*",
+    "@fal-ai/client": "^1.10.1",
     "@node-rs/argon2": "^2.0.2",
     "@prisma/client": "^5.22.0",
     "@sentry/nextjs": "^10.53.1",
