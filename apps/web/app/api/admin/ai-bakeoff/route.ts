@@ -40,10 +40,12 @@ import {
 import { captureServerEvent } from '../../../../lib/notifications/posthog-server';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 300;
+// Hobby-plan ceiling — Vercel rejects the whole DEPLOY above 60 (errorCode
+// invalid_max_duration, learned 2026-06-12). Callers send ONE model per
+// invocation; 1 × 45s fits with headroom for storage I/O.
+export const maxDuration = 60;
 
-// 6 models × 40s ≤ 240s, inside maxDuration with headroom for storage I/O.
-const PER_MODEL_TIMEOUT_MS = 40_000;
+const PER_MODEL_TIMEOUT_MS = 45_000;
 
 const ledgerStore: LedgerStore = {
   download: (key) => storage.downloadAssetObject(key),
