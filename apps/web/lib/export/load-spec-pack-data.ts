@@ -3,9 +3,9 @@
 // authenticated userId and every read is RLS-scoped (withUser) — a
 // non-owner's loads return null and the route 404s.
 
-import { briefs, projects, storage, vehicles } from '@alphawolf/db';
+import { briefs, generation, projects, storage, vehicles } from '@alphawolf/db';
 import { parseBriefData, type BriefData } from '@/lib/brief/schema';
-import type { SpecPackData, SpecPackPhoto } from './spec-pack';
+import type { AiProvenance, SpecPackData, SpecPackPhoto } from './spec-pack';
 
 const MAX_EMBEDDED_PHOTOS = 4;
 
@@ -29,6 +29,40 @@ async function fetchHeroPng(url: string | null): Promise<Uint8Array | undefined>
     return new Uint8Array(await res.arrayBuffer());
   } catch {
     return undefined;
+  }
+}
+
+// Goal 7 D6: the pack cover prefers the customer's CHOSEN design — the newest
+// complete FINAL run's largest render — over the stock template thumb. PNG
+// only (the builder embeds PNG); a non-PNG final falls back to the template
+// hero rather than failing the pack.
+async function loadFinalHero(
+  userId: string,
+  projectId: string,
+): Promise<{ png: Uint8Array; provenance: AiProvenance } | null> {
+  try {
+    const runs = await generation.listRunsForProject(userId, projectId);
+    const finalRun = runs.find(
+      (r) => r.kind === 'final' && r.status === 'complete' && r.images.length > 0,
+    );
+    if (!finalRun) return null;
+    const candidates = finalRun.images.filter((i) => i.storagePath.endsWith('.png'));
+    if (candidates.length === 0) return null;
+    const hero = candidates.reduce((a, b) => (b.width * b.height > a.width * a.height ? b : a));
+    const bytes = await storage.downloadAssetObject(hero.storagePath);
+    const prov = (hero.provenance ?? {}) as Record<string, unknown>;
+    return {
+      png: new Uint8Array(bytes),
+      provenance: {
+        provider: typeof prov.provider === 'string' ? prov.provider : finalRun.provider,
+        model: typeof prov.model === 'string' ? prov.model : finalRun.model,
+        runId: finalRun.id,
+        promptVersion: typeof prov.promptVersion === 'string' ? prov.promptVersion : '',
+      },
+    };
+  } catch {
+    // A missing object / transient storage error never blocks the pack.
+    return null;
   }
 }
 
@@ -76,7 +110,8 @@ export async function loadSpecPackData(
     : null;
 
   const label = [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(' ');
-  const heroPng = await fetchHeroPng(vehicle.thumbPngUrl);
+  const finalHero = await loadFinalHero(userId, projectId);
+  const heroPng = finalHero?.png ?? (await fetchHeroPng(vehicle.thumbPngUrl));
   const photos = await loadPhotos(userId, projectId, briefData);
 
   return {
@@ -101,5 +136,6 @@ export async function loadSpecPackData(
     briefVersion,
     photos,
     createdAt: new Date(),
+    ...(finalHero ? { aiProvenance: finalHero.provenance } : {}),
   };
 }

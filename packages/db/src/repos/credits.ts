@@ -30,6 +30,28 @@ export async function getCreditBalance(userId: string): Promise<number> {
   });
 }
 
+// TEST/DEV-ONLY drain: zero a user's balance with a system-written 'spend'
+// row (no run_id, so the run-scoped partial uniques don't apply; the CHECK
+// constraint allows source='spend' with a negative delta). Exists for the
+// local generation E2E's exhaustion path (waitlist sheet); the only call site
+// is the dev-gated /api/dev/drain-credits route, which is 404 in production.
+// The ledger stays append-only and truthful: the drain is a visible row.
+export async function drainCredits(userId: string): Promise<number> {
+  return withSystem(async (db) => {
+    const agg = await db.creditLedger.aggregate({
+      where: { userId },
+      _sum: { delta: true },
+    });
+    const balance = agg._sum.delta ?? 0;
+    if (balance <= 0) return 0;
+    await db.$executeRaw`
+      INSERT INTO credit_ledger (user_id, delta, source, reason)
+      VALUES (${userId}::uuid, ${-balance}, 'spend', 'dev_drain')
+    `;
+    return balance;
+  });
+}
+
 // Newest-first ledger page for the (Phase 2) account/credits UI.
 export async function listCreditLedger(userId: string, limit = 50): Promise<CreditLedgerRow[]> {
   return withUser(userId, async (db) => {

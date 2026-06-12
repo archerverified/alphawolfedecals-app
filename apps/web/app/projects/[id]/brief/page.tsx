@@ -3,7 +3,7 @@
 // panel breakdown, then hand serialisable props to the client wizard.
 
 import { notFound } from 'next/navigation';
-import { briefs, projects, vehicles } from '@alphawolf/db';
+import { briefs, credits, projects, vehicles } from '@alphawolf/db';
 import { requireUser } from '../../../../lib/admin/guard';
 import { BriefWizard } from '../../../../components/brief/BriefWizard';
 import { parseBriefData, type BriefData } from '../../../../lib/brief/schema';
@@ -34,6 +34,10 @@ export default async function BriefPage({ params }: { params: Promise<{ id: stri
 
   const label = [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(' ');
 
+  // Drives the Generate button (Goal 7 D5): cost on the button, zero balance
+  // opens the waitlist sheet.
+  const creditBalance = await credits.getCreditBalance(user.id);
+
   return (
     <main className="min-h-screen bg-zinc-50">
       <BriefWizard
@@ -50,6 +54,7 @@ export default async function BriefPage({ params }: { params: Promise<{ id: stri
           outlinePath: p.svgPath,
         }))}
         vehicleDims={{ lengthMm: vehicle.lengthMm, widthMm: vehicle.widthMm }}
+        creditBalance={creditBalance}
       />
     </main>
   );

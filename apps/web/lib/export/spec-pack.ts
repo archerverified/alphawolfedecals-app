@@ -21,6 +21,14 @@ export interface SpecPackPhoto {
   note?: string;
 }
 
+/** AI provenance for a pack whose hero is a generated final render (Goal 7 D6). */
+export interface AiProvenance {
+  provider: string;
+  model: string;
+  runId: string;
+  promptVersion: string;
+}
+
 export interface SpecPackData {
   projectId: string;
   projectName: string;
@@ -39,6 +47,8 @@ export interface SpecPackData {
   briefVersion: number | null;
   photos: SpecPackPhoto[]; // ≤4 embedded
   createdAt: Date;
+  /** Set when the hero is an AI final render — lands in the PDF metadata. */
+  aiProvenance?: AiProvenance;
 }
 
 const PAGE_W = 612; // US Letter, points
@@ -188,9 +198,26 @@ export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
   doc.setTitle(`Wrap Spec Pack — ${data.projectName}`);
   doc.setAuthor('Alpha Wolf Wrap Studio');
   doc.setProducer('Alpha Wolf Wrap Studio spec-pack generator (B2C-009)');
-  doc.setCreator(
-    'AI-assisted design brief — generated content; provenance: alphawolfedecals-app-web.vercel.app',
-  );
+  if (data.aiProvenance) {
+    // Goal 7 D6: the cover hero is an AI final render — record full provenance
+    // (provider, model, run, prompt version) in the document metadata.
+    const p = data.aiProvenance;
+    doc.setCreator(
+      `AI-generated design — ${p.provider}/${p.model}, run ${p.runId}, prompt ${p.promptVersion}; ` +
+        'provenance: alphawolfedecals-app-web.vercel.app',
+    );
+    doc.setKeywords([
+      'AI-generated',
+      `provider:${p.provider}`,
+      `model:${p.model}`,
+      `run:${p.runId}`,
+      `promptVersion:${p.promptVersion}`,
+    ]);
+  } else {
+    doc.setCreator(
+      'AI-assisted design brief — generated content; provenance: alphawolfedecals-app-web.vercel.app',
+    );
+  }
   doc.setSubject(`Vehicle wrap specification for ${data.vehicle.label}`);
   doc.setCreationDate(data.createdAt);
 
