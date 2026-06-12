@@ -138,11 +138,24 @@ export function GenerationStudio({
             toast.error(
               "That run didn't work out. Your credit is back in your balance — try again.",
             );
-          } else if (res.run.status === 'complete' && res.run.kind === 'final' && watched) {
-            toast.success('Final design ready! It’s in your editor and on your spec pack cover.');
+          } else if (res.run.status === 'complete' && res.run.kind === 'final') {
+            // Handoff BEFORE the gallery flips to "Final": when the badge and
+            // "Open in editor" appear, the locked layers are already in the
+            // working document. The sweep effect below is the retry/repair
+            // path for crashes and revisits.
+            if (!finalizedRef.current.has(res.run.runId)) {
+              finalizedRef.current.add(res.run.runId);
+              try {
+                const fin = await finalizeFinalRunAction(projectId, res.run.runId);
+                if (!fin.ok) finalizedRef.current.delete(res.run.runId);
+              } catch {
+                finalizedRef.current.delete(res.run.runId); // sweep retries
+              }
+            }
+            if (watched) {
+              toast.success('Final design ready! It’s in your editor and on your spec pack cover.');
+            }
           }
-          // refreshContext surfaces the final run → the handoff sweep effect
-          // below performs the (idempotent) editor/export registration.
           await refreshContext();
           if (res.run.status === 'complete') setSnapshot(null);
         }
