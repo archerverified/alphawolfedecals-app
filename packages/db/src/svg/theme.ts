@@ -15,6 +15,11 @@ export const brand = {
   cyan: '#00AEEF',
   /** Sheet ink — header bands, titles, legend numbers. */
   ink: '#141b2d',
+  /**
+   * Sheet paper. The QC compositors extend the raster canvas with this exact
+   * color under the SVG legend strip — a mismatch shows as a seam band.
+   */
+  paper: '#f8f8f6',
 } as const;
 
 // Panel labeling (Archer, 2026-06-12): NO text inside the vehicle art. Each
@@ -246,8 +251,11 @@ export type PanelNumberSpec = {
   n: number;
   /** Drawing units per sheet pixel (default 1). */
   unitScale?: number;
-  /** Drawable limits (view band) — a leader that would escape them flips side. */
-  clamp?: { minX: number; minY: number; maxX: number; maxY: number };
+  /**
+   * Horizontal drawable limits — a leader numeral flips to the panel's other
+   * end when its preferred end would escape them AND the other end fits.
+   */
+  clamp?: { minX: number; maxX: number };
 };
 
 /**
@@ -288,19 +296,20 @@ export function renderPanelNumber(spec: PanelNumberSpec): string {
   const sw = r2(t.leader.strokeWidth * u);
   const tick = (x1: number, y1: number, x2: number, y2: number): string =>
     `<line x1="${r2(x1)}" y1="${r2(y1)}" x2="${r2(x2)}" y2="${r2(y2)}" stroke="${t.fill}" stroke-width="${sw}"/>`;
-  if (h <= w) {
-    // Flat strip: numeral off the left end at the band's centreline (right
-    // end when clamped on the left).
-    const left = !spec.clamp || minX - (len + gap + textW) >= spec.clamp.minX;
-    const edge = left ? minX : maxX;
-    const dir = left ? -1 : 1;
-    return `<g opacity="${t.opacity}">${tick(edge, cy, edge + dir * len, cy)}${numeral(edge + dir * (len + gap), cy + fs * 0.35, left ? 'end' : 'start')}</g>`;
-  }
-  // Tall sliver: numeral beside the right edge (left when clamped).
-  const right = !spec.clamp || maxX + len + gap + textW <= spec.clamp.maxX;
-  const edge = right ? maxX : minX;
-  const dir = right ? 1 : -1;
-  return `<g opacity="${t.opacity}">${tick(edge, cy, edge + dir * len, cy)}${numeral(edge + dir * (len + gap), cy + fs * 0.35, right ? 'start' : 'end')}</g>`;
+  // Leader numeral at the panel's centreline, off the left end for flat
+  // strips (stacked bands keep distinct y's, so leaders cannot collide) and
+  // off the right edge for tall slivers. Flip to the other end only when the
+  // preferred end escapes the clamp and the other end actually fits —
+  // otherwise keep the preferred end (a clipped numeral beats one drawn over
+  // a neighbouring view).
+  const need = len + gap + textW;
+  const fitsLeft = !spec.clamp || minX - need >= spec.clamp.minX;
+  const fitsRight = !spec.clamp || maxX + need <= spec.clamp.maxX;
+  const preferLeft = h <= w;
+  const left = preferLeft ? fitsLeft || !fitsRight : !fitsRight && fitsLeft;
+  const edge = left ? minX : maxX;
+  const dir = left ? -1 : 1;
+  return `<g opacity="${t.opacity}">${tick(edge, cy, edge + dir * len, cy)}${numeral(edge + dir * (len + gap), cy + fs * 0.35, left ? 'end' : 'start')}</g>`;
 }
 
 export type LegendEntry = { n: number; name: string };
@@ -334,7 +343,15 @@ export type LegendSpec = {
 export function renderPanelLegend(spec: LegendSpec): string {
   const t = legendStyle;
   const u = spec.unitScale ?? 1;
-  const { rows } = legendMetrics(spec.entries.length);
+  const { rows, cols } = legendMetrics(spec.entries.length);
+  // Columns shrink their pitch to share spec.width when the token pitch would
+  // overflow it; names get the rest of the pitch and ellipsize past it — the
+  // legend is the only place names live, overprint would destroy the mapping.
+  const pitchPx = Math.min(t.columnWidth, spec.width / u / cols);
+  const nameBudgetPx = pitchPx - t.numberWidth - t.numberGap - 12;
+  const maxChars = Math.max(4, Math.floor(nameBudgetPx / (t.fontSize * 0.54)));
+  const fit = (name: string): string =>
+    name.length > maxChars ? `${name.slice(0, maxChars - 1).trimEnd()}…` : name;
   const parts: string[] = [`<g font-family="${panelNumber.fontFamily}">`];
   parts.push(
     `<line x1="${r2(spec.x)}" y1="${r2(spec.y)}" x2="${r2(spec.x + spec.width)}" y2="${r2(spec.y)}" stroke="${t.rule.stroke}" stroke-width="${r2(t.rule.width * u)}"/>`,
@@ -348,13 +365,13 @@ export function renderPanelLegend(spec: LegendSpec): string {
   sorted.forEach((e, i) => {
     const col = Math.floor(i / rows);
     const row = i % rows;
-    const colX = spec.x + col * t.columnWidth * u;
+    const colX = spec.x + col * pitchPx * u;
     const y = r2(firstRowY + row * t.lineHeight * u);
     parts.push(
       `<text x="${r2(colX + t.numberWidth * u)}" y="${y}" text-anchor="end" fill="${t.numberFill}" font-size="${fs}" font-weight="700">${e.n}</text>`,
     );
     parts.push(
-      `<text x="${r2(colX + (t.numberWidth + t.numberGap) * u)}" y="${y}" fill="${t.nameFill}" font-size="${fs}">${escXml(e.name)}</text>`,
+      `<text x="${r2(colX + (t.numberWidth + t.numberGap) * u)}" y="${y}" fill="${t.nameFill}" font-size="${fs}">${escXml(fit(e.name))}</text>`,
     );
   });
   parts.push('</g>');

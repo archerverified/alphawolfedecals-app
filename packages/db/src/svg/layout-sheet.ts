@@ -9,7 +9,7 @@
 // Pure string assembly; rasterisation (PNG) happens in storage.uploadLayoutSheet.
 
 import { geometry } from '@alphawolf/canvas';
-import { panelNumbers, VIEW_ORDER } from './numbering.js';
+import { numberViews, VIEW_ORDER } from './numbering.js';
 import { panelUnionBounds } from './qc-overlay.js';
 import {
   annotationsForView,
@@ -116,7 +116,15 @@ export function assembleLayoutSheetFromRows(
     arr.push(p);
     byView.set(p.view, arr);
   }
-  const ordered = [...byView.keys()].sort((a, b) => VIEW_ORDER.indexOf(a) - VIEW_ORDER.indexOf(b));
+  // Same view ranking as panelNumbers — unknown views go LAST (indexOf's -1
+  // would put them first, inverting the sheet order against the numbering).
+  const viewRank = (v: string): number => {
+    const i = VIEW_ORDER.indexOf(v);
+    return i === -1 ? VIEW_ORDER.length : i;
+  };
+  const ordered = [...byView.keys()].sort(
+    (a, b) => viewRank(a) - viewRank(b) || a.localeCompare(b),
+  );
 
   const views: LayoutSheetInput['views'] = [];
   let cursorX = 0;
@@ -212,19 +220,9 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
 
   // Stable numbering + the legend strip (the ONE placement rule: a full-width
   // strip below the views, here reserved between the content and the footer).
-  const flat = input.views.flatMap((v) =>
-    v.panels.map((p) => ({
-      view: v.view,
-      name: p.name,
-      installOrder: p.installOrder,
-      outlinePath: p.outlinePath,
-      panel: p,
-    })),
-  );
-  const numbers = panelNumbers(flat);
-  const numberOf = new Map(flat.map((f, i) => [f.panel, numbers[i]!]));
+  const { numberOf, bboxOf, entries } = numberViews(input.views);
   const LEGEND_GAP = 18;
-  const legendH = legendMetrics(flat.length).height;
+  const legendH = legendMetrics(entries.length).height;
   const contentH = CONTENT.h - legendH - LEGEND_GAP;
 
   const cw = union.maxX - union.minX;
@@ -239,7 +237,7 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
   lines.push(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SHEET_W} ${SHEET_H}" font-family="Helvetica, Arial, sans-serif">`,
   );
-  lines.push(`  <rect width="${SHEET_W}" height="${SHEET_H}" fill="#f8f8f6"/>`);
+  lines.push(`  <rect width="${SHEET_W}" height="${SHEET_H}" fill="${brand.paper}"/>`);
 
   // Header band.
   lines.push(`  <rect width="${SHEET_W}" height="${HEADER_H}" fill="${INK}"/>`);
@@ -270,13 +268,12 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
         `      <path d="${esc(p.wrapSafePath)}" fill="${WRAP_SAFE}" fill-opacity="0.05" stroke="${WRAP_SAFE}" stroke-width="1.5" stroke-dasharray="6 5" vector-effect="non-scaling-stroke"/>`,
       );
       // No names on the art — only the subtle numeral (legend carries names).
-      try {
-        const pb = geometry.bbox(geometry.parsePath(p.outlinePath));
+      // Degenerate outlines draw no numeral; their legend row still lists them.
+      const pb = bboxOf.get(p);
+      if (pb) {
         lines.push(
           '      ' + renderPanelNumber({ bbox: pb, n: numberOf.get(p)!, unitScale: 1 / s }),
         );
-      } catch {
-        // No numeral for unparseable outlines (the legend row still lists it).
       }
     }
     lines.push('    </g>');
@@ -356,7 +353,7 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
   lines.push(
     '  ' +
       renderPanelLegend({
-        entries: flat.map((f, i) => ({ n: numbers[i]!, name: f.name })),
+        entries,
         x: CONTENT.x,
         y: CONTENT.y + contentH + LEGEND_GAP,
         width: CONTENT.w,

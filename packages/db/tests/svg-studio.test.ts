@@ -19,6 +19,7 @@ import {
   legendMetrics,
   panelNumber,
   renderDimensionCallout,
+  renderPanelLegend,
   renderPanelNumber,
 } from '../src/svg/theme';
 import { validateOutlineSvg } from '../src/svg/validate';
@@ -447,6 +448,19 @@ describe('panelNumbers', () => {
     ];
     expect(panelNumbers(panels)).toEqual([2, 1]);
   });
+
+  test('unknown views sort after known views, by name, and never merge rows', () => {
+    // Two non-canonical views whose local Y-extents overlap must not cluster
+    // into one reading row — their coordinate spaces are unrelated.
+    const panels = [
+      { view: 'starboard', name: 'S1', installOrder: 1, outlinePath: rect(0, 0) },
+      { view: 'port', name: 'P1', installOrder: 2, outlinePath: rect(500, 0) },
+      { view: 'port', name: 'P2', installOrder: 3, outlinePath: rect(0, 0) },
+      { view: 'driver', name: 'Known', installOrder: 4, outlinePath: rect(0, 0) },
+    ];
+    // driver first; then port (alphabetical) reading left-to-right; then starboard.
+    expect(panelNumbers(panels)).toEqual([4, 3, 2, 1]);
+  });
 });
 
 describe('renderPanelNumber', () => {
@@ -488,5 +502,31 @@ describe('renderPanelNumber', () => {
     expect(g).toContain('text-anchor="start"');
     const x = Number(g.match(/<text x="([-\d.]+)"/)![1]);
     expect(x).toBeGreaterThan(60);
+  });
+});
+
+describe('renderPanelLegend', () => {
+  test('ellipsizes names past the column budget — overprint would destroy the mapping', () => {
+    const g = renderPanelLegend({
+      entries: [{ n: 1, name: 'A'.repeat(80) }],
+      x: 0,
+      y: 0,
+      width: 1800,
+    });
+    expect(() => parseSync(`<svg>${g}</svg>`)).not.toThrow();
+    expect(g).toContain('…');
+    expect(g).not.toContain('A'.repeat(60));
+  });
+
+  test('shrinks column pitch when the token pitch would overflow the strip width', () => {
+    const entries = Array.from({ length: 40 }, (_, i) => ({ n: i + 1, name: `Panel ${i + 1}` }));
+    const g = renderPanelLegend({ entries, x: 0, y: 0, width: 1000 });
+    // 5 columns into 1000px → pitch 200; the last column starts inside the strip.
+    const xs = [...g.matchAll(/text-anchor="end"[^>]*/g)];
+    expect(xs.length).toBe(40);
+    const numberXs = [...g.matchAll(/<text x="([\d.]+)" y="[\d.]+" text-anchor="end"/g)].map((m) =>
+      Number(m[1]),
+    );
+    expect(Math.max(...numberXs)).toBeLessThan(1000);
   });
 });

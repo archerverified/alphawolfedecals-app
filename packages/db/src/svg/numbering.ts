@@ -33,10 +33,24 @@ export type NumberablePanel = {
   outlinePath: string;
 };
 
+export type Bbox = { minX: number; minY: number; maxX: number; maxY: number };
+
+/**
+ * Degenerate-safe outline bbox: rings of <3 points are dropped (their
+ * zero-bbox would silently anchor at the origin); null when nothing drawable
+ * remains. THE bbox policy for numbering and numeral placement — every
+ * consumer must agree on what counts as degenerate.
+ */
+export function outlineBbox(d: string): Bbox | null {
+  const rings = geometry.parsePath(d).filter((r) => r.length >= 3);
+  return rings.length > 0 ? geometry.bbox(rings) : null;
+}
+
 type Item = {
   i: number;
   viewIdx: number;
-  b: { minX: number; minY: number; maxX: number; maxY: number } | null;
+  view: string;
+  b: Bbox | null;
   installOrder: number;
   name: string;
   row: number;
@@ -53,14 +67,17 @@ const sameRow = (a: NonNullable<Item['b']>, z: NonNullable<Item['b']>): boolean 
  * Degenerate outlines (no parseable ring) sort after positioned panels within
  * their view; they still receive a number so the legend stays complete.
  */
-export function panelNumbers(panels: NumberablePanel[]): number[] {
+export function panelNumbers(
+  panels: NumberablePanel[],
+  bboxes?: ReadonlyArray<Bbox | null>,
+): number[] {
   const items: Item[] = panels.map((p, i) => {
-    const rings = geometry.parsePath(p.outlinePath).filter((r) => r.length >= 3);
     const viewIdx = VIEW_ORDER.indexOf(p.view);
     return {
       i,
       viewIdx: viewIdx === -1 ? VIEW_ORDER.length : viewIdx,
-      b: rings.length > 0 ? geometry.bbox(rings) : null,
+      view: p.view,
+      b: bboxes ? bboxes[i]! : outlineBbox(p.outlinePath),
       installOrder: p.installOrder,
       name: p.name,
       row: 0,
@@ -68,12 +85,14 @@ export function panelNumbers(panels: NumberablePanel[]): number[] {
   });
 
   // Cluster each view's panels into reading rows (transitive Y-overlap),
-  // then key rows by the topmost edge of their cluster.
-  const byView = new Map<number, Item[]>();
+  // then key rows by the topmost edge of their cluster. Group by view NAME —
+  // two non-canonical views must not merge into one cluster space (their
+  // local coordinates are unrelated); among themselves they order by name.
+  const byView = new Map<string, Item[]>();
   for (const it of items) {
-    const arr = byView.get(it.viewIdx) ?? [];
+    const arr = byView.get(it.view) ?? [];
     arr.push(it);
-    byView.set(it.viewIdx, arr);
+    byView.set(it.view, arr);
   }
   for (const group of byView.values()) {
     const positioned = group.filter((it) => it.b !== null);
@@ -98,6 +117,7 @@ export function panelNumbers(panels: NumberablePanel[]): number[] {
 
   items.sort((a, z) => {
     if (a.viewIdx !== z.viewIdx) return a.viewIdx - z.viewIdx;
+    if (a.view !== z.view) return a.view.localeCompare(z.view); // unknown views
     if (a.row !== z.row) return a.row - z.row;
     const ax = a.b?.minX ?? Infinity;
     const zx = z.b?.minX ?? Infinity;
@@ -113,4 +133,41 @@ export function panelNumbers(panels: NumberablePanel[]): number[] {
     out[it.i] = rank + 1;
   });
   return out;
+}
+
+export type NumberedViews<P> = {
+  /** Panel object → its stable number. */
+  numberOf: Map<P, number>;
+  /** Panel object → degenerate-safe outline bbox (null = draw no numeral). */
+  bboxOf: Map<P, Bbox | null>;
+  /** Legend rows, one per panel. */
+  entries: Array<{ n: number; name: string }>;
+};
+
+/**
+ * The one numbering entry point for view-shaped renderer inputs: flattens,
+ * numbers, and exposes the bboxes the derivation already computed so callers
+ * don't re-parse paths. Both sheet renderers use this — the field mapping
+ * that feeds panelNumbers must exist exactly once, or the sheets could
+ * disagree on numbers.
+ */
+export function numberViews<
+  P extends { name: string; outlinePath: string; installOrder: number },
+>(views: Array<{ view: string; panels: P[] }>): NumberedViews<P> {
+  const flat = views.flatMap((v) =>
+    v.panels.map((p) => ({
+      view: v.view,
+      name: p.name,
+      installOrder: p.installOrder,
+      outlinePath: p.outlinePath,
+      panel: p,
+    })),
+  );
+  const bboxes = flat.map((f) => outlineBbox(f.outlinePath));
+  const numbers = panelNumbers(flat, bboxes);
+  return {
+    numberOf: new Map(flat.map((f, i) => [f.panel, numbers[i]!])),
+    bboxOf: new Map(flat.map((f, i) => [f.panel, bboxes[i]!])),
+    entries: flat.map((f, i) => ({ n: numbers[i]!, name: f.name })),
+  };
 }

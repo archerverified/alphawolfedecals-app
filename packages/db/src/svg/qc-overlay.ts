@@ -22,9 +22,10 @@
 // pure string assembly.
 
 import { geometry } from '@alphawolf/canvas';
-import { panelNumbers } from './numbering.js';
+import { numberViews } from './numbering.js';
 import {
   annotationsForView,
+  brand,
   dimensionCallout,
   escXml,
   legendMetrics,
@@ -247,22 +248,11 @@ export function buildQcOverlaySvg(input: QcOverlayInput): string {
     throw new Error('[svg] buildQcOverlaySvg: at least one view is required');
   }
   const u = input.viewBox.width / 1920;
-  const band = input.contentBand ?? { top: 0, bottom: input.viewBox.height };
 
   // Stable numbering across the whole template (view order, then position).
-  const flat = input.views.flatMap((v) =>
-    v.panels.map((p) => ({
-      view: v.view,
-      name: p.name,
-      installOrder: p.installOrder,
-      outlinePath: p.outlinePath,
-      panel: p,
-    })),
-  );
-  const numbers = panelNumbers(flat);
-  const numberOf = new Map(flat.map((f, i) => [f.panel, numbers[i]!]));
+  const { numberOf, bboxOf, entries } = numberViews(input.views);
 
-  const legendH = legendMetrics(flat.length).height * u;
+  const legendH = legendMetrics(entries.length).height * u;
   const lines: string[] = [];
   lines.push(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${input.viewBox.width} ${r2(input.viewBox.height + legendH)}">`,
@@ -270,14 +260,9 @@ export function buildQcOverlaySvg(input: QcOverlayInput): string {
   for (const v of input.views) {
     const tx = v.translate?.x ?? 0;
     const ty = v.translate?.y ?? 0;
-    // The numeral's leader fallback must stay inside the drawable band,
-    // expressed in this view's local coordinates.
-    const clamp = {
-      minX: -tx,
-      minY: band.top - ty,
-      maxX: input.viewBox.width - tx,
-      maxY: band.bottom - ty,
-    };
+    // The numeral's leader fallback must stay inside the sheet, expressed in
+    // this view's local coordinates.
+    const clamp = { minX: -tx, maxX: input.viewBox.width - tx };
     lines.push(`<g transform="translate(${r2(tx)},${r2(ty)})">`);
     for (const p of v.panels) {
       // The blue zone rendering is unchanged by design — panel names moved
@@ -286,16 +271,9 @@ export function buildQcOverlaySvg(input: QcOverlayInput): string {
       lines.push(
         `<path d="${escXml(p.wrapSafePath)}" fill="none" stroke="${PANEL_FILL}" stroke-width="${r2(1.5 * u)}" stroke-dasharray="${r2(7 * u)} ${r2(5 * u)}"/>`,
       );
-      const rings = geometry.parsePath(p.outlinePath).filter((r) => r.length >= 3);
-      if (rings.length > 0) {
-        lines.push(
-          renderPanelNumber({
-            bbox: geometry.bbox(rings),
-            n: numberOf.get(p)!,
-            unitScale: u,
-            clamp,
-          }),
-        );
+      const bbox = bboxOf.get(p);
+      if (bbox) {
+        lines.push(renderPanelNumber({ bbox, n: numberOf.get(p)!, unitScale: u, clamp }));
       }
     }
     lines.push('</g>');
@@ -305,11 +283,11 @@ export function buildQcOverlaySvg(input: QcOverlayInput): string {
   // Legend strip appended below the art (its own paper background — the strip
   // is new canvas, not vehicle art).
   lines.push(
-    `<rect x="0" y="${input.viewBox.height}" width="${input.viewBox.width}" height="${r2(legendH)}" fill="#f8f8f6"/>`,
+    `<rect x="0" y="${input.viewBox.height}" width="${input.viewBox.width}" height="${r2(legendH)}" fill="${brand.paper}"/>`,
   );
   lines.push(
     renderPanelLegend({
-      entries: flat.map((f, i) => ({ n: numbers[i]!, name: f.name })),
+      entries,
       x: 64 * u,
       y: input.viewBox.height,
       width: input.viewBox.width - 128 * u,
