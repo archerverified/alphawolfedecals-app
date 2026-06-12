@@ -32,12 +32,17 @@ import {
   assembleLayoutSheetFromRows,
   buildLayoutSheetSvg,
   buildOutlineSvg,
+  buildQcOverlaySvg,
   defaultAxisForView,
   mmPerUnitFor,
+  panelUnionBounds,
   validateOutlineSvg,
+  viewScanWindows,
   wrapSafeZoneFor,
   type OutlineViewSpec,
+  type QcOverlayView,
 } from '../src/svg/index.js';
+import { measureArtBounds } from './lib/art-bounds.js';
 import { setVehiclePanels, type PanelInput } from '../src/repos/vehicles.js';
 import { createSource, listForVehicle } from '../src/repos/template-sources.js';
 import { findUserByEmailForAuth } from '../src/repos/users.js';
@@ -93,19 +98,49 @@ async function wrappedSheetPng(vehicleId: string, storageKey: string): Promise<B
     .toBuffer();
 }
 
-function overlaySvg(def: TemplateDef, panels: PanelInput[]): string {
-  const shapes = panels
-    .map((p) => {
-      const zone = p.wrapSafeZone as { clip_path: string };
-      const b = geometry.bbox(geometry.parsePath(p.svgPath));
-      return (
-        `<path d="${p.svgPath}" fill="#2563eb" fill-opacity="0.13" stroke="#dc2626" stroke-width="2.5"/>` +
-        `<path d="${zone.clip_path}" fill="none" stroke="#2563eb" stroke-width="1.5" stroke-dasharray="7 5"/>` +
-        `<text x="${(b.minX + b.maxX) / 2}" y="${(b.minY + b.maxY) / 2}" text-anchor="middle" font-size="17" font-family="Helvetica" font-weight="700" fill="#dc2626">${p.installOrder}. ${p.name.replace(/&/g, '&amp;').replace(/</g, '&lt;')}</text>`
-      );
-    })
-    .join('');
-  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${def.viewBox.width} ${def.viewBox.height}" width="1920" height="1080">${shapes}</svg>`;
+// The wrapped sheets put their header band above y≈64 and the footer rule at
+// y≈988 — dimension callouts must stay inside that band.
+const SHEET_CONTENT_BAND = { top: 70, bottom: 984 };
+
+async function overlaySvg(
+  def: TemplateDef,
+  panels: PanelInput[],
+  dims: { lengthMm: number; widthMm: number; heightMm: number; wheelbaseMm?: number | null },
+  basePng: Buffer,
+): Promise<string> {
+  // AW panels are authored sheet-absolute (translate 0,0), so panel geometry
+  // composites 1:1; callouts anchor on the measured ink extent of each view.
+  const byView = new Map<string, PanelInput[]>();
+  for (const p of panels) {
+    byView.set(p.view, [...(byView.get(p.view) ?? []), p]);
+  }
+  const views: QcOverlayView[] = [];
+  for (const [view, vp] of byView) {
+    const qcPanels = vp.map((p) => ({
+      name: p.name,
+      outlinePath: p.svgPath,
+      wrapSafePath: (p.wrapSafeZone as { clip_path: string }).clip_path,
+      installOrder: p.installOrder,
+    }));
+    const bounds = panelUnionBounds(qcPanels);
+    if (!bounds) continue;
+    views.push({ view, panels: qcPanels, artBounds: bounds });
+  }
+  const windows = viewScanWindows(
+    views.map((v) => ({ view: v.view, bounds: v.artBounds })),
+    def.viewBox,
+    SHEET_CONTENT_BAND,
+  );
+  const measured = await measureArtBounds(basePng, def.viewBox, windows);
+  for (const v of views) {
+    v.artBounds = measured[v.view] ?? v.artBounds;
+  }
+  return buildQcOverlaySvg({
+    viewBox: def.viewBox,
+    dims,
+    views,
+    contentBand: SHEET_CONTENT_BAND,
+  });
 }
 
 async function main(): Promise<void> {
@@ -135,6 +170,7 @@ async function main(): Promise<void> {
           lengthMm: true,
           widthMm: true,
           heightMm: true,
+          wheelbaseMm: true,
           svgStorageKey: true,
           viewCount: true,
           year: true,
@@ -219,7 +255,13 @@ async function main(): Promise<void> {
     // QC overlay.
     if (vehicle.svgStorageKey) {
       const base = await wrappedSheetPng(def.vehicleId, vehicle.svgStorageKey);
-      const overlay = await sharp(Buffer.from(overlaySvg(def, panels)))
+      const overlay = await sharp(
+        Buffer.from(
+          await overlaySvg(def, panels, { ...dims, wheelbaseMm: vehicle.wheelbaseMm }, base),
+        ),
+        { density: 96 },
+      )
+        .resize(1920, 1080, { fit: 'fill' })
         .png()
         .toBuffer();
       const out = path.join(QC_DIR, `${file.replace('.json', '')}-overlay.png`);
@@ -253,7 +295,7 @@ async function main(): Promise<void> {
           yearLabel: String(vehicle.year),
           code: vehicle.alphaWolfTplId,
           scaleDenom: vehicle.scaleDenom,
-          dims,
+          dims: { ...dims, wheelbaseMm: vehicle.wheelbaseMm },
         },
         panels,
       );

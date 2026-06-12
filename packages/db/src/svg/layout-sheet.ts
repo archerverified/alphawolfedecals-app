@@ -10,6 +10,7 @@
 
 import { geometry } from '@alphawolf/canvas';
 import { defaultAxisForView } from './calibrate.js';
+import { brand, dimensionCallout, dimensionText, renderDimensionCallout } from './theme.js';
 
 const SHEET_W = 1920;
 const SHEET_H = 1080;
@@ -17,7 +18,7 @@ const HEADER_H = 64;
 const FOOTER_Y = 988;
 const CONTENT = { x: 60, y: 100, w: SHEET_W - 120, h: FOOTER_Y - 140 };
 
-const INK = '#141b2d';
+const INK = brand.ink;
 const MUTED = '#8b93a7';
 const PANEL_STROKE = '#15181d';
 const WRAP_SAFE = '#2563eb';
@@ -39,13 +40,24 @@ export type LayoutSheetPanel = {
   installOrder: number;
 };
 
+/**
+ * Pattern-sheet dimension annotation for one view. Geometry policy lives in
+ * the renderer: `length` spans the view's content bbox below it; `wheelbase`
+ * and `height` are calibrated spans (bbox span × ratio) — wheelbase centred
+ * under the length row, height as a vertical callout beside the view.
+ */
+export type DimensionAnnotation =
+  | { kind: 'length'; label: string }
+  | { kind: 'wheelbase'; label: string; ratio: number }
+  | { kind: 'height'; label: string; ratio: number };
+
 export type LayoutSheetView = {
   view: string;
   /** Sheet placement (same transform the outline SVG uses). */
   translate: { x: number; y: number };
   panels: LayoutSheetPanel[];
-  /** Dimension callout under this view, e.g. "4,708 mm · 185.4 in overall". */
-  dimensionLabel?: string;
+  /** Dimension callouts for this view (theme.ts pattern-sheet style). */
+  annotations?: DimensionAnnotation[];
 };
 
 export type LayoutSheetInput = {
@@ -97,7 +109,7 @@ export type LayoutSheetMeta = {
   yearLabel: string;
   code: string | null;
   scaleDenom: number;
-  dims: { lengthMm: number; widthMm: number; heightMm: number };
+  dims: { lengthMm: number; widthMm: number; heightMm: number; wheelbaseMm?: number | null };
 };
 
 export type LayoutPanelRow = {
@@ -108,13 +120,33 @@ export type LayoutPanelRow = {
   installOrder: number;
 };
 
-const mmToInches = (mm: number): string => (mm / 25.4).toFixed(1);
-const fmtMm = (mm: number): string => mm.toLocaleString('en-US');
-
-function calloutFor(view: string, dims: LayoutSheetMeta['dims']): string {
+// Which annotations a view carries (Archer, 2026-06-12): overall length below
+// profile/top views (+ wheelbase when known), overall height beside front/rear
+// elevations. Height/wheelbase spans are calibrated off the view's horizontal
+// content span, which the panel union approximates within a few percent (the
+// known panels-stop-short-of-bumpers shortfall — see calibrate.ts).
+function annotationsFor(view: string, dims: LayoutSheetMeta['dims']): DimensionAnnotation[] {
   const axis = defaultAxisForView(view);
-  const mm = axis === 'length' ? dims.lengthMm : axis === 'width' ? dims.widthMm : dims.heightMm;
-  return `Overall ${axis} ${fmtMm(mm)} mm · ${mmToInches(mm)} in`;
+  if (axis === 'width') {
+    return [
+      {
+        kind: 'height',
+        label: dimensionText('Overall height', dims.heightMm),
+        ratio: dims.heightMm / dims.widthMm,
+      },
+    ];
+  }
+  const out: DimensionAnnotation[] = [
+    { kind: 'length', label: dimensionText('Overall length', dims.lengthMm) },
+  ];
+  if (dims.wheelbaseMm) {
+    out.push({
+      kind: 'wheelbase',
+      label: dimensionText('Wheelbase', dims.wheelbaseMm),
+      ratio: dims.wheelbaseMm / dims.lengthMm,
+    });
+  }
+  return out;
 }
 
 const titleCase = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
@@ -157,7 +189,7 @@ export function assembleLayoutSheetFromRows(
         wrapSafePath: (p.wrapSafeZone as { clip_path?: string } | null)?.clip_path ?? p.svgPath,
         installOrder: p.installOrder,
       })),
-      dimensionLabel: calloutFor(view, meta.dims),
+      annotations: annotationsFor(view, meta.dims),
     });
     cursorX += maxX - minX + VIEW_GUTTER;
   }
@@ -192,13 +224,37 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
     maxY: Math.max(...perView.map(({ b }) => b.maxY)),
   };
 
-  // Content-units reserved under the views for labels + dimension callouts.
-  const calloutRoom = 110;
+  // A height callout's calibrated span can overhang its view's bbox top and
+  // bottom (front/rear panels cover a body band, not roof-to-ground). Expand
+  // the union by that overhang (content units) before fitting.
+  for (const { v, b } of perView) {
+    const height = v.annotations?.find((x) => x.kind === 'height');
+    if (!height) continue;
+    const overhang = Math.max(0, ((b.maxX - b.minX) * height.ratio - (b.maxY - b.minY)) / 2);
+    union.minY = Math.min(union.minY, b.minY - overhang);
+    union.maxY = Math.max(union.maxY, b.maxY + overhang);
+  }
+
+  // Sheet-pixel room reserved around the content: below for the view labels +
+  // horizontal dimension rows, left when the leftmost view carries a vertical
+  // height callout. Constants are sheet px, so the annotation style stays the
+  // same size regardless of the art's unit scale.
+  const VIEW_LABEL_OFFSET = 30;
+  const LENGTH_ROW_OFFSET = 56;
+  const roomBottom = Math.max(
+    ...perView.map(({ v }) => {
+      const rows = v.annotations?.filter((x) => x.kind !== 'height').length ?? 0;
+      return rows > 0 ? LENGTH_ROW_OFFSET + (rows - 1) * 44 + 40 : 50;
+    }),
+  );
+  const leftmost = perView.reduce((m, x) => (x.b.minX < m.b.minX ? x : m), perView[0]!);
+  const roomLeft = leftmost.v.annotations?.some((x) => x.kind === 'height') ? 80 : 0;
+
   const cw = union.maxX - union.minX;
-  const ch = union.maxY - union.minY + calloutRoom;
-  const s = Math.min(CONTENT.w / cw, CONTENT.h / ch);
-  const ox = CONTENT.x + (CONTENT.w - cw * s) / 2 - union.minX * s;
-  const oy = CONTENT.y + (CONTENT.h - ch * s) / 2 - union.minY * s;
+  const ch = union.maxY - union.minY;
+  const s = Math.min((CONTENT.w - roomLeft) / cw, (CONTENT.h - roomBottom) / ch);
+  const ox = CONTENT.x + roomLeft + (CONTENT.w - roomLeft - cw * s) / 2 - union.minX * s;
+  const oy = CONTENT.y + (CONTENT.h - roomBottom - ch * s) / 2 - union.minY * s;
 
   // Font sizes are computed in sheet units (the outer coordinate space) so the
   // sheet stays legible regardless of the art's unit scale.
@@ -249,24 +305,60 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
     }
     lines.push('    </g>');
 
-    // View label + dimension callout under the view (content coordinates).
-    const labelY = b.maxY + 34 / s;
+    // View label + dimension callouts (content coordinates; theme constants
+    // are sheet px, so pass unitScale = 1/s).
+    const u = 1 / s;
     const midX = (b.minX + b.maxX) / 2;
+    const midY = (b.minY + b.maxY) / 2;
     lines.push(
-      `    <text x="${r2(midX)}" y="${r2(labelY)}" text-anchor="middle" fill="#5a6172" font-size="${r2(16 / s)}" letter-spacing="${r2(2 / s)}">${esc(v.view.toUpperCase())}</text>`,
+      `    <text x="${r2(midX)}" y="${r2(b.maxY + VIEW_LABEL_OFFSET * u)}" text-anchor="middle" fill="#5a6172" font-size="${r2(16 * u)}" letter-spacing="${r2(2 * u)}">${esc(v.view.toUpperCase())}</text>`,
     );
-    if (v.dimensionLabel) {
-      const dimY = b.maxY + 62 / s;
-      lines.push(
-        `    <g stroke="#9aa3b5" stroke-width="${r2(1 / s)}">` +
-          `<line x1="${r2(b.minX)}" y1="${r2(dimY)}" x2="${r2(b.maxX)}" y2="${r2(dimY)}"/>` +
-          `<line x1="${r2(b.minX)}" y1="${r2(dimY - 6 / s)}" x2="${r2(b.minX)}" y2="${r2(dimY + 6 / s)}"/>` +
-          `<line x1="${r2(b.maxX)}" y1="${r2(dimY - 6 / s)}" x2="${r2(b.maxX)}" y2="${r2(dimY + 6 / s)}"/>` +
-          `</g>`,
-      );
-      lines.push(
-        `    <text x="${r2(midX)}" y="${r2(dimY + 24 / s)}" text-anchor="middle" fill="#5a6172" font-size="${r2(13 / s)}">${esc(v.dimensionLabel)}</text>`,
-      );
+    for (const ann of v.annotations ?? []) {
+      if (ann.kind === 'length') {
+        lines.push(
+          '    ' +
+            renderDimensionCallout({
+              orientation: 'horizontal',
+              span: [b.minX, b.maxX],
+              edge: b.maxY,
+              side: 1,
+              label: ann.label,
+              unitScale: u,
+              offsetPx: LENGTH_ROW_OFFSET,
+            }),
+        );
+      } else if (ann.kind === 'wheelbase') {
+        // Calibrated span centred under the length row. Axle positions aren't
+        // in the data model, so no extension lines — the row states the real
+        // wheelbase without claiming anchor points on the drawing.
+        const half = ((b.maxX - b.minX) * ann.ratio) / 2;
+        lines.push(
+          '    ' +
+            renderDimensionCallout({
+              orientation: 'horizontal',
+              span: [midX - half, midX + half],
+              edge: b.maxY,
+              side: 1,
+              label: ann.label,
+              unitScale: u,
+              offsetPx: LENGTH_ROW_OFFSET + dimensionCallout.rowGap,
+              extensionLines: false,
+            }),
+        );
+      } else {
+        const half = ((b.maxX - b.minX) * ann.ratio) / 2;
+        lines.push(
+          '    ' +
+            renderDimensionCallout({
+              orientation: 'vertical',
+              span: [midY - half, midY + half],
+              edge: b.minX,
+              side: -1,
+              label: ann.label,
+              unitScale: u,
+            }),
+        );
+      }
     }
     lines.push('  </g>');
   }

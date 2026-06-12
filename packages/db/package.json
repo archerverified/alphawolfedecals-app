@@ -37,7 +37,8 @@
     "db:make-admin": "dotenv -e .env -- tsx scripts/make-admin.ts",
     "storage:provision": "dotenv -e .env -- tsx scripts/provision-storage.ts",
     "storage:migrate-local": "dotenv -e .env -- tsx scripts/migrate-local-assets.ts",
-    "db:author-aw": "dotenv -e .env -- tsx scripts/author-aw-panels.ts"
+    "db:author-aw": "dotenv -e .env -- tsx scripts/author-aw-panels.ts",
+    "db:regen-artifacts": "dotenv -e .env -- tsx scripts/regen-template-artifacts.ts"
   },
   "dependencies": {
     "@alphawolf/canvas": "workspace:^",

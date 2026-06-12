@@ -196,7 +196,10 @@ describe('assembleLayoutSheet', () => {
     expect(sheet.viewsLine).toBe('2-View · Driver / Passenger');
     expect(sheet.views).toHaveLength(2);
     // Profile views call out the overall length in mm + inches.
-    expect(sheet.views[0]?.dimensionLabel).toBe('Overall length 11,125 mm · 438.0 in');
+    expect(sheet.views[0]?.annotations?.[0]).toEqual({
+      kind: 'length',
+      label: 'Overall length 11,125 mm · 438.0 in',
+    });
     // Second view starts one content-width + gutter to the right.
     expect(sheet.views[1]?.translate.x).toBeGreaterThan(sheet.views[0]!.translate.x);
   });
