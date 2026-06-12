@@ -108,7 +108,11 @@ export const AI_CONFIG = {
     // $/MTok, for the spend ledger + cost tracking (verified 2026-06-12).
     inputUsdPerMTok: 1.0,
     outputUsdPerMTok: 5.0,
-    maxTokens: 4096,
+    // OUTPUT ceiling (a cap, not a spend): a 5-view brief is ~1.8-2.5K output
+    // tokens (3 directions × 5 prompts; measured 737 for 2 views), and a
+    // max_tokens truncation mid-JSON fails the run permanently after the one
+    // repair retry — so keep generous headroom. Haiku 4.5 allows up to 64K.
+    maxTokens: 8192,
   },
   // Draft render geometry. ~1 MP keeps per-MP models at their floor price.
   draftImage: { width: 1024, height: 768 },

@@ -9,6 +9,8 @@
 
 import 'server-only';
 
+import { VIEW_ORDER } from '@alphawolf/db';
+
 import type { BriefData } from '@/lib/brief/schema';
 import { MATERIAL_TIERS } from '@/lib/brief/schema';
 
@@ -122,16 +124,14 @@ Return ONLY JSON matching the provided schema: { "affectedViews", "editPrompt", 
 // are part of the versioned prompt surface).
 // ---------------------------------------------------------------------------
 
-const CANONICAL_VIEW_ORDER = ['front', 'driver', 'back', 'passenger', 'top'];
-
+// VIEW_ORDER is THE canonical order shared with the panel-numbering system
+// (packages/db svg/numbering) — never redefine it here, or sheet numbering and
+// prompt ordering drift apart. Unknown view names sort last, stably.
 export function orderViews(views: string[]): string[] {
   return [...views].sort((a, b) => {
-    const ia = CANONICAL_VIEW_ORDER.indexOf(a);
-    const ib = CANONICAL_VIEW_ORDER.indexOf(b);
-    return (
-      (ia === -1 ? CANONICAL_VIEW_ORDER.length : ia) -
-      (ib === -1 ? CANONICAL_VIEW_ORDER.length : ib)
-    );
+    const ia = VIEW_ORDER.indexOf(a);
+    const ib = VIEW_ORDER.indexOf(b);
+    return (ia === -1 ? VIEW_ORDER.length : ia) - (ib === -1 ? VIEW_ORDER.length : ib);
   });
 }
 
@@ -218,6 +218,10 @@ export function buildCompileUserMessage(input: CompileBriefInput): string {
     for (const note of zoneNotes) lines.push(`- ${note}`);
   }
 
+  // DELIBERATE omissions from the prompt: extras.dotNumber is TEXT (USDOT/MC
+  // number) — the no-text rule forbids AI-rendering it; it is applied
+  // downstream as document/layer text (export spec pack), like the logo.
+  // brief.tint only affects window glass, which every prompt keeps unchanged.
   const extras = brief.extras;
   const extraLines: string[] = [];
   if (extras?.chromeDelete)

@@ -2,6 +2,8 @@
 // vi.mock'd, no key, no spend. The integration test (one real Haiku call)
 // lives in ai-orchestrator.integration.test.ts behind an env gate.
 
+import { createHash } from 'node:crypto';
+
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { AI_CONFIG } from '@alphawolf/db';
@@ -24,6 +26,10 @@ import {
   ORCHESTRATOR_PROMPT_VERSION,
   OrchestratorError,
 } from '../lib/ai/orchestrator';
+import {
+  ITERATION_SYSTEM_PROMPT,
+  ORCHESTRATOR_SYSTEM_PROMPT,
+} from '../lib/ai/orchestrator/prompts';
 
 const LOGO_FILE_NAME = 'alpha-wolf-logo.png';
 const UUID_A = '11111111-1111-4111-8111-111111111111';
@@ -282,6 +288,21 @@ describe('compileIteration', () => {
     );
     await expect(compileIteration(iterationInput)).rejects.toThrowError(OrchestratorError);
     expect(createMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('prompt provenance', () => {
+  it('pins the prompt text to ORCHESTRATOR_PROMPT_VERSION (edit a prompt? bump the version AND this hash)', () => {
+    // Run provenance records the version string; this pin makes a silent
+    // prompt edit (text changed, version not bumped) fail loudly in CI.
+    const hash = createHash('sha256')
+      .update(ORCHESTRATOR_SYSTEM_PROMPT)
+      .update('::')
+      .update(ITERATION_SYSTEM_PROMPT)
+      .digest('hex');
+    expect(`${ORCHESTRATOR_PROMPT_VERSION}:${hash}`).toBe(
+      'v1:c072246ae6c0f3c846519852b52f6ba920064e69d1731e86c18d38e3fea901d5',
+    );
   });
 });
 

@@ -11,6 +11,10 @@
 //    error messages.
 //  - usage tokens + estimated USD are returned so the pipeline can ledger the
 //    orchestration cost alongside image costs.
+//  - transport failures (429/500/timeouts) propagate as the SDK's typed
+//    Anthropic.APIError — deliberately NOT wrapped, so the pipeline can
+//    distinguish retry-safe transport errors from OrchestratorError
+//    (validation/config) when deciding refunds.
 
 import 'server-only';
 
