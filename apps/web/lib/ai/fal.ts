@@ -100,7 +100,12 @@ async function submit(req: ProviderRequest): Promise<ProviderSubmission> {
   const { request_id } = await queue.submit(model.id, { input: buildInput(req) });
   return {
     requestId: request_id,
-    estimatedCostUsd: estimateImageCostUsd(model.pricing, req.width, req.height),
+    estimatedCostUsd: estimateImageCostUsd(
+      model.pricing,
+      req.width,
+      req.height,
+      req.imageUrls?.length ?? 0,
+    ),
   };
 }
 
@@ -110,11 +115,12 @@ async function check(modelKey: AiModelKey, requestId: string): Promise<ProviderC
   try {
     status = await queue.status(model.id, { requestId, logs: false });
   } catch (err) {
-    // 4xx = deterministic (bad request id, revoked key) — fail fast rather
-    // than leaning on the run deadline. 5xx/network stays pending; the
-    // run-level deadline (sweeper) is the backstop for a wedged job.
+    // Only DETERMINISTIC rejections fail fast (bad/unknown request id).
+    // 429/401/403 on the STATUS endpoint are not failed runs — the render may
+    // still complete and bill, so releasing spend on them would fail open.
+    // Those and 5xx/network stay pending; the run deadline is the backstop.
     const httpStatus = (err as { status?: number }).status;
-    if (httpStatus !== undefined && httpStatus >= 400 && httpStatus < 500) {
+    if (httpStatus === 404 || httpStatus === 422) {
       return { status: 'failed', error: `provider status check rejected (HTTP ${httpStatus})` };
     }
     return { status: 'pending' };

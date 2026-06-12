@@ -107,9 +107,13 @@ export async function POST(request: Request): Promise<NextResponse> {
   const seed = Number.isInteger(body.seed) ? (body.seed as number) : undefined;
   const controlImageUrl =
     typeof body.controlImageUrl === 'string' ? body.controlImageUrl : undefined;
-  const modelKeys = (Array.isArray(body.modelKeys) ? body.modelKeys : []).filter(
-    (k): k is AiModelKey => typeof k === 'string' && k in AI_MODELS,
-  );
+  const modelKeys = [
+    ...new Set(
+      (Array.isArray(body.modelKeys) ? body.modelKeys : []).filter(
+        (k): k is AiModelKey => typeof k === 'string' && k in AI_MODELS,
+      ),
+    ),
+  ];
   if (!label || !prompt || modelKeys.length === 0) {
     return NextResponse.json(
       { error: 'label, prompt and at least one valid modelKey are required' },
