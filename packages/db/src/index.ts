@@ -69,7 +69,12 @@ export type {
   TransitionResult,
 } from './repos/orders.js';
 export type { CreditSource, CreditLedgerRow } from './repos/credits.js';
-export type { BriefRow, BriefSaveResult, BriefSnapshotResult } from './repos/briefs.js';
+export type {
+  BriefRow,
+  BriefSaveResult,
+  BriefSnapshotResult,
+  BriefSnapshotRow,
+} from './repos/briefs.js';
 export type {
   GenerationRunKind,
   GenerationRunStatus,

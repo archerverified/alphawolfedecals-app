@@ -685,6 +685,19 @@ export async function insertImage(
   });
 }
 
+// All images for one run (the advance loop's harvest-idempotency read: a job
+// that already has an image row is never re-inserted on a re-entered slice).
+export async function listImages(userId: string, runId: string): Promise<GenerationImageRow[]> {
+  return withUser(userId, async (db) => {
+    const rows = await db.generationImage.findMany({
+      where: { runId },
+      orderBy: { createdAt: 'asc' },
+      select: IMAGE_SELECT,
+    });
+    return rows.map(toImageRow);
+  });
+}
+
 // ---------------------------------------------------------------------------
 // Cost true-up + spend cap reads.
 // ---------------------------------------------------------------------------
@@ -695,14 +708,23 @@ export async function insertImage(
 // conservative estimate the daily spend cap sums — lowering it mid-run would
 // let concurrent runs slip under the cap (the TOCTOU the estimate exists to
 // close). A non-terminal run is left untouched. Returns the jobs' actual total
-// either way.
-export async function trueUpRunCost(userId: string, runId: string): Promise<number> {
+// either way. `extraCostUsd` carries run-level costs that have no job row —
+// the orchestrator's token spend (pipeline D7: orchestration is part of the
+// run's real cost).
+export async function trueUpRunCost(
+  userId: string,
+  runId: string,
+  extraCostUsd = 0,
+): Promise<number> {
+  if (!Number.isFinite(extraCostUsd) || extraCostUsd < 0) {
+    throw new Error(`[generation] extraCostUsd must be >= 0 (got ${extraCostUsd})`);
+  }
   return withUser(userId, async (db) => {
     const agg = await db.generationJob.aggregate({
       where: { runId },
       _sum: { costUsd: true },
     });
-    const total = Number(agg._sum.costUsd ?? 0);
+    const total = Number(agg._sum.costUsd ?? 0) + extraCostUsd;
     await db.generationRun.updateMany({
       where: { id: runId, status: { in: ['complete', 'failed'] } },
       data: { costUsd: total },

@@ -147,6 +147,29 @@ export async function snapshotBrief(
   });
 }
 
+export type BriefSnapshotRow = {
+  briefId: string;
+  version: number;
+  data: unknown;
+  label: string | null;
+  createdAt: Date;
+};
+
+// Load one frozen snapshot by version (the generation pipeline renders FROM
+// the snapshot a run was started against, never the live brief — provenance).
+export async function getBriefSnapshot(
+  userId: string,
+  briefId: string,
+  version: number,
+): Promise<BriefSnapshotRow | null> {
+  return withUser(userId, (db) =>
+    db.briefSnapshot.findUnique({
+      where: { briefId_version: { briefId, version } },
+      select: { briefId: true, version: true, data: true, label: true, createdAt: true },
+    }),
+  );
+}
+
 export async function listBriefSnapshots(
   userId: string,
   briefId: string,

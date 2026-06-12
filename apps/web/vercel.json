@@ -1,5 +1,11 @@
 {
   "regions": ["sfo1"],
+  "crons": [
+    {
+      "path": "/api/cron/sweep-generation",
+      "schedule": "*/15 * * * *"
+    }
+  ],
   "functions": {
     "app/(public)/health/route.ts": {
       "maxDuration": 5

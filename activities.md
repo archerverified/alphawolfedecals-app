@@ -6,6 +6,49 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-12 — Goal 7 D4/D5 core: generation pipeline runtime (PR open, stacked on #148)
+
+**Status:** PR OPEN on `goal/7-pipeline`, base `goal/7-generation-data` (#148) —
+NOT merged. Branch carries a merge of origin/main (the #147 orchestrator, which
+the data branch predates).
+
+**What shipped (the client-poll-driven advance machine, design §review-1).**
+
+- `apps/web/lib/ai/run-pipeline.ts` — `advanceRun(userId, runId)`: ONE bounded
+  slice per call (orchestrate | submit/harvest ≤3 jobs | settle), CAS-guarded
+  everywhere, idempotent + re-entrant. Resubmit guard honored: request id
+  persists via markJobSubmitted BEFORE any poll; re-entered slices harvest by
+  id, never resubmit. Estimate→true-up: run cost stays the conservative config
+  estimate until terminal, then trueUpRunCost(jobs actuals + orchestrator token
+  spend). Failures (orchestrator, all/partial render failures, deadline) →
+  failRun + idempotent credit refund + Sentry + PostHog, LOUD. Conditioning
+  image = pre-generated public view render (`views/<vehicleId>/<view>.png`);
+  byte fetches ride the bake-off SSRF allowlist (data: + fal CDN only).
+- `apps/web/lib/ai/watermark.ts` — sharp resize to AI_CONFIG.previewWidth +
+  tiled diagonal "ALPHA WOLF · PREVIEW" SVG overlay; deterministic. Finals are
+  never watermarked (preview = the full render).
+- `apps/web/lib/actions/generation.ts` — startGenerationRunAction /
+  startIterationAction / startFinalAction (gates IN ORDER: account rate limit →
+  global daily spend cap (+`ai_spend_cap_hit`) → startRun's atomic monthly gate
+  - credit spend), advanceGenerationAction (THE poll), getGenerationContextAction
+    (balance/monthly/active + gallery with signed watermarked previews — original
+    paths never reach the client). Friendly typed failures, customer voice.
+- `apps/web/app/api/cron/sweep-generation/route.ts` + vercel.json cron
+  (`*/15 * * * *`) — fail-closed auth (x-vercel-cron OR CRON_SECRET bearer),
+  sweepStaleRuns(15) (sanctioned withSystem), `generation_swept`. NOTE: Hobby
+  plan limits cron granularity — schedule may need to coarsen at deploy.
+- packages/db riders: briefs.getBriefSnapshot (render FROM the frozen
+  snapshot), generation.listImages (harvest idempotency read),
+  trueUpRunCost extraCostUsd param (orchestrator spend).
+- Events: generation_run_started/completed/failed, iteration_started,
+  final_started, ai_spend_cap_hit, generation_swept.
+
+**Verification.** All offline (zero real API calls): web lint/typecheck green,
+153 web tests (40 new: slice machine happy path with REAL mock renders,
+resubmit guard, all-failed + partial → refund, deadline, orchestrator failure,
+CAS concurrency, gate order, friendly mappings, sweeper auth, watermark
+determinism/dimensions); db lint/typecheck green, 100 db tests.
+
 ## 2026-06-12 — Goal 7 D4/D7: generation data layer + credit money rails (PR open)
 
 **Status:** PR OPEN on `goal/7-generation-data` — NOT merged; prod migration
