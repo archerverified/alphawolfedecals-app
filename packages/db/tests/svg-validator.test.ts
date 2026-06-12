@@ -172,6 +172,116 @@ describe('isValidPathData', () => {
   });
 });
 
+// Goal 6 Template Studio: templates with fewer than the 4 standard views
+// (vehicles.view_count 1..4) declare their exact view set.
+describe('validateOutlineSvg — declared views (Goal 6)', () => {
+  // 2-view boat sheet: aspect bears no relation to length×4/height×2.
+  const BOAT_DIMS = { lengthMm: 11125, heightMm: 2400 };
+
+  test('a 2-view sheet passes with views declared, aspect formula skipped', () => {
+    const result = validateOutlineSvg(
+      buildSvg(['driver', 'passenger'], '0 0 1920 1080'),
+      BOAT_DIMS,
+      {
+        views: ['driver', 'passenger'],
+      },
+    );
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.panels.map((p) => p.view).sort()).toEqual(['driver', 'passenger']);
+    }
+  });
+
+  test('a declared view missing from the document fails', () => {
+    expectFailRule(
+      validateOutlineSvg(buildSvg(['driver'], '0 0 1920 1080'), BOAT_DIMS, {
+        views: ['driver', 'passenger'],
+      }),
+      'views',
+    );
+  });
+
+  test('an undeclared view group in the document fails (even "top")', () => {
+    expectFailRule(
+      validateOutlineSvg(buildSvg(['driver', 'passenger', 'top'], '0 0 1920 1080'), BOAT_DIMS, {
+        views: ['driver', 'passenger'],
+      }),
+      'views',
+    );
+  });
+
+  test('a declared view with no panels fails', () => {
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1920 1080">${viewGroup(
+      'driver',
+    )}<g id="view-passenger" data-view="passenger"></g></svg>`;
+    expectFailRule(
+      validateOutlineSvg(svg, BOAT_DIMS, { views: ['driver', 'passenger'] }),
+      'panels',
+    );
+  });
+
+  test('declared views must be known view names', () => {
+    expectFailRule(
+      validateOutlineSvg(buildSvg(['driver'], '0 0 1920 1080'), BOAT_DIMS, { views: ['port'] }),
+      'views',
+    );
+  });
+
+  test('empty / duplicate declarations fail', () => {
+    expectFailRule(validateOutlineSvg(buildSvg(['driver']), BOAT_DIMS, { views: [] }), 'views');
+    expectFailRule(
+      validateOutlineSvg(buildSvg(['driver']), BOAT_DIMS, { views: ['driver', 'driver'] }),
+      'views',
+    );
+  });
+
+  test('omitting the option keeps the original 4-view + aspect behavior', () => {
+    // Same doc that passes with declared views fails the default contract.
+    expectFailRule(
+      validateOutlineSvg(buildSvg(['driver', 'passenger'], '0 0 1920 1080'), BOAT_DIMS),
+      'views',
+    );
+  });
+});
+
+describe('panel identity (view, name) uniqueness', () => {
+  test('two panels with the same data-name in one view are rejected', () => {
+    const inner = `${panel('front')}${panel('front')}`;
+    const svgText = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4800 1200">${viewGroup('front', inner)}${viewGroup('driver')}${viewGroup('back')}${viewGroup('passenger')}</svg>`;
+    expectFailRule(validateOutlineSvg(svgText, DIMS), 'panels');
+  });
+});
+
+describe('XML entity decoding in extracted fields', () => {
+  test('escaped & / quotes in data-name and data-notes come back decoded', () => {
+    const inner =
+      '<g class="panel" id="p-front" data-name="Bow &amp; Mid &quot;A&quot;" data-notes="keep &lt;numbers&gt; clear" data-install-order="1">' +
+      '<path class="outline" d="M10 10 L100 10 L100 100 Z"/>' +
+      '<path class="wrap-safe" d="M20 20 L90 20 L90 90 Z"/></g>';
+    const svgText = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4800 1200">${viewGroup('front', inner)}${viewGroup('driver')}${viewGroup('back')}${viewGroup('passenger')}</svg>`;
+    const result = validateOutlineSvg(svgText, DIMS);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      const p = result.panels.find((x) => x.view === 'front')!;
+      expect(p.name).toBe('Bow & Mid "A"');
+      expect(p.notes).toBe('keep <numbers> clear');
+    }
+  });
+
+  test('out-of-range numeric references never CRASH the validator', () => {
+    // &#x110000; is beyond the Unicode range — String.fromCodePoint would
+    // THROW. The validator's contract is to always return a result (ok or
+    // errors), never to throw on crafted input. (svgson may reject the doc at
+    // parse — also fine; what must not happen is an exception.)
+    const inner =
+      '<g class="panel" id="p-front" data-name="Bad &#x110000; ref" data-install-order="1">' +
+      '<path class="outline" d="M10 10 L100 10 L100 100 Z"/>' +
+      '<path class="wrap-safe" d="M20 20 L90 20 L90 90 Z"/></g>';
+    const svgText = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4800 1200">${viewGroup('front', inner)}${viewGroup('driver')}${viewGroup('back')}${viewGroup('passenger')}</svg>`;
+    expect(() => validateOutlineSvg(svgText, DIMS)).not.toThrow();
+  });
+});
+
 describe('real seed file', () => {
   test('the shipped Tier-1 Transit SVG passes validation', () => {
     const svg = readFileSync(

@@ -12,6 +12,7 @@ export {
 } from './polygon';
 export type { Bbox } from './polygon';
 export { isElementInsideClip, pathArea, pathAreaMm2 } from './hit-test';
+export { insetRingPath, pathAreaScaled } from './offset';
 export { elementBbox } from './bbox';
 export { resolveSnap } from './snap';
 export type { SnapCandidate, SnapInput, SnapResult } from './snap';

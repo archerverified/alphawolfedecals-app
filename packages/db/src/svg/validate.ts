@@ -59,6 +59,20 @@ export type SvgValidationResult =
 
 export type OutlineDims = { lengthMm: number; heightMm: number };
 
+// Declared-views support (Goal 6 Template Studio). Templates with fewer than
+// the 4 standard views (the AW catalogue: a 2-view boat, a 3-view coach —
+// vehicles.view_count is CHECK-constrained 1..4) declare the exact view set
+// their sheet carries. When `views` is provided:
+//   * every declared view must be present with ≥1 panel, and no OTHER view
+//     group may appear (including "top" unless declared) — the SVG and the
+//     vehicle row can't drift apart;
+//   * the §3.4 aspect-ratio formula is SKIPPED — it encodes the 4-across
+//     reference sheet (length×4 / height×2) and is meaningless for other
+//     layouts. Scale correctness for declared-view sheets is enforced by the
+//     Studio's measurement calibration instead, not by aspect heuristics.
+// Omitting `views` keeps the original behavior (4 required + optional top).
+export type OutlineValidationOptions = { views?: readonly string[] };
+
 // --- small AST helpers ------------------------------------------------------
 
 function classesOf(node: INode): string[] {
@@ -84,6 +98,33 @@ function findAll(root: INode, predicate: (n: INode) => boolean): INode[] {
   const out: INode[] = [];
   for (const n of walk(root)) if (predicate(n)) out.push(n);
   return out;
+}
+
+// svgson does NOT decode XML entities in attribute values, so an authored
+// name like "Bow &amp; Mid" would otherwise be stored verbatim. Decode the
+// named + numeric entities on the free-text fields we extract (name, notes);
+// path data and view names are charset-constrained and validated, so entities
+// there fail their own rules.
+const XML_ENTITY_DECODES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+};
+
+function decodeXmlEntities(value: string): string {
+  return value.replace(/&(amp|lt|gt|quot|apos|#\d+|#x[0-9a-fA-F]+);/g, (_, ent: string) => {
+    if (ent[0] !== '#') return XML_ENTITY_DECODES[ent]!;
+    const code =
+      ent[1] === 'x' ? Number.parseInt(ent.slice(2), 16) : Number.parseInt(ent.slice(1), 10);
+    // Out-of-range / surrogate code points would make fromCodePoint THROW —
+    // the validator's contract is to return errors, never to crash on crafted
+    // input. Leave such references as literal text instead.
+    const valid =
+      Number.isFinite(code) && code >= 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff);
+    return valid ? String.fromCodePoint(code) : `&${ent};`;
+  });
 }
 
 // --- path-data grammar (rule 7) --------------------------------------------
@@ -148,9 +189,36 @@ function fail(errors: SvgValidationError[]): SvgValidationResult {
   return { ok: false, errors };
 }
 
-export function validateOutlineSvg(svgText: string, dims: OutlineDims): SvgValidationResult {
+export function validateOutlineSvg(
+  svgText: string,
+  dims: OutlineDims,
+  opts?: OutlineValidationOptions,
+): SvgValidationResult {
   const errors: SvgValidationError[] = [];
   const warnings: string[] = [];
+
+  // Resolve the view contract up front. Declared views are validated as
+  // config: a bad declaration is a caller bug, reported as errors rather than
+  // thrown so admin UIs surface it like any other validation miss.
+  const declared = opts?.views;
+  if (declared !== undefined) {
+    if (declared.length === 0) {
+      return fail([{ rule: 'views', message: 'Declared views list is empty.' }]);
+    }
+    const unknown = declared.filter(
+      (v) => !KNOWN_VIEWS.includes(v as (typeof KNOWN_VIEWS)[number]),
+    );
+    if (unknown.length > 0) {
+      return fail([{ rule: 'views', message: `Unknown declared view(s): ${unknown.join(', ')}.` }]);
+    }
+    if (new Set(declared).size !== declared.length) {
+      return fail([{ rule: 'views', message: 'Declared views list has duplicates.' }]);
+    }
+  }
+  const requiredViews: readonly string[] = declared ?? REQUIRED_VIEWS;
+  // Views allowed to appear in the document: exactly the declared set, or the
+  // default contract (4 required + optional top).
+  const allowedViews: readonly string[] = declared ?? KNOWN_VIEWS;
 
   let root: INode;
   try {
@@ -176,7 +244,7 @@ export function validateOutlineSvg(svgText: string, dims: OutlineDims): SvgValid
     viewBox = { width: w, height: h };
     if (w <= 0 || h <= 0) {
       errors.push({ rule: 'viewBox', message: 'viewBox width/height must be positive.' });
-    } else if (dims.heightMm > 0 && dims.lengthMm > 0) {
+    } else if (declared === undefined && dims.heightMm > 0 && dims.lengthMm > 0) {
       const actual = w / h;
       const expected = (dims.lengthMm * 4) / (dims.heightMm * 2);
       const drift = Math.abs(actual - expected) / expected;
@@ -198,7 +266,7 @@ export function validateOutlineSvg(svgText: string, dims: OutlineDims): SvgValid
   const viewByName = new Map<string, INode>();
   for (const g of viewGroups) {
     const name = g.attributes['data-view'] ?? (g.attributes.id ?? '').replace(/^view-/, '');
-    if (!KNOWN_VIEWS.includes(name as (typeof KNOWN_VIEWS)[number])) {
+    if (!allowedViews.includes(name)) {
       errors.push({ rule: 'views', message: `Unknown view group "${name}".` });
       continue;
     }
@@ -208,30 +276,32 @@ export function validateOutlineSvg(svgText: string, dims: OutlineDims): SvgValid
     }
     viewByName.set(name, g);
   }
-  for (const required of REQUIRED_VIEWS) {
+  for (const required of requiredViews) {
     if (!viewByName.has(required)) {
       errors.push({ rule: 'views', message: `Missing required view group "view-${required}".` });
     }
   }
 
   // Rules 2 + 3 (and panel extraction): each view has ≥1 g.panel; each panel has
-  // both an .outline and a .wrap-safe path.
+  // both an .outline and a .wrap-safe path. (view, name) pairs must be unique —
+  // panel identity downstream (vehicle_panels sync, saved-artwork attachment)
+  // is keyed on them, and the DB enforces it with a unique constraint.
   const panels: ExtractedPanel[] = [];
+  const seenIdentities = new Set<string>();
   let installSeq = 0;
-  for (const view of KNOWN_VIEWS) {
+  for (const view of allowedViews) {
     const group = viewByName.get(view);
     if (!group) continue;
     const panelGroups = findAll(group, (n) => n.name === 'g' && hasClass(n, 'panel'));
-    if (
-      REQUIRED_VIEWS.includes(view as (typeof REQUIRED_VIEWS)[number]) &&
-      panelGroups.length === 0
-    ) {
+    if (requiredViews.includes(view) && panelGroups.length === 0) {
       errors.push({ rule: 'panels', message: `View "${view}" has no <g class="panel">.` });
     }
     for (const panel of panelGroups) {
       const outline = findAll(panel, (n) => n.name === 'path' && hasClass(n, 'outline'))[0];
       const wrapSafe = findAll(panel, (n) => n.name === 'path' && hasClass(n, 'wrap-safe'))[0];
-      const label = panel.attributes['data-name'] ?? panel.attributes.id ?? `${view} panel`;
+      const label = decodeXmlEntities(
+        panel.attributes['data-name'] ?? panel.attributes.id ?? `${view} panel`,
+      );
       if (!outline) {
         errors.push({ rule: 'panels', message: `Panel "${label}" is missing its .outline path.` });
       }
@@ -241,6 +311,14 @@ export function validateOutlineSvg(svgText: string, dims: OutlineDims): SvgValid
           message: `Panel "${label}" is missing its .wrap-safe path.`,
         });
       }
+      const identity = `${view} ${label}`;
+      if (seenIdentities.has(identity)) {
+        errors.push({
+          rule: 'panels',
+          message: `Duplicate panel name "${label}" in view "${view}" — names must be unique per view.`,
+        });
+      }
+      seenIdentities.add(identity);
       const finishRaw = panel.attributes['data-finish-hint'];
       const finishHint: FinishHint = FINISH_HINTS.includes(finishRaw as FinishHint)
         ? (finishRaw as FinishHint)
@@ -253,7 +331,10 @@ export function validateOutlineSvg(svgText: string, dims: OutlineDims): SvgValid
         wrapSafePath: wrapSafe?.attributes.d ?? '',
         finishHint,
         installOrder: Number.isFinite(installRaw) ? installRaw : ++installSeq,
-        notes: panel.attributes['data-notes'] ?? null,
+        notes:
+          panel.attributes['data-notes'] != null
+            ? decodeXmlEntities(panel.attributes['data-notes'])
+            : null,
       });
     }
   }

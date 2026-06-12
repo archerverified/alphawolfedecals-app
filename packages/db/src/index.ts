@@ -12,6 +12,7 @@ export * as authEvents from './repos/auth-events.js';
 export * as rateLimit from './repos/rate-limit.js';
 export * as vehicles from './repos/vehicles.js';
 export * as vehicleRequests from './repos/vehicle-template-requests.js';
+export * as templateSources from './repos/template-sources.js';
 export * as projects from './repos/projects.js';
 export * as orders from './repos/orders.js';
 export * as credits from './repos/credits.js';
@@ -45,6 +46,12 @@ export type {
   RequestStatus,
 } from './repos/vehicle-template-requests.js';
 export type {
+  TemplateSourceKind,
+  TemplateSourceRow,
+  CreateSourceInput,
+  SourceMeasurements,
+} from './repos/template-sources.js';
+export type {
   ProjectRow,
   WorkingVersionRow,
   AssetRow,
@@ -69,4 +76,5 @@ export type {
   SvgValidationError,
   ExtractedPanel,
   OutlineDims,
+  OutlineValidationOptions,
 } from './svg/validate.js';

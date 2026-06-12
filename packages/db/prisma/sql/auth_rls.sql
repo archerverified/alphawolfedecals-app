@@ -418,6 +418,21 @@ create policy vtr_admin_delete on vehicle_template_requests
   for delete
   using (app_is_admin());
 
+-- template_sources (Goal 6 Template Studio) ----------------------------------
+-- Studio ingest provenance: which owned source artifact (photo / OEM PDF /
+-- owned SVG) each authored template traces to. Internal-staff data only —
+-- admins author templates; customers never read or write these rows. One
+-- FOR ALL admin policy covers every verb and fails closed (app_is_admin() is
+-- false when app.current_user_id is unset — ADR-0014 invariant 5).
+alter table template_sources enable row level security;
+alter table template_sources force row level security;
+
+drop policy if exists template_sources_admin_all on template_sources;
+create policy template_sources_admin_all on template_sources
+  for all
+  using (app_is_admin())
+  with check (app_is_admin());
+
 -- ----------------------------------------------------------------------------
 -- Customer projects + canvas persistence + uploaded assets (GH-005 / GH-008).
 -- See ADR-0006 (canvas model) and ADR-0007 (asset storage).
