@@ -95,9 +95,13 @@ export type AiModelKey = keyof typeof AI_MODELS;
 
 export const AI_CONFIG = {
   // Defaults per pipeline stage. `draft` is set by the 2026-06 bake-off
-  // (docs/product/bakeoff-2026-06.md); the others follow PRD §10.
+  // (docs/product/bakeoff-2026-06.md): nano-banana EDITS the template's own
+  // view render, so the customer sees THEIR vehicle with the wrap applied
+  // (geometry 3/3 on every detailed render). flux_depth_dev — the PRD §10
+  // paper pick — was relegated by the evidence (one catastrophic output, one
+  // vehicle-identity drift, slowest). The others follow PRD §10.
   defaults: {
-    draft: 'flux_depth_dev' as AiModelKey,
+    draft: 'nano_banana_edit' as AiModelKey,
     iteration: 'kontext_dev' as AiModelKey,
     final: 'flux2_pro_edit' as AiModelKey,
     upscale: 'recraft_crisp_upscale' as AiModelKey,
