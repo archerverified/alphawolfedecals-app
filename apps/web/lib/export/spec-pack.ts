@@ -21,6 +21,14 @@ export interface SpecPackPhoto {
   note?: string;
 }
 
+/** AI provenance for a pack whose hero is a generated final render (Goal 7 D6). */
+export interface AiProvenance {
+  provider: string;
+  model: string;
+  runId: string;
+  promptVersion: string;
+}
+
 export interface SpecPackData {
   projectId: string;
   projectName: string;
@@ -31,14 +39,22 @@ export interface SpecPackData {
     lengthMm: number;
     widthMm: number;
     heightMm: number;
-    /** PNG bytes of the template render; absent → text-only cover. */
+    /** Hero image bytes (template render or AI final); absent → text-only cover. */
     heroPng?: Uint8Array;
+    /**
+     * Encoding of heroPng. The fal provider returns JPEG by default, so AI
+     * final heroes are usually 'jpg'; template thumbs are 'png'. Defaults to
+     * 'png' when omitted.
+     */
+    heroKind?: 'png' | 'jpg';
   };
   panels: BriefPanel[];
   brief: BriefData;
   briefVersion: number | null;
   photos: SpecPackPhoto[]; // ≤4 embedded
   createdAt: Date;
+  /** Set when the hero is an AI final render — lands in the PDF metadata. */
+  aiProvenance?: AiProvenance;
 }
 
 const PAGE_W = 612; // US Letter, points
@@ -182,15 +198,38 @@ function includedPanels(data: SpecPackData): BriefPanel[] {
   return ids === null ? data.panels : data.panels.filter((p) => ids.includes(p.id));
 }
 
+/** Embed the hero respecting its encoding (AI finals from fal are JPEG). */
+function embedHero(doc: PDFDocument, data: SpecPackData) {
+  const bytes = data.vehicle.heroPng!;
+  return data.vehicle.heroKind === 'jpg' ? doc.embedJpg(bytes) : doc.embedPng(bytes);
+}
+
 export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
   const doc = await PDFDocument.create();
   // AI provenance + identity metadata (PRD v1.1 §4.4 requirement).
   doc.setTitle(`Wrap Spec Pack — ${data.projectName}`);
   doc.setAuthor('Alpha Wolf Wrap Studio');
   doc.setProducer('Alpha Wolf Wrap Studio spec-pack generator (B2C-009)');
-  doc.setCreator(
-    'AI-assisted design brief — generated content; provenance: alphawolfedecals-app-web.vercel.app',
-  );
+  if (data.aiProvenance) {
+    // Goal 7 D6: the cover hero is an AI final render — record full provenance
+    // (provider, model, run, prompt version) in the document metadata.
+    const p = data.aiProvenance;
+    doc.setCreator(
+      `AI-generated design — ${p.provider}/${p.model}, run ${p.runId}, prompt ${p.promptVersion}; ` +
+        'provenance: alphawolfedecals-app-web.vercel.app',
+    );
+    doc.setKeywords([
+      'AI-generated',
+      `provider:${p.provider}`,
+      `model:${p.model}`,
+      `run:${p.runId}`,
+      `promptVersion:${p.promptVersion}`,
+    ]);
+  } else {
+    doc.setCreator(
+      'AI-assisted design brief — generated content; provenance: alphawolfedecals-app-web.vercel.app',
+    );
+  }
   doc.setSubject(`Vehicle wrap specification for ${data.vehicle.label}`);
   doc.setCreationDate(data.createdAt);
 
@@ -220,7 +259,7 @@ export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
 
     if (data.vehicle.heroPng) {
       try {
-        const img = await doc.embedPng(data.vehicle.heroPng);
+        const img = await embedHero(doc, data);
         const maxW = PAGE_W - 2 * MARGIN;
         const maxH = 300;
         const scale = Math.min(maxW / img.width, maxH / img.height);
@@ -271,7 +310,7 @@ export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
     y -= 10;
     if (v.heroPng) {
       try {
-        const img = await doc.embedPng(v.heroPng);
+        const img = await embedHero(doc, data);
         const maxW = PAGE_W - 2 * MARGIN;
         const maxH = y - 120;
         const scale = Math.min(maxW / img.width, maxH / img.height, 1.2);

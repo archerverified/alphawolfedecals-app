@@ -97,7 +97,7 @@ export { AI_CONFIG, AI_MODELS, estimateImageCostUsd } from './ai-config.js';
 export type { AiModelKey, AiModelConfig, AiModelPricing } from './ai-config.js';
 // THE canonical view order (PR #142 numbering decision). Shared so consumers
 // (sheet renderers, AI orchestrator) cannot drift from the panel-number order.
-export { VIEW_ORDER } from './svg/numbering.js';
+export { VIEW_ORDER, outlineBbox } from './svg/numbering.js';
 export type {
   SvgValidationResult,
   SvgValidationError,

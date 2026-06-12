@@ -31,6 +31,7 @@ import { LogoStep } from './LogoStep';
 import { ColorsStep } from './ColorsStep';
 import { TintStep } from './TintStep';
 import { DeliveryPanel } from './DeliveryPanel';
+import { GenerateButton } from '../generation/GenerateButton';
 
 export interface BriefWizardProps {
   projectId: string;
@@ -42,6 +43,8 @@ export interface BriefWizardProps {
   panels: BriefPanel[];
   /** Real overall vehicle dimensions (mm) — anchor for the logo DPI gate. */
   vehicleDims: { lengthMm: number; widthMm: number };
+  /** Current credit balance — drives the Generate button copy/waitlist. */
+  creditBalance: number;
 }
 
 export function BriefWizard({
@@ -53,6 +56,7 @@ export function BriefWizard({
   vehicleLabel,
   panels,
   vehicleDims,
+  creditBalance,
 }: BriefWizardProps) {
   const steps = useMemo(() => enabledBriefSteps(), []);
   const initialIndex = Math.max(
@@ -95,7 +99,7 @@ export function BriefWizard({
 
   const saveBrief = useCallback(() => {
     setSavingBrief(true);
-    autosave.flushNow();
+    void autosave.flushNow();
     void (async () => {
       try {
         const res = await snapshotBriefAction({ projectId, briefId });
@@ -208,10 +212,10 @@ export function BriefWizard({
           <ChevronLeft className="size-4" aria-hidden /> Back
         </Button>
         {step.key === 'review' ? (
-          // PHASE 2 SEAM (B2C-007): "Generate concepts — uses 1 credit" lands
-          // here, next to Save; the snapshot path below is the same one a
-          // generation run will version against.
-          <span className="flex items-center gap-2">
+          // Phase 2 seam delivered (Goal 7 D5): Generate sits next to Save.
+          // startGenerationRunAction snapshots the brief itself; flushNow runs
+          // first so the snapshot carries just-typed edits.
+          <span className="flex flex-wrap items-center justify-end gap-2">
             <Button asChild variant="outline" data-testid="brief-export">
               {/* Plain anchor: a binary download, not a client navigation.
                   Flush first so just-typed edits make it onto the pack. */}
@@ -219,10 +223,20 @@ export function BriefWizard({
                 Download spec pack (PDF)
               </a>
             </Button>
-            <Button onClick={saveBrief} disabled={savingBrief} data-testid="brief-save">
+            <Button
+              variant="outline"
+              onClick={saveBrief}
+              disabled={savingBrief}
+              data-testid="brief-save"
+            >
               {savingBrief ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
               Save brief
             </Button>
+            <GenerateButton
+              projectId={projectId}
+              creditBalance={creditBalance}
+              beforeStart={autosave.flushNow}
+            />
           </span>
         ) : (
           <Button onClick={() => goTo(stepIndex + 1)} data-testid="brief-next">

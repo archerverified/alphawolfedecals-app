@@ -6,6 +6,65 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-12 — Goal 7 D5/D6: generation studio UI + final→editor/export handoff (PR #154 open, stacked on goal/7-pipeline)
+
+**Status:** PR #154 OPEN on `goal/7-generation-ui`, base `goal/7-pipeline` (#150) — NOT merged.
+
+**What shipped (PRD §3 step 4 + §5; goal prompt D5/D6).**
+
+- Generate seam on the brief Review step: "Generate 3 concepts — uses 1 credit"
+  (cost ON the button), client-minted UUID token (double-click dedupes), brief
+  autosave AWAITED before the run snapshots, zero balance → waitlist sheet,
+  success → `/projects/[id]/generate?run=<id>`.
+- Generation studio (`app/projects/[id]/generate` + `GenerationStudio`):
+  sticky always-visible credit header; 2.5s poll on advanceGenerationAction
+  (THE POLL DRIVES THE PIPELINE) with friendly per-stage copy + per-render
+  progress; 3-direction concept gallery (orchestrator titles/summaries,
+  watermarked previews, view switcher, persisted via context action);
+  per-concept iteration bar (ITERATION_CHIPS fill an editable text box;
+  "Refine — uses 1 credit"); zero-dep before/after slider vs the stock
+  `views/<vehicleId>/<view>.png` render; "Use this design" → confirm → free
+  final → un-watermarked renders + editor/export buttons.
+- Waitlist sheet (NO Stripe/checkout): "You're out of credits for now — more
+  are on the way." + join → PostHog `credit_waitlist_joined` + success state;
+  ONE component, copy-swap to checkout later (PRD §5 decision 8).
+- Final handoff (`lib/actions/generation-finalize.ts`): renders → parsed
+  ProjectAsset rows (idempotent + crash-repairable); LOCKED ImageElement per
+  view at the BACK of the view's largest panel (template-space cover
+  placement, canonical outlineBbox policy); logo composited UNLOCKED on its
+  brief zones (never AI-rendered); handoff AWAITED before the gallery flips
+  to "Final", with an idempotent revisit sweep as the repair path; canvas
+  insertion best-effort, never blocks completion. Export pack: cover hero
+  prefers the newest complete final render (PNG or JPEG — fal defaults to
+  JPEG; 8 MB cap), AI provenance (provider/model/runId/promptVersion) in PDF
+  Creator + Keywords.
+- Events: generation_viewed, concept_selected, credit_waitlist_joined
+  (client), final_handoff_completed (server).
+- E2E `e2e/generation.spec.ts` (mock provider, LOCAL ONLY — green-skips on
+  remote DEPLOY_URL; prod smoke list untouched). Dev-only /api/dev/drain-credits
+  (e2e-suffix-restricted; repo fn refuses in production, atomic under the
+  spend advisory lock). Cleanup tool: `pnpm --filter @alphawolf/db
+db:cleanup-e2e <email>` (suffix-guarded; removes projects/user/storage).
+
+**Review (CLAUDE.md §3).** `/code-review` high-effort multi-agent pass (7
+finder angles, fresh contexts) ran against the full diff; 10 findings fixed in
+`0b15509` (poll arming, handoff retry, flush race, asset repair, drain
+hardening + e2e-only targeting, JPEG hero, stale-URL toasts, canonical
+VIEW_ORDER/outlineBbox, preview-URL churn, Sentry on hero failures) + a
+post-review regression fixed in `a8b079b` (handoff ordering vs "Open in
+editor"). Full record in the PR description.
+
+**Verification.** web lint/typecheck green; 168 web unit tests (15 new) + 100
+db tests green after every fix batch. LIVE local e2e on the FINAL code PASSED
+(1 passed, 6.2m): signup → brief → generate (5→4 credits) → 3 concepts → chip
+iteration (4→3) → free final → editor stage holds locked (non-draggable) AI
+layers → drain → waitlist sheet + joined. Earlier runs also verified handoff
+at the data level (4 parsed assets, 4 LOCKED z0 elements, rev 0→1). All e2e
+users/projects/storage objects removed via db:cleanup-e2e — zero artifacts on
+the live DB. Known approximations documented in PR #154 (template-space cover
+placement, 30-day signed srcUrl, SVG-logo square fallback, export hero not
+live-exercised through the export route this session).
+
 ## 2026-06-12 — Goal 7 D4/D5 core: generation pipeline runtime (PR open, stacked on #148)
 
 **Status:** PR OPEN on `goal/7-pipeline`, base `goal/7-generation-data` (#148) —
@@ -90,6 +149,7 @@ DB this session).
   intentionally unapplied there — run it post-merge after `db:migrate` +
   `db:apply-sql`. Verified locally: db lint/typecheck/build green, 97/97 db
   unit tests, web typecheck green, 100/101 web tests (1 pre-existing skip).
+
 ## 2026-06-12 — Goal 7 D3: Haiku orchestrator (brief → 3 concept directions, iteration parsing) — PR #147
 
 **Status:** PR #147 open vs main (branch goal/7-orchestrator), fresh-context review done + findings fixed in-branch, NOT merged (gated on CI + Archer).

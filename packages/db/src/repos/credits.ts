@@ -30,6 +30,40 @@ export async function getCreditBalance(userId: string): Promise<number> {
   });
 }
 
+// TEST/DEV-ONLY drain: zero a user's balance with a system-written 'spend'
+// row (no run_id, so the run-scoped partial uniques don't apply; the CHECK
+// constraint allows source='spend' with a negative delta). Exists for the
+// local generation E2E's exhaustion path (waitlist sheet); the only call site
+// is the dev-gated /api/dev/drain-credits route (404 in production), which
+// additionally restricts targets to @e2e.alphawolf.test identities.
+// Defense-in-depth: the function ITSELF refuses to run in production — the
+// route's NODE_ENV gate must not be the only thing between this withSystem
+// write and a real customer's ledger. Single atomic INSERT…SELECT under the
+// same per-user advisory lock the spend rails take, so a concurrent run spend
+// can't race the read and drive the balance negative. The ledger stays
+// append-only and truthful: the drain is a visible row.
+export async function drainCredits(userId: string): Promise<number> {
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error('[credits] drainCredits is a dev/test-only tool — refusing in production');
+  }
+  return withSystem(async (db) => {
+    // Same xact-scoped lock app_spend_credits takes (separate statement, so
+    // the INSERT's snapshot postdates any concurrent spend's commit).
+    await db.$executeRaw`
+      SELECT pg_advisory_xact_lock(hashtext('credit_spend'), hashtext(${userId}))
+    `;
+    const rows = await db.$queryRaw<Array<{ drained: number | bigint | null }>>`
+      INSERT INTO credit_ledger (user_id, delta, source, reason)
+      SELECT ${userId}::uuid, -SUM(delta), 'spend', 'dev_drain'
+      FROM credit_ledger
+      WHERE user_id = ${userId}::uuid
+      HAVING SUM(delta) > 0
+      RETURNING -delta AS drained
+    `;
+    return Number(rows[0]?.drained ?? 0);
+  });
+}
+
 // Newest-first ledger page for the (Phase 2) account/credits UI.
 export async function listCreditLedger(userId: string, limit = 50): Promise<CreditLedgerRow[]> {
   return withUser(userId, async (db) => {
