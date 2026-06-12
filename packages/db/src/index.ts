@@ -17,6 +17,7 @@ export * as projects from './repos/projects.js';
 export * as orders from './repos/orders.js';
 export * as credits from './repos/credits.js';
 export * as briefs from './repos/briefs.js';
+export * as generation from './repos/generation.js';
 export * as storage from './storage/supabase.js';
 export * as svg from './svg/index.js';
 
@@ -69,6 +70,22 @@ export type {
 } from './repos/orders.js';
 export type { CreditSource, CreditLedgerRow } from './repos/credits.js';
 export type { BriefRow, BriefSaveResult, BriefSnapshotResult } from './repos/briefs.js';
+export type {
+  GenerationRunKind,
+  GenerationRunStatus,
+  GenerationJobStatus,
+  GenerationRunRow,
+  GenerationJobRow,
+  GenerationImageRow,
+  StartRunInput,
+  StartRunResult,
+  RunContext,
+  RunPatch,
+  FailRunResult,
+  RunWithImages,
+  RecordJobInput,
+  InsertImageInput,
+} from './repos/generation.js';
 export { CREDIT_CONFIG, PLAN_LIMITS } from './credit-config.js';
 export type { PlanName } from './credit-config.js';
 export { AI_CONFIG, AI_MODELS, estimateImageCostUsd } from './ai-config.js';

@@ -7,7 +7,9 @@
 import { withSystem, withUser } from '../client.js';
 import { CREDIT_CONFIG, PLAN_LIMITS, type PlanName } from '../credit-config.js';
 
-export type CreditSource = 'grant' | 'purchase' | 'referral' | 'admin';
+// 'spend' / 'refund' (Goal 7) are written ONLY via the SECURITY DEFINER
+// functions app_spend_credits / app_refund_credits — see repos/generation.ts.
+export type CreditSource = 'grant' | 'purchase' | 'referral' | 'admin' | 'spend' | 'refund';
 
 export type CreditLedgerRow = {
   id: string;

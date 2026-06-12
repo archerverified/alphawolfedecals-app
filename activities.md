@@ -6,6 +6,47 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-12 — Goal 7 D4/D7: generation data layer + credit money rails (PR open)
+
+**Status:** PR OPEN on `goal/7-generation-data` — NOT merged; prod migration
+application is an operator step at merge time (nothing was applied to the live
+DB this session).
+
+**What shipped.**
+
+- TWO migrations (deliberately split — PG forbids using a new enum value in
+  the transaction that adds it): `20260612200000_credit_spend_enum` adds
+  `spend`/`refund` to `credit_source`; `20260612200100_generation_runs` adds
+  `generation_runs` / `generation_jobs` / `generation_images`, the
+  `credit_ledger.run_id` FK, the spend-sign CHECK, and the idempotency
+  partial uniques (client_token once; one non-terminal run per project+kind;
+  one final per parent-run concept; one spend + one refund per run).
+- `auth_rls.sql`: SECURITY DEFINER money rails in the app_is_shop_member
+  shape — `app_spend_credits` (GUC-derived user, per-user advisory xact
+  lock, fails closed, balance check + negative ledger row),
+  `app_refund_credits` (idempotent via ON CONFLICT on the refund partial
+  unique; derives the user from the spend row so the GUC-less system sweeper
+  can call it), `app_generation_spend_today` (global daily spend cap read).
+  RLS: runs owner SELECT/INSERT/UPDATE with project-ownership WITH CHECK,
+  DELETE revoked (audit records); jobs owner-ALL via run join, DELETE
+  revoked; images SELECT+INSERT only (brief_snapshots immutability shape).
+  credit_ledger keeps its full INSERT/UPDATE/DELETE revoke — spends/refunds
+  ONLY happen through the definer functions.
+- `packages/db/src/repos/generation.ts` (+ `generation` export): startRun is
+  one withUser tx (clientToken dedupe → monthly-gate count → run INSERT →
+  app_spend_credits; insufficient balance rolls the whole thing back), CAS
+  status transitions for the poll-driven advance loop, markJobSubmitted
+  resubmit guard (provider_request_id persists at submit, NULL-guarded),
+  failRun + sweepStaleRuns refund paths, trueUpRunCost, spendToday reads.
+  sweepStaleRuns is the one withSystem write (system maintenance).
+- Tests: 11 pure unit tests (green) + `generation-rls.integration.test.ts`
+  mirroring briefs-rls (cross-user invisibility, image immutability, ledger
+  lockout, atomic spend, double-spend block, refund idempotency, sign CHECK,
+  GUC-less sweeper refund). Integration suite NOT run this session: the only
+  packages/db/.env points at the LIVE Supabase pooler and the migrations are
+  intentionally unapplied there — run it post-merge after `db:migrate` +
+  `db:apply-sql`. Verified locally: db lint/typecheck/build green, 97/97 db
+  unit tests, web typecheck green, 100/101 web tests (1 pre-existing skip).
 ## 2026-06-12 — Goal 7 D3: Haiku orchestrator (brief → 3 concept directions, iteration parsing) — PR #147
 
 **Status:** PR #147 open vs main (branch goal/7-orchestrator), fresh-context review done + findings fixed in-branch, NOT merged (gated on CI + Archer).

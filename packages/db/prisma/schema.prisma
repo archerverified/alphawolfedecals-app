@@ -50,11 +50,18 @@ enum UserPlan {
 
 // Where a credit_ledger row came from. `purchase` is reserved for the Phase 2
 // Stripe credit-pack checkout; the enum ships purchase-ready per the PRD.
+// `spend` / `refund` (Goal 7 / D7) encode generation-run debits and their
+// compensating credits; both are written ONLY by the SECURITY DEFINER
+// functions app_spend_credits / app_refund_credits (prisma/sql/auth_rls.sql) —
+// app_user has no INSERT on credit_ledger. Sign discipline is enforced by the
+// chk_credit_ledger_spend_sign CHECK (spend < 0, everything else > 0).
 enum CreditSource {
   grant
   purchase
   referral
   admin
+  spend
+  refund
 
   @@map("credit_source")
 }
@@ -107,6 +114,7 @@ model User {
   templateRequests VehicleTemplateRequest[]
   creditLedger     CreditLedger[]
   templateSources  TemplateSource[]         @relation("TemplateSourceCreatedBy")
+  generationRuns   GenerationRun[]
 
   @@index([accountType])
   @@index([status])
@@ -494,11 +502,12 @@ model Project {
   createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamptz
   updatedAt     DateTime      @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
-  vehicle  Vehicle          @relation(fields: [vehicleId], references: [id])
-  versions ProjectVersion[]
-  assets   ProjectAsset[]
-  orders   Order[]
-  brief    DesignBrief?
+  vehicle        Vehicle          @relation(fields: [vehicleId], references: [id])
+  versions       ProjectVersion[]
+  assets         ProjectAsset[]
+  orders         Order[]
+  brief          DesignBrief?
+  generationRuns GenerationRun[]
 
   @@index([ownerUserId, status])
   @@map("projects")
@@ -585,14 +594,24 @@ model Order {
 model CreditLedger {
   id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
   userId    String       @map("user_id") @db.Uuid
-  // Positive = credit (grant/purchase), negative = spend (Phase 2 generation runs).
+  // Positive = credit (grant/purchase/referral/admin/refund), negative = spend.
+  // Enforced by chk_credit_ledger_spend_sign (raw SQL, 20260612200100):
+  // (source='spend' AND delta<0) OR (source<>'spend' AND delta>0).
   delta     Int
   source    CreditSource
-  // Structured discriminator within a source, e.g. grant/'signup', grant/'monthly_drip'.
+  // Structured discriminator within a source, e.g. grant/'signup',
+  // spend/'generation_run', refund/'generation_run_refund'.
   reason    String?
+  // The generation run a spend/refund row paid for (Goal 7 / D7). SET NULL so
+  // the audit row outlives the run. Two partial uniques in the migration —
+  // credit_ledger_spend_once_per_run + credit_ledger_refund_once_per_run —
+  // make double-spend impossible and refunds idempotent (ON CONFLICT target
+  // of app_refund_credits). Not expressible in Prisma — raw SQL by design.
+  runId     String?      @map("run_id") @db.Uuid
   createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  run  GenerationRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
 
   @@index([userId, createdAt])
   @@map("credit_ledger")
@@ -636,4 +655,152 @@ model BriefSnapshot {
 
   @@unique([briefId, version])
   @@map("brief_snapshots")
+}
+
+// ----------------------------------------------------------------------------
+// AI generation pipeline (Goal 7 / D4 + D7). See docs/product/
+// goal-7-pipeline-design.md. Three tables:
+//   * generation_runs   — the run state machine (queued → orchestrating →
+//                         rendering → complete|failed). Audit records: RLS
+//                         revokes DELETE from app_user.
+//   * generation_jobs   — mutable per-(run, concept, view) work units. The
+//                         resubmit guard: provider_request_id persists at
+//                         submit, resume harvests by id, never resubmits.
+//   * generation_images — immutable results/provenance (brief_snapshots
+//                         doctrine: RLS revokes UPDATE/DELETE).
+// Money rails live on credit_ledger (run_id + spend/refund sources) and are
+// written ONLY via SECURITY DEFINER app_spend_credits / app_refund_credits.
+// ----------------------------------------------------------------------------
+
+enum GenerationRunKind {
+  initial
+  iteration
+  final
+
+  @@map("generation_run_kind")
+}
+
+enum GenerationRunStatus {
+  queued
+  orchestrating
+  rendering
+  complete
+  failed
+
+  @@map("generation_run_status")
+}
+
+enum GenerationJobStatus {
+  pending
+  submitted
+  complete
+  failed
+
+  @@map("generation_job_status")
+}
+
+model GenerationRun {
+  id           String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId    String              @map("project_id") @db.Uuid
+  userId       String              @map("user_id") @db.Uuid
+  kind         GenerationRunKind
+  status       GenerationRunStatus @default(queued)
+  // The brief_snapshots.version this run rendered (provenance back to the
+  // exact brief).
+  briefVersion Int                 @map("brief_version")
+  // Iteration/final lineage: the initial (or prior) run this one derives from.
+  parentRunId  String?             @map("parent_run_id") @db.Uuid
+  // Which of the parent's concepts an iteration/final targets.
+  conceptKey   String?             @map("concept_key")
+  // Customer's iteration instruction ("make the flames blue").
+  instruction  String?
+  // Orchestrator output: 3 creative directions × per-view instructions.
+  directions   Json?
+  provider     String              @default("mock")
+  model        String              @default("")
+  // ESTIMATED at insert (config prices — spend-cap TOCTOU guard), trued up
+  // at completion via trueUpRunCost.
+  costUsd      Decimal             @default(0) @map("cost_usd") @db.Decimal(8, 4)
+  error        String?
+  // Client-generated idempotency token. Raw-SQL partial unique
+  // generation_runs_client_token_once (WHERE client_token IS NOT NULL) turns
+  // a double-click into a dedupe instead of a double-spend.
+  clientToken  String?             @map("client_token")
+  // Sweeper TTL: a non-terminal run past this is failed + refunded.
+  deadlineAt   DateTime?           @map("deadline_at") @db.Timestamptz
+  createdAt    DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+  completedAt  DateTime?           @map("completed_at") @db.Timestamptz
+
+  // Two further raw-SQL partial uniques (not expressible in Prisma):
+  //   * generation_runs_one_active_per_project_kind — UNIQUE(project_id, kind)
+  //     WHERE status NOT IN ('complete','failed'): one in-flight run per
+  //     project+kind.
+  //   * generation_runs_final_once_per_concept — UNIQUE(parent_run_id,
+  //     concept_key) WHERE kind='final': free-final farming guard.
+  // Plus two raw-SQL lineage CHECKs (chk_generation_runs_final_lineage /
+  // chk_generation_runs_iteration_lineage): finals require parent_run_id AND
+  // concept_key, iterations require parent_run_id — NULL lineage (which a
+  // unique index treats as distinct) can never bypass the final-once guard.
+
+  project       Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentRun     GenerationRun?  @relation("GenerationRunLineage", fields: [parentRunId], references: [id], onDelete: SetNull)
+  childRuns     GenerationRun[] @relation("GenerationRunLineage")
+  jobs          GenerationJob[]
+  images        GenerationImage[]
+  creditEntries CreditLedger[]
+
+  @@index([userId, createdAt])
+  @@index([projectId, createdAt])
+  @@map("generation_runs")
+}
+
+model GenerationJob {
+  id                String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  runId             String              @map("run_id") @db.Uuid
+  conceptKey        String              @map("concept_key")
+  view              String
+  status            GenerationJobStatus @default(pending)
+  // Provider queue id, persisted AT SUBMIT TIME (before any poll). A resumed
+  // slice that finds this non-null harvests by id — it NEVER resubmits.
+  providerRequestId String?             @map("provider_request_id")
+  prompt            String              @default("")
+  costUsd           Decimal             @default(0) @map("cost_usd") @db.Decimal(8, 4)
+  error             String?
+  createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt         DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  run    GenerationRun     @relation(fields: [runId], references: [id], onDelete: Cascade)
+  images GenerationImage[]
+
+  @@unique([runId, conceptKey, view])
+  @@map("generation_jobs")
+}
+
+model GenerationImage {
+  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  runId             String        @map("run_id") @db.Uuid
+  jobId             String        @map("job_id") @db.Uuid
+  conceptKey        String        @map("concept_key")
+  view              String
+  // Unwatermarked original in the PRIVATE bucket — owner-scoped signed URLs
+  // only; the gallery client never receives this path pre-selection.
+  storagePath       String        @map("storage_path")
+  // Watermarked preview the gallery renders.
+  previewPath       String?       @map("preview_path")
+  width             Int
+  height            Int
+  provider          String        @default("")
+  model             String        @default("")
+  providerRequestId String?       @map("provider_request_id")
+  costUsd           Decimal       @default(0) @map("cost_usd") @db.Decimal(8, 4)
+  provenance        Json?
+  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  run GenerationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+  job GenerationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)
+
+  @@index([runId])
+  @@map("generation_images")
 }
