@@ -18,7 +18,7 @@ export * as orders from './repos/orders.js';
 export * as credits from './repos/credits.js';
 export * as briefs from './repos/briefs.js';
 export * as storage from './storage/supabase.js';
-export * as svg from './svg/validate.js';
+export * as svg from './svg/index.js';
 
 export type { AccountType, AccountStatus, DecryptedUser } from './repos/users.js';
 export type { MembershipRole, ShopSummary } from './repos/shops.js';
@@ -78,3 +78,6 @@ export type {
   OutlineDims,
   OutlineValidationOptions,
 } from './svg/validate.js';
+export type { BuildOutlineInput, OutlineViewSpec, OutlinePanelSpec } from './svg/build-outline.js';
+export type { VehicleDimsMm, ViewAxis, ViewCalibration } from './svg/calibrate.js';
+export type { LayoutSheetInput, LayoutSheetView, LayoutSheetPanel } from './svg/layout-sheet.js';
