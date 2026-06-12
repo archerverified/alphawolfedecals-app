@@ -6,6 +6,93 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-12 — Goal 7 — AI generation (B2C Phase 2) — CLOSEOUT
+
+**Status:** ✅ ALL 9 deliverables shipped via reviewed, CI-green PRs (#143–#155,
+12 merged PRs incl. the #144 panel-number rider); REAL prod proof run completed
+and cleaned; smoke green on the final prod deploy; Supabase advisors at the
+2-WARN baseline (no new). **Spend: ≈$1.18 of the $9 ceiling** (fal ≈$1.09,
+Anthropic ≈$0.09) — full ledger in `docs/product/goal-7-spend-ledger.md`.
+Diagram: [`docs/vault/diagrams/goal-7-ai-generation.md`](docs/vault/diagrams/goal-7-ai-generation.md).
+
+**What shipped.** Brief → 3 AI concept directions on the customer's actual
+vehicle views → chip/free-text iteration → free export-quality final →
+locked layers in the editor with the REAL logo composited (never AI-rendered)
+→ export pack with AI hero + provenance metadata. Provider adapter
+(fal hosted queue + deterministic mock, fail-closed selection), Haiku 4.5
+orchestrator (versioned prompts, structured outputs, zod boundary),
+generation_runs/jobs/images with owner RLS, credits spent/refunded ONLY via
+SECURITY DEFINER fns (advisory-lock atomic; refund idempotent + terminal-only),
+client-poll-driven advance slices (60s budget), watermarking, sweeper cron,
+rate limit + global daily spend cap, waitlist exhaustion sheet (grant-only, NO
+Stripe), before/after slider. PROOF: live local e2e (mock renders, real DB +
+real orchestrator) AND one real prod run — evidence in
+`docs/deployment/screenshots/2026-06-12-goal-7/` (8 proof shots + export PDF +
+bake-off images + PostHog taxonomy).
+
+**DECISIONS (per the no-questions policy).**
+1. Pipeline runs on Vercel + fal's hosted queue — NO BullMQ, NO Render
+   (keys exist only in Vercel env; FAL_KEY is write-only sensitive, so ALL
+   real-call surfaces are server-side; Render alphawolf-ai stays health-only
+   and does NOT need keys).
+2. after() rejected as the pipeline driver per backend-architect review —
+   client-poll-driven CAS advance slices + sweeper instead.
+3. Bake-off amended to budget (PRD §10 20-brief → 6 planned, 4 briefs × 3
+   models × 1 view completed; prod auth flake cost briefs 1–2). Scorecard:
+   `docs/product/bakeoff-2026-06.md`.
+4. **Draft default = nano-banana-edit**, overturning PRD §10's flux-depth
+   paper pick: it EDITS the template's own view render → the customer sees
+   THEIR vehicle (geometry 3/3 on every detailed render); flux-depth produced
+   one catastrophic non-vehicle + one identity drift.
+5. Hobby-plan constraints learned via failed deploys: maxDuration ≤60
+   (#145) and DAILY-only crons (#155 — the */15 sweeper cron silently killed
+   every deploy after #150 until found via manual `vercel deploy`).
+6. AI_PROVIDER=fal on Production only; CI/dev/preview run the mock
+   (fail-closed: fal-with-blank-key throws; mock-in-prod emits a tripwire).
+7. Per-view conditioning renders pre-generated to the public bucket
+   (`pnpm db:render-views`, `views/<vehicleId>/<view>.png`).
+8. credit_source enum gained spend/refund; spend/refund flow ONLY through
+   app_spend_credits/app_refund_credits (app_user INSERT stays revoked).
+9. Prompt's named repo agents (backend-architect etc.) don't exist in
+   .claude/agents — fulfilled with role-prompted subagents; every PR got the
+   fresh-context review + RLS/money PRs got the independent second opinion
+   (verdicts recorded in each PR body).
+
+**Flagged for Archer.**
+- Intermittent bodyless-404s on prod admin APIs right after deploys
+  (deployment pinning suspected) — burned bake-off briefs 1–2; worth watching
+  after future deploys.
+- Pre-existing oddities found (NOT touched): 8 admin users created 00:36–01:26
+  UTC 2026-06-12 and one draft "2024 BMW X3" project on the operator account —
+  review/clean when convenient.
+- Launch list: full 20-brief bake-off when caps raise; richer Transit
+  conditioning render before nano runs on outline-only vehicles; wire the mock
+  generation e2e into CI smoke (needs CI DB secrets — prod smoke can't run it,
+  prod is real-fal); CRON_SECRET is set on Vercel (copy in
+  ~/.alphawolf-cron-secret).
+
+## 2026-06-12 — Goal 7 REAL PROD PROOF RUN: full customer journey on production, real fal spend $0.70
+
+**Status:** DONE. One end-to-end journey on https://alphawolfedecals-app-web.vercel.app
+as studio-operator (project "Goal 7 proof", 2024 BMW X3, 4 views), zero flake
+recoveries, ~3.5 min total generation wall time.
+
+- Brief: full-wrap default, tiny-logo.svg uploaded (vector parse instant — worker
+  warm), assigned to Rear Quarter, Clean preset + forest-green prompt.
+- Generate (1 credit) → 3 real fal concepts in ~90s (nano_banana_edit, 12 drafts).
+- Iteration "Brighter colors" on literal (1 credit, kontext_dev, ~30s) → visibly
+  brighter render. Final (free, flux2_pro_edit, ~37s) → Final badge, un-watermarked
+  renders, before/after slider captured. Editor shows the 4 views with AI layers.
+- Export pack: 4-page PDF, 409 KB, fal provenance in the PDF metadata, logo in spec.
+- **ACTUAL SPEND (generation_runs.cost_usd):** initial $0.4776 + iteration $0.1018 +
+  final $0.1200 = **$0.6994** (vs ~$0.80 expected, $1.50 ceiling). 20 images stored.
+- Evidence: `docs/deployment/screenshots/2026-06-12-goal-7/proof-0[1-8]-*.png` +
+  `proof-export-pack.pdf`.
+- CLEANUP (standing e2e rule): 38 storage objects removed (36 generations + 2 logo
+  assets), project row deleted (cascade: 3 runs, 20 jobs, 20 images, 5 assets,
+  1 brief, 1 snapshot). Credit ledger spend rows survive with run_id NULL (audit).
+  Verified: 0 objects left under both prefixes; operator project list clean.
+
 ## 2026-06-12 — Goal 7 D5/D6: generation studio UI + final→editor/export handoff (PR #154 open, stacked on goal/7-pipeline)
 
 **Status:** PR #154 OPEN on `goal/7-generation-ui`, base `goal/7-pipeline` (#150) — NOT merged.
