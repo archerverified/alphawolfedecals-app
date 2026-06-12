@@ -56,3 +56,11 @@
 ## 6. Memory-file deltas for next session
 
 The v1 memory files (`code-review-stack.md` etc.) live in the OLD session's space and are unreachable from new sessions. Their content is superseded by: repo `CLAUDE.md` (review protocol, gotchas) + this doc. If the `Documents/Claude/Projects/alphawolf-decals-app` folder gets mounted, update its `CLAUDE.md` working agreement #5 (still says "CodeRabbit only") to match repo CLAUDE.md §3.
+
+## Addendum (2026-06-12)
+- Goals 5 + 6 COMPLETE and independently verified (B2C Phase 1 wizard/export; Template Studio + AW panel data — launch blocker closed). PR #134 closed the silent email-failure class.
+- Env state: RESEND_FROM_EMAIL + UPSTASH_REDIS_REST_URL/TOKEN added to Vercel 2026-06-12 (this commit triggers the activating deploy); RESEND_FROM_EMAIL pending a Render alphawolf-api manual deploy if added after 02:06 UTC.
+- Verification finding: Goal 6 e2e left 5 Studio test vehicles in the prod catalog (4 published, 1 draft) — retired via SQL 2026-06-12. RULE FOR FUTURE PROMPTS: prod e2e must never leave published artifacts; cleanup is part of the test.
+- Review-trail drift: Goal 6 PRs #137–#139 lack explicit verdicts in PR bodies (#135/#136 have them). Reinforce "verdict text in EVERY PR body incl. data/docs PRs" in future prompts.
+- CodeRabbit GitHub app is still installed and posting rate-limited noise comments — Archer to uninstall (protocol retired it 2026-06-09).
+- Roadmap: docs/product/roadmap-goals-6-10.md. Next: Goal 7 (AI generation) — needs fal.ai key + spend cap + Anthropic key from Archer.
