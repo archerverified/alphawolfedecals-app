@@ -139,14 +139,13 @@ export function assembleLayoutSheetFromRows(
     let minY = Infinity;
     let maxX = -Infinity;
     for (const p of vp) {
-      try {
-        const b = geometry.bbox(geometry.parsePath(p.svgPath));
-        minX = Math.min(minX, b.minX);
-        minY = Math.min(minY, b.minY);
-        maxX = Math.max(maxX, b.maxX);
-      } catch {
-        // Unparseable paths were rejected upstream by the validator.
-      }
+      // Same degenerate-path filter as viewBounds (zero-bbox anchors the fit).
+      const rings = geometry.parsePath(p.svgPath).filter((r) => r.length >= 3);
+      if (rings.length === 0) continue;
+      const b = geometry.bbox(rings);
+      minX = Math.min(minX, b.minX);
+      minY = Math.min(minY, b.minY);
+      maxX = Math.max(maxX, b.maxX);
     }
     if (!Number.isFinite(minX)) continue;
     views.push({

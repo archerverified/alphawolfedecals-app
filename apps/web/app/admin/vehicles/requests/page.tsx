@@ -55,43 +55,52 @@ export default async function RequestQueuePage() {
                 <StatusBadge status={r.status} />
               </div>
 
-              <form
-                action={updateRequestStatusAction}
-                className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-3"
-              >
-                <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
-                <input type="hidden" name="id" value={r.id} />
-                <input
-                  name="shippedVehicleId"
-                  placeholder="shipped template id (for Shipped)"
-                  defaultValue={r.shippedVehicleId ?? ''}
-                  className="min-w-[18rem] flex-1 rounded-md border border-zinc-300 px-2 py-1.5 text-xs shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-200"
-                />
-                <button
-                  type="submit"
-                  name="status"
-                  value="in_progress"
-                  className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 transition hover:bg-zinc-50"
-                >
-                  In progress
-                </button>
-                <button
-                  type="submit"
-                  name="status"
-                  value="shipped"
-                  className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-800"
-                >
-                  Shipped
-                </button>
-                <button
-                  type="submit"
-                  name="status"
-                  value="rejected"
-                  className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 transition hover:bg-zinc-50"
-                >
-                  Reject
-                </button>
-              </form>
+              {/* One form per transition with the status in a HIDDEN input:
+                  submit-button name/value is dropped by server-action forms
+                  (the silent no-op the Goal 6 e2e caught on the vehicle detail
+                  page — same fix here). The Shipped form carries the template
+                  id field; the other transitions don't use it. */}
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-zinc-100 pt-3">
+                <form action={updateRequestStatusAction} className="flex flex-1 items-center gap-2">
+                  <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
+                  <input type="hidden" name="id" value={r.id} />
+                  <input type="hidden" name="status" value="shipped" />
+                  <input
+                    name="shippedVehicleId"
+                    placeholder="shipped template id (for Shipped)"
+                    defaultValue={r.shippedVehicleId ?? ''}
+                    className="min-w-[18rem] flex-1 rounded-md border border-zinc-300 px-2 py-1.5 text-xs shadow-sm outline-none focus:border-zinc-900 focus:ring-2 focus:ring-zinc-200"
+                  />
+                  <button
+                    type="submit"
+                    className="rounded-md bg-emerald-700 px-3 py-1.5 text-xs font-medium text-white transition hover:bg-emerald-800"
+                  >
+                    Shipped
+                  </button>
+                </form>
+                <form action={updateRequestStatusAction}>
+                  <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
+                  <input type="hidden" name="id" value={r.id} />
+                  <input type="hidden" name="status" value="in_progress" />
+                  <button
+                    type="submit"
+                    className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 transition hover:bg-zinc-50"
+                  >
+                    In progress
+                  </button>
+                </form>
+                <form action={updateRequestStatusAction}>
+                  <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
+                  <input type="hidden" name="id" value={r.id} />
+                  <input type="hidden" name="status" value="rejected" />
+                  <button
+                    type="submit"
+                    className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 transition hover:bg-zinc-50"
+                  >
+                    Reject
+                  </button>
+                </form>
+              </div>
             </li>
           ))}
         </ul>

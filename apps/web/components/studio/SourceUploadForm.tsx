@@ -2,33 +2,74 @@
 
 // Studio ingest form (Goal 6 D1 stage 1): one owned source file + the
 // reference measurements from the strategy doc (overall length, wheelbase,
-// wrap height). Posts to the admin-gated uploadStudioSourceAction.
+// wrap height). Direct upload (PR #136 review fix): a Server Action grants a
+// signed URL, the browser PUTs the file straight to Storage (Server Action
+// bodies are capped at 1 MB), then finalize records the provenance row.
 
-import { useActionState } from 'react';
-import { CSRF_FIELD_NAME } from '@alphawolf/auth';
-import { uploadStudioSourceAction, type StudioActionState } from '../../lib/actions/studio';
-
-const initial: StudioActionState = { ok: false };
+import { useRef, useState } from 'react';
+import {
+  finalizeStudioSourceAction,
+  grantStudioSourceUploadAction,
+} from '../../lib/actions/studio';
 
 const inputCls =
   'w-full rounded-md border border-zinc-300 px-2.5 py-1.5 text-sm text-zinc-900 focus:border-zinc-500 focus:outline-none';
 
-export function SourceUploadForm({
-  vehicleId,
-  csrfToken,
-}: {
-  vehicleId: string;
-  csrfToken: string;
-}) {
-  const [state, action, pending] = useActionState<StudioActionState, FormData>(
-    uploadStudioSourceAction,
-    initial,
-  );
+export function SourceUploadForm({ vehicleId }: { vehicleId: string }) {
+  const formRef = useRef<HTMLFormElement | null>(null);
+  const [phase, setPhase] = useState<'idle' | 'uploading'>('idle');
+  const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
+
+  const onSubmit = async (e: React.FormEvent<HTMLFormElement>): Promise<void> => {
+    e.preventDefault();
+    const form = e.currentTarget;
+    const data = new FormData(form);
+    const file = data.get('file');
+    const kind = String(data.get('kind') ?? '');
+    if (!(file instanceof File) || file.size === 0) {
+      setMessage({ ok: false, text: 'Pick a source file first.' });
+      return;
+    }
+
+    setPhase('uploading');
+    setMessage(null);
+    try {
+      const grant = await grantStudioSourceUploadAction({
+        vehicleId,
+        fileName: file.name,
+        mimeType: file.type,
+        size: file.size,
+      });
+      const put = await fetch(grant.signedUrl, {
+        method: 'PUT',
+        headers: { 'content-type': file.type, 'x-upsert': 'true' },
+        body: file,
+      });
+      if (!put.ok) throw new Error(`Upload failed (${put.status}).`);
+
+      const result = await finalizeStudioSourceAction({
+        vehicleId,
+        key: grant.key,
+        kind,
+        overallLengthMm: Number(data.get('overallLengthMm')) || undefined,
+        wheelbaseMm: Number(data.get('wheelbaseMm')) || undefined,
+        wrapHeightMm: Number(data.get('wrapHeightMm')) || undefined,
+        notes: String(data.get('notes') ?? '') || undefined,
+      });
+      setMessage({
+        ok: result.ok,
+        text: result.message ?? (result.ok ? 'Source uploaded.' : 'Failed.'),
+      });
+      if (result.ok) formRef.current?.reset();
+    } catch (err) {
+      setMessage({ ok: false, text: err instanceof Error ? err.message : 'Upload failed.' });
+    } finally {
+      setPhase('idle');
+    }
+  };
 
   return (
-    <form action={action} className="space-y-3">
-      <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
-      <input type="hidden" name="vehicleId" value={vehicleId} />
+    <form ref={formRef} onSubmit={onSubmit} className="space-y-3">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
         <label className="block text-sm">
           <span className="mb-1 block text-xs font-medium text-zinc-500">Source kind</span>
@@ -67,17 +108,17 @@ export function SourceUploadForm({
           <input type="text" name="notes" maxLength={300} className={inputCls} />
         </label>
       </div>
-      {state.message ? (
-        <p className={`text-sm ${state.ok ? 'text-emerald-600' : 'text-red-600'}`}>
-          {state.message}
+      {message ? (
+        <p className={`text-sm ${message.ok ? 'text-emerald-600' : 'text-red-600'}`}>
+          {message.text}
         </p>
       ) : null}
       <button
         type="submit"
-        disabled={pending}
+        disabled={phase === 'uploading'}
         className="inline-flex items-center justify-center rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition hover:bg-zinc-800 disabled:opacity-50"
       >
-        {pending ? 'Uploading…' : 'Upload source'}
+        {phase === 'uploading' ? 'Uploading…' : 'Upload source'}
       </button>
     </form>
   );

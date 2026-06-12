@@ -146,7 +146,20 @@ export function StudioWorkspace({
 
   // --- pointer handlers -------------------------------------------------------
 
+  const capturePointer = (e: React.PointerEvent): void => {
+    // Without capture, releasing the button outside the SVG never fires
+    // pointerup — the drag/draft sticks to the next hover and silently moves
+    // authored geometry (PR #137 review fix).
+    svgRef.current?.setPointerCapture(e.pointerId);
+  };
+
+  const clearInteraction = (): void => {
+    drag.current = null;
+    setDraft(null);
+  };
+
   const onPointerDown = (e: React.PointerEvent): void => {
+    capturePointer(e);
     const [x, y] = toSheet(e);
     if (mode === 'draw') {
       setDraft({ x0: x, y0: y, x1: x, y1: y });
@@ -354,6 +367,8 @@ export function StudioWorkspace({
           onPointerDown={onPointerDown}
           onPointerMove={onPointerMove}
           onPointerUp={onPointerUp}
+          onPointerCancel={clearInteraction}
+          onLostPointerCapture={clearInteraction}
           data-testid="studio-canvas"
         >
           {backdropUrl ? (
@@ -381,6 +396,7 @@ export function StudioWorkspace({
                   onPointerDown={(e) => {
                     if (mode !== 'select') return;
                     e.stopPropagation();
+                    capturePointer(e);
                     setSelectedKey(p.key);
                     const [x, y] = toSheet(e);
                     drag.current = { kind: 'panel', key: p.key, lastX: x, lastY: y };
@@ -399,6 +415,7 @@ export function StudioWorkspace({
                         className="cursor-grab"
                         onPointerDown={(e) => {
                           e.stopPropagation();
+                          capturePointer(e);
                           drag.current = { kind: 'vertex', key: p.key, index: i };
                         }}
                         onDoubleClick={(e) => {

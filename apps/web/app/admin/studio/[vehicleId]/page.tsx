@@ -138,7 +138,7 @@ export default async function StudioVehiclePage({
             ))}
           </ul>
         ) : null}
-        <SourceUploadForm vehicleId={vehicle.id} csrfToken={csrfToken} />
+        <SourceUploadForm vehicleId={vehicle.id} />
       </section>
     </div>
   );
