@@ -36,7 +36,8 @@
     "db:seed-aw": "dotenv -e .env -- tsx scripts/seed-vehicle-templates.ts",
     "db:make-admin": "dotenv -e .env -- tsx scripts/make-admin.ts",
     "storage:provision": "dotenv -e .env -- tsx scripts/provision-storage.ts",
-    "storage:migrate-local": "dotenv -e .env -- tsx scripts/migrate-local-assets.ts"
+    "storage:migrate-local": "dotenv -e .env -- tsx scripts/migrate-local-assets.ts",
+    "db:author-aw": "dotenv -e .env -- tsx scripts/author-aw-panels.ts"
   },
   "dependencies": {
     "@alphawolf/canvas": "workspace:^",

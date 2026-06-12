@@ -1,0 +1,207 @@
+{
+  "$comment": "AW-TPL-0001 BMW X3 panel set (Goal 6 D2). Coordinates are SHEET-ABSOLUTE (the wrapped.svg 1920x1080 frame) so QC overlays composite 1:1 over the art. Views per the sheet: back (top-left), driver (top-right), front (bottom-left), passenger (bottom-right). Provenance: authored over Alpha Wolf's own wrapped art (vehicle-templates/aa000001.../wrapped.svg); no third-party template source. View spans from ink-bbox analysis: driver/passenger width 1023u = 4708mm length; front/back body width ~225u = 1891mm width.",
+  "vehicleId": "aa000001-0000-4000-8000-000000000001",
+  "provenanceNote": "Authored over Alpha Wolf owned wrapped art (aa000001/wrapped.svg), Goal 2a manual import of in-house BMW X3 sheet. Calibrated against stated 4708x1891x1676 mm.",
+  "viewBox": {
+    "width": 1920,
+    "height": 1080
+  },
+  "views": [
+    {
+      "view": "driver",
+      "spanUnits": 1023,
+      "axis": "length",
+      "panels": [
+        {
+          "name": "Rear Quarter",
+          "points": [
+            [706, 190],
+            [830, 185],
+            [830, 345],
+            [706, 345]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 1,
+          "notes": "Includes rear corner; taillight stays clear via wrap-safe inset"
+        },
+        {
+          "name": "Rear Door",
+          "points": [
+            [830, 185],
+            [995, 182],
+            [995, 340],
+            [830, 345]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 2
+        },
+        {
+          "name": "Front Door",
+          "points": [
+            [995, 182],
+            [1345, 185],
+            [1345, 340],
+            [995, 340]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 3
+        },
+        {
+          "name": "Front Fender",
+          "points": [
+            [1345, 185],
+            [1490, 195],
+            [1490, 340],
+            [1345, 340]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 4
+        },
+        {
+          "name": "Nose & Front Bumper",
+          "points": [
+            [1490, 195],
+            [1700, 215],
+            [1715, 290],
+            [1700, 350],
+            [1490, 340]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 5
+        }
+      ]
+    },
+    {
+      "view": "passenger",
+      "spanUnits": 1023,
+      "axis": "length",
+      "panels": [
+        {
+          "name": "Nose & Front Bumper",
+          "points": [
+            [705, 680],
+            [915, 660],
+            [915, 805],
+            [705, 815],
+            [690, 755]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 6
+        },
+        {
+          "name": "Front Fender",
+          "points": [
+            [915, 660],
+            [1080, 650],
+            [1080, 805],
+            [915, 805]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 7
+        },
+        {
+          "name": "Front Door",
+          "points": [
+            [1080, 647],
+            [1430, 647],
+            [1430, 805],
+            [1080, 805]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 8
+        },
+        {
+          "name": "Rear Door",
+          "points": [
+            [1430, 647],
+            [1595, 650],
+            [1595, 810],
+            [1430, 805]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 9
+        },
+        {
+          "name": "Rear Quarter",
+          "points": [
+            [1595, 650],
+            [1699, 655],
+            [1699, 810],
+            [1595, 810]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 10
+        }
+      ]
+    },
+    {
+      "view": "back",
+      "spanUnits": 390,
+      "axis": "width",
+      "panels": [
+        {
+          "name": "Tailgate",
+          "points": [
+            [250, 210],
+            [590, 210],
+            [590, 330],
+            [250, 330]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 11
+        },
+        {
+          "name": "Rear Bumper",
+          "points": [
+            [243, 330],
+            [597, 330],
+            [597, 400],
+            [243, 400]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 12
+        }
+      ]
+    },
+    {
+      "view": "front",
+      "spanUnits": 410,
+      "axis": "width",
+      "panels": [
+        {
+          "name": "Hood Front",
+          "points": [
+            [255, 645],
+            [585, 645],
+            [585, 695],
+            [255, 695]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 13
+        },
+        {
+          "name": "Front Fascia",
+          "points": [
+            [235, 695],
+            [608, 695],
+            [608, 775],
+            [235, 775]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 14
+        },
+        {
+          "name": "Front Bumper",
+          "points": [
+            [228, 775],
+            [615, 775],
+            [615, 845],
+            [228, 845]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 15
+        }
+      ]
+    }
+  ]
+}
