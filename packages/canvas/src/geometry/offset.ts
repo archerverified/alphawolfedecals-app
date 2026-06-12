@@ -3,18 +3,18 @@
 //
 // insetRingPath generates a panel's wrap-safe path from its outline by
 // offsetting every edge toward the interior. Join model (per the PR #135
-// review findings):
-//   * convex corners take the exact miter — for an INSET the two offset lines
-//     meet inside the polygon, so the miter is the geometrically correct
-//     vertex no matter how sharp the corner (a clamp here was the bug: it
-//     emitted points OUTSIDE the panel);
-//   * reflex corners take a bevel at exactly `inset` distance — the true
-//     offset there is an arc; the bevel chord cuts slightly INTO the interior,
-//     which is the conservative direction for a wrap-safe boundary;
+// review + verification findings):
+//   * EVERY corner takes the exact miter. Convex: the inset offset lines meet
+//     inside the polygon (a clamp here emitted points OUTSIDE the panel — the
+//     original bug). Reflex: the miter sits BEYOND the true inset arc, so
+//     clearance from the panel edge is ≥ inset everywhere (a bevel chord here
+//     is a secant of the arc and under-clears the corner — the verification
+//     regression). Exploding reflex miters (corner → 180°) are rejected.
 //   * the output ring is then checked for self-intersection (segment pairs)
 //     and same-winding/strictly-smaller area. Features narrower than 2×inset
 //     produce a bowtie and are REJECTED, not repaired — callers treat the
-//     throw as "inset too large for this panel".
+//     throw as "inset too large for this panel". Exactly-retraced zero-width
+//     spurs (anti-parallel collinear corners) are rejected explicitly.
 // Input must be a single hole-free ring; multi-ring paths are rejected.
 //
 // pathAreaScaled is the calibrated sibling of pathAreaMm2: template documents
@@ -57,7 +57,43 @@ type Edge = {
   ny: number;
 };
 
-/** True when the output ring has any properly-crossing non-adjacent segment pair. */
+const orient2 = (ax: number, ay: number, bx: number, by: number, cx: number, cy: number): number =>
+  (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+
+/** Collinear non-adjacent segments that OVERLAP (a doubled-back ring section). */
+function segmentsCollinearOverlap(
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+  cx: number,
+  cy: number,
+  dx: number,
+  dy: number,
+): boolean {
+  const EPS = 1e-6;
+  if (
+    Math.abs(orient2(ax, ay, bx, by, cx, cy)) > EPS ||
+    Math.abs(orient2(ax, ay, bx, by, dx, dy)) > EPS
+  ) {
+    return false;
+  }
+  // Project onto the dominant axis and test 1-D range overlap.
+  const horizontal = Math.abs(bx - ax) >= Math.abs(by - ay);
+  const [a1, b1] = horizontal ? [ax, bx] : [ay, by];
+  const [c1, d1] = horizontal ? [cx, dx] : [cy, dy];
+  const lo1 = Math.min(a1, b1);
+  const hi1 = Math.max(a1, b1);
+  const lo2 = Math.min(c1, d1);
+  const hi2 = Math.max(c1, d1);
+  return Math.min(hi1, hi2) - Math.max(lo1, lo2) > EPS;
+}
+
+/**
+ * True when the output ring has any properly-crossing OR collinear-overlapping
+ * non-adjacent segment pair (the latter is how reflex miters on flush edges
+ * double back — proper-crossing tests are blind to collinear overlap).
+ */
 function ringSelfIntersects(ring: Ring): boolean {
   const m = ring.length;
   for (let i = 0; i < m; i++) {
@@ -69,8 +105,58 @@ function ringSelfIntersects(ring: Ring): boolean {
       if (j === i + 1 || (i === 0 && j === m - 1)) continue;
       const c = ring[j]!;
       const d = ring[(j + 1) % m]!;
-      if (segmentsProperlyCross(a[0]!, a[1]!, b[0]!, b[1]!, c[0]!, c[1]!, d[0]!, d[1]!)) {
+      if (
+        segmentsProperlyCross(a[0]!, a[1]!, b[0]!, b[1]!, c[0]!, c[1]!, d[0]!, d[1]!) ||
+        segmentsCollinearOverlap(a[0]!, a[1]!, b[0]!, b[1]!, c[0]!, c[1]!, d[0]!, d[1]!)
+      ) {
         return true;
+      }
+    }
+  }
+  return false;
+}
+
+function pointSegmentDistance(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+const CLEARANCE_SAMPLES = 16;
+// Output coordinates are rounded to 2 decimals; allow that much slack.
+const CLEARANCE_TOLERANCE = 0.02;
+
+/**
+ * The wrap-safe CONTRACT, enforced rather than assumed: every point along the
+ * inset boundary (sampled densely, not just vertices) must be at least `inset`
+ * away from the input boundary. Pure mitering can under-clear near features
+ * shallower than the inset (e.g. a sub-inset dent whose shoulder miters span
+ * it) — those results are rejected here instead of shipping silently.
+ */
+function ringUnderClears(out: Ring, input: Ring, inset: number): boolean {
+  const m = out.length;
+  const n = input.length;
+  for (let i = 0; i < m; i++) {
+    const [ax, ay] = out[i]! as [number, number];
+    const [bx, by] = out[(i + 1) % m]! as [number, number];
+    for (let s = 0; s <= CLEARANCE_SAMPLES; s++) {
+      const px = ax + ((bx - ax) * s) / CLEARANCE_SAMPLES;
+      const py = ay + ((by - ay) * s) / CLEARANCE_SAMPLES;
+      let min = Infinity;
+      for (let j = 0; j < n; j++) {
+        const [cx, cy] = input[j]! as [number, number];
+        const [dx, dy] = input[(j + 1) % n]! as [number, number];
+        min = Math.min(min, pointSegmentDistance(px, py, cx, cy, dx, dy));
+        if (min < inset - CLEARANCE_TOLERANCE) return true;
       }
     }
   }
@@ -150,34 +236,53 @@ export function insetRingPath(d: string, inset: number): string {
     const cross = prev.dx * cur.dy - prev.dy * cur.dx;
 
     if (Math.abs(cross) < 1e-9) {
-      // Collinear continuation: a single offset point suffices.
+      // Collinear: distinguish straight continuation from a 180° REVERSAL —
+      // an exactly-retraced zero-width spur is by definition narrower than
+      // 2× any inset, and its overlap is collinear so the self-intersection
+      // check (proper crossings only) cannot catch it downstream.
+      if (prev.dx * cur.dx + prev.dy * cur.dy < 0) {
+        throw new Error(
+          '[geometry] insetRingPath: zero-width spur (exactly retraced edge) — reject',
+        );
+      }
       push(vx + cur.nx * inset, vy + cur.ny * inset);
       continue;
     }
 
-    const convex = cross * areaSign < 0;
-    if (convex) {
-      // Exact miter: offset lines of an inset always meet inside the polygon
-      // at a convex corner.
-      const hit = lineIntersect(
-        prev.vx + prev.nx * inset,
-        prev.vy + prev.ny * inset,
-        prev.dx,
-        prev.dy,
-        vx + cur.nx * inset,
-        vy + cur.ny * inset,
-        cur.dx,
-        cur.dy,
-      );
-      if (hit) {
-        push(hit[0], hit[1]);
-        continue;
-      }
-      // Numerically parallel despite the cross check: fall through to bevel.
+    // Exact miter at EVERY corner. Convex: the inset offset lines meet inside
+    // the polygon — exact and contained (a too-long convex miter implies a
+    // sub-2×inset feature, caught by the self-intersection check). Reflex: the
+    // miter sits on the angle bisector at inset/cos(turn/2) from the vertex —
+    // BEYOND the true inset arc, i.e. clearance ≥ inset everywhere (a bevel
+    // chord here would be a secant of the arc and under-clear the corner).
+    const hit = lineIntersect(
+      prev.vx + prev.nx * inset,
+      prev.vy + prev.ny * inset,
+      prev.dx,
+      prev.dy,
+      vx + cur.nx * inset,
+      vy + cur.ny * inset,
+      cur.dx,
+      cur.dy,
+    );
+    if (!hit) {
+      // Numerically parallel despite the cross check — treat as straight.
+      push(vx + cur.nx * inset, vy + cur.ny * inset);
+      continue;
     }
-    // Reflex corner (or degenerate miter): bevel at exactly `inset` distance.
-    push(vx + prev.nx * inset, vy + prev.ny * inset);
-    push(vx + cur.nx * inset, vy + cur.ny * inset);
+    const convex = cross * areaSign < 0;
+    if (!convex) {
+      // The reflex miter explodes as the corner approaches 180°; such a
+      // corner bounds a feature effectively narrower than the inset — reject
+      // rather than emit a deep sliver cut (8× ≈ a 165.5° reflex turn).
+      const dist = Math.hypot(hit[0] - vx, hit[1] - vy);
+      if (dist > inset * 8) {
+        throw new Error(
+          '[geometry] insetRingPath: reflex corner too shallow for this inset — reject',
+        );
+      }
+    }
+    push(hit[0], hit[1]);
   }
 
   // Wrap-around dedupe: first and last may coincide after bevels.
@@ -200,6 +305,12 @@ export function insetRingPath(d: string, inset: number): string {
   // Same winding, strictly smaller: anything else means the inset collapsed.
   if (Math.sign(insetArea) !== Math.sign(area) || Math.abs(insetArea) >= Math.abs(area)) {
     throw new Error('[geometry] insetRingPath: inset collapses the polygon (inset too large?)');
+  }
+
+  if (ringUnderClears(out, ring, inset)) {
+    throw new Error(
+      '[geometry] insetRingPath: result under-clears the panel edge — a feature is shallower than the inset',
+    );
   }
 
   return `M${out.map(([x, y]) => `${round2(x!)} ${round2(y!)}`).join(' L')} Z`;

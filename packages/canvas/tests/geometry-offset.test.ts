@@ -18,6 +18,50 @@ function expectContained(insetD: string, inputD: string): void {
   }
 }
 
+function pointSegmentDist(
+  px: number,
+  py: number,
+  ax: number,
+  ay: number,
+  bx: number,
+  by: number,
+): number {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 === 0 ? 0 : Math.max(0, Math.min(1, ((px - ax) * dx + (py - ay) * dy) / len2));
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+/**
+ * Dense clearance check (the verification round's catch): EVERY point along
+ * the inset boundary — not just vertices — must be at least `inset` from the
+ * input boundary. A bevel chord at a reflex corner under-clears between its
+ * endpoints; this sampler catches what vertex containment cannot.
+ */
+function expectClearance(insetD: string, inputD: string, inset: number): void {
+  const input = ringOf(inputD);
+  const out = ringOf(insetD);
+  const SAMPLES = 24;
+  for (let i = 0; i < out.length; i++) {
+    const [ax, ay] = out[i]! as [number, number];
+    const [bx, by] = out[(i + 1) % out.length]! as [number, number];
+    for (let s = 0; s <= SAMPLES; s++) {
+      const px = ax + ((bx - ax) * s) / SAMPLES;
+      const py = ay + ((by - ay) * s) / SAMPLES;
+      let min = Infinity;
+      for (let j = 0; j < input.length; j++) {
+        const [cx, cy] = input[j]! as [number, number];
+        const [dx2, dy2] = input[(j + 1) % input.length]! as [number, number];
+        min = Math.min(min, pointSegmentDist(px, py, cx, cy, dx2, dy2));
+      }
+      expect(min, `boundary point (${px.toFixed(1)}, ${py.toFixed(1)}) clearance`).toBeGreaterThan(
+        inset - 0.02,
+      );
+    }
+  }
+}
+
 describe('insetRingPath', () => {
   test('insets an axis-aligned rectangle exactly (CW winding)', () => {
     // 100×80 rect, visually clockwise in y-down coords.
@@ -54,6 +98,47 @@ describe('insetRingPath', () => {
     expectContained(out, L);
   });
 
+  test('VERIFY REPRO: clearance ≥ inset along the WHOLE boundary (reflex corners too)', () => {
+    // The reflex bevel regression under-cleared to 3.54 on this shape at
+    // inset 5; the reflex miter keeps every boundary point ≥ 5 away.
+    const L = 'M0 0 L100 0 L100 40 L60 40 L60 100 L0 100 Z';
+    expectClearance(insetRingPath(L, 5), L, 5);
+    const notch = 'M0 0 L120 0 L120 50 L80 50 L80 100 L0 100 Z';
+    expectClearance(insetRingPath(notch, 6), notch, 6);
+    const rect = 'M0 0 L100 0 L100 80 L0 80 Z';
+    expectClearance(insetRingPath(rect, 10), rect, 10);
+    const tri = 'M0 0 L100 0 L50 90 Z';
+    expectClearance(insetRingPath(tri, 8), tri, 8);
+    const bow = 'M0 0 L70 0 L100 40 L70 80 L0 80 Z';
+    expectClearance(insetRingPath(bow, 8), bow, 8);
+  });
+
+  test('VERIFY REPRO: an exactly-retraced zero-width spur is rejected', () => {
+    // Anti-parallel collinear corner: the overlap is collinear, so the
+    // self-intersection check (proper crossings only) cannot see it — the
+    // dot-product guard must.
+    const spur = 'M0 0 L100 0 L100 80 L50 80 L50 95 L50 80 L0 80 Z';
+    expect(() => insetRingPath(spur, 5)).toThrow(/zero-width|self-intersects|collapses/);
+  });
+
+  test('a shallow dent is carved around with full clearance (reflex miters are exact)', () => {
+    // Brute-force-verified: the result bumps inward around the dent and the
+    // worst boundary clearance is exactly the inset.
+    const dent = 'M0 0 L200 0 L200 80 L101 80 L100 79.2 L99 80 L0 80 Z';
+    const out = insetRingPath(dent, 6);
+    expectClearance(out, dent, 6);
+    expectContained(out, dent);
+  });
+
+  test('an interior needle (near-180° reflex) is rejected, not deep-cut', () => {
+    // 2-wide, 60-deep spur into the interior: the reflex tip miter explodes
+    // (inset/cos(turn/2) ≫ 8×inset) — reject per the cap.
+    const needle = 'M0 0 L200 0 L200 80 L101 80 L100 20 L99 80 L0 80 Z';
+    expect(() => insetRingPath(needle, 6)).toThrow(
+      /reflex corner|self-intersects|collapses|zero-width|under-clears/,
+    );
+  });
+
   test('REVIEW REPRO: rejects a narrow limb (bowtie self-intersection), not silently corrupts', () => {
     // Limb is 12 units tall; inset 7 → 2×7 > 12 → the limb inverts.
     expect(() => insetRingPath('M0 0 L200 0 L200 80 L120 80 L120 12 L0 12 Z', 7)).toThrow(
@@ -72,7 +157,9 @@ describe('insetRingPath', () => {
     // The 4-unit-wide spike cannot contain a 5-unit inset — the old clamp
     // emitted vertices OUTSIDE the panel here; the contract is to reject.
     const spike = 'M0 0 L100 0 L100 80 L52 80 L50 95 L48 80 L0 80 Z';
-    expect(() => insetRingPath(spike, 5)).toThrow(/self-intersects|collapses/);
+    expect(() => insetRingPath(spike, 5)).toThrow(
+      /self-intersects|collapses|under-clears|zero-width/,
+    );
   });
 
   test('a pointed bow wider than 2×inset takes the exact miter, contained', () => {

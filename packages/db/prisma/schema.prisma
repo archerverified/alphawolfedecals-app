@@ -359,6 +359,10 @@ model VehiclePanel {
 
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
+  // Panel IDENTITY: saved canvas artwork keys on the panel UUID, and the
+  // Studio's setVehiclePanels sync matches rows by (view, name) to preserve
+  // those UUIDs across re-authoring — so the pair must be unique per vehicle.
+  @@unique([vehicleId, view, name], map: "vehicle_panels_identity_uk")
   @@index([vehicleId], map: "vehicle_panels_vehicle_idx")
   @@map("vehicle_panels")
 }

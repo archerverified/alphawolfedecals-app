@@ -118,7 +118,12 @@ function decodeXmlEntities(value: string): string {
     if (ent[0] !== '#') return XML_ENTITY_DECODES[ent]!;
     const code =
       ent[1] === 'x' ? Number.parseInt(ent.slice(2), 16) : Number.parseInt(ent.slice(1), 10);
-    return Number.isFinite(code) ? String.fromCodePoint(code) : `&${ent};`;
+    // Out-of-range / surrogate code points would make fromCodePoint THROW —
+    // the validator's contract is to return errors, never to crash on crafted
+    // input. Leave such references as literal text instead.
+    const valid =
+      Number.isFinite(code) && code >= 0 && code <= 0x10ffff && !(code >= 0xd800 && code <= 0xdfff);
+    return valid ? String.fromCodePoint(code) : `&${ent};`;
   });
 }
 
@@ -278,8 +283,11 @@ export function validateOutlineSvg(
   }
 
   // Rules 2 + 3 (and panel extraction): each view has ≥1 g.panel; each panel has
-  // both an .outline and a .wrap-safe path.
+  // both an .outline and a .wrap-safe path. (view, name) pairs must be unique —
+  // panel identity downstream (vehicle_panels sync, saved-artwork attachment)
+  // is keyed on them, and the DB enforces it with a unique constraint.
   const panels: ExtractedPanel[] = [];
+  const seenIdentities = new Set<string>();
   let installSeq = 0;
   for (const view of allowedViews) {
     const group = viewByName.get(view);
@@ -303,6 +311,14 @@ export function validateOutlineSvg(
           message: `Panel "${label}" is missing its .wrap-safe path.`,
         });
       }
+      const identity = `${view} ${label}`;
+      if (seenIdentities.has(identity)) {
+        errors.push({
+          rule: 'panels',
+          message: `Duplicate panel name "${label}" in view "${view}" — names must be unique per view.`,
+        });
+      }
+      seenIdentities.add(identity);
       const finishRaw = panel.attributes['data-finish-hint'];
       const finishHint: FinishHint = FINISH_HINTS.includes(finishRaw as FinishHint)
         ? (finishRaw as FinishHint)

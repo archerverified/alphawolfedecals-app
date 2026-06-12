@@ -244,6 +244,14 @@ describe('validateOutlineSvg — declared views (Goal 6)', () => {
   });
 });
 
+describe('panel identity (view, name) uniqueness', () => {
+  test('two panels with the same data-name in one view are rejected', () => {
+    const inner = `${panel('front')}${panel('front')}`;
+    const svgText = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4800 1200">${viewGroup('front', inner)}${viewGroup('driver')}${viewGroup('back')}${viewGroup('passenger')}</svg>`;
+    expectFailRule(validateOutlineSvg(svgText, DIMS), 'panels');
+  });
+});
+
 describe('XML entity decoding in extracted fields', () => {
   test('escaped & / quotes in data-name and data-notes come back decoded', () => {
     const inner =
@@ -258,6 +266,19 @@ describe('XML entity decoding in extracted fields', () => {
       expect(p.name).toBe('Bow & Mid "A"');
       expect(p.notes).toBe('keep <numbers> clear');
     }
+  });
+
+  test('out-of-range numeric references never CRASH the validator', () => {
+    // &#x110000; is beyond the Unicode range — String.fromCodePoint would
+    // THROW. The validator's contract is to always return a result (ok or
+    // errors), never to throw on crafted input. (svgson may reject the doc at
+    // parse — also fine; what must not happen is an exception.)
+    const inner =
+      '<g class="panel" id="p-front" data-name="Bad &#x110000; ref" data-install-order="1">' +
+      '<path class="outline" d="M10 10 L100 10 L100 100 Z"/>' +
+      '<path class="wrap-safe" d="M20 20 L90 20 L90 90 Z"/></g>';
+    const svgText = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 4800 1200">${viewGroup('front', inner)}${viewGroup('driver')}${viewGroup('back')}${viewGroup('passenger')}</svg>`;
+    expect(() => validateOutlineSvg(svgText, DIMS)).not.toThrow();
   });
 });
 
