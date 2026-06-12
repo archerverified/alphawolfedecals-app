@@ -3,14 +3,14 @@
 // isElementInsideClip uses ray-casting point-in-polygon (pure TS, NO
 // Path2D/Canvas2D) so the printable-area test is unit-testable headlessly.
 
-import { parsePath, type Ring } from './path-parse';
+import { parsePath, type Ring } from './path-parse.js';
 import {
   bbox as ringsBbox,
   bboxIntersects,
   pointInPolygon,
   polygonArea,
   type Bbox,
-} from './polygon';
+} from './polygon.js';
 
 /**
  * True when the element's axis-aligned bbox is fully inside the clip polygon.

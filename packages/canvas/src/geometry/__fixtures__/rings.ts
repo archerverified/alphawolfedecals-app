@@ -1,7 +1,7 @@
 // Sample wrap-safe rings for geometry unit tests. Coordinates are panel-local,
 // unit mm×10, mirroring the seed vehicle SVG (e.g. driver panel `M60 360...`).
 
-import type { Ring } from '../path-parse';
+import type { Ring } from '../path-parse.js';
 
 /** A simple axis-aligned rectangle 0,0 -> 1000,600. Area = 600_000 unit². */
 export const RECT_RING: Ring = [

@@ -22,9 +22,9 @@
 // document's mm-per-unit calibration factor, derived from the vehicle's stated
 // dimensions (Studio calibration stage).
 
-import { parsePath, type Ring } from './path-parse';
-import { polygonArea, ringSignedArea } from './polygon';
-import { segmentsProperlyCross } from './hit-test';
+import { parsePath, type Ring } from './path-parse.js';
+import { polygonArea, ringSignedArea } from './polygon.js';
+import { segmentsProperlyCross } from './hit-test.js';
 
 /** Intersection of two infinite lines given by point + direction. Null when parallel. */
 function lineIntersect(
@@ -182,6 +182,12 @@ export function insetRingPath(d: string, inset: number): string {
   const ring = rings[0];
   if (!ring || ring.length < 3) {
     throw new Error('[geometry] insetRingPath: path has no polygon ring');
+  }
+  // Complexity bound: the self-intersection + clearance checks are O(n²)-ish.
+  // Panel outlines are tens of vertices; a flattened-curve blowup (huge-
+  // coordinate Béziers subdivide to ~2^18 points) is rejected, not processed.
+  if (ring.length > 5000) {
+    throw new Error('[geometry] insetRingPath: outline too complex (>5000 vertices)');
   }
 
   const area = ringSignedArea(ring);

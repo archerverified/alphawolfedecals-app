@@ -218,6 +218,31 @@ export async function uploadTemplateSourceObject(
   return key;
 }
 
+// Signed UPLOAD URL so the admin's browser PUTs the source file straight to
+// Storage instead of riding a Server Action body (which Next caps at 1 MB).
+// Same contract as signedAssetUploadUrl: the CALLER passed requireAdmin().
+export async function signedTemplateSourceUploadUrl(key: string): Promise<SignedUpload> {
+  const { data, error } = await getServiceClient()
+    .storage.from(TEMPLATE_SOURCES_BUCKET)
+    .createSignedUploadUrl(key);
+  if (error || !data) {
+    throw new Error(
+      `[db/storage] signedTemplateSourceUploadUrl failed for ${key}: ${error?.message ?? 'no url'}`,
+    );
+  }
+  return { path: data.path, token: data.token, signedUrl: data.signedUrl };
+}
+
+// Object metadata for a private template source (existence + size check at
+// finalize time — the bucket's own size/MIME caps are the storage-side net).
+export async function templateSourceObjectInfo(
+  key: string,
+): Promise<{ size: number; contentType: string | null } | null> {
+  const { data, error } = await getServiceClient().storage.from(TEMPLATE_SOURCES_BUCKET).info(key);
+  if (error || !data) return null;
+  return { size: data.size ?? 0, contentType: data.contentType ?? null };
+}
+
 // Short-lived signed READ URL for a private template source. The CALLER must
 // have already passed requireAdmin() — same contract as signedAssetReadUrl.
 export async function signedTemplateSourceReadUrl(

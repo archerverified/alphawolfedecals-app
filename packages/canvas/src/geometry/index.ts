@@ -1,5 +1,5 @@
-export { parsePath } from './path-parse';
-export type { Ring } from './path-parse';
+export { parsePath } from './path-parse.js';
+export type { Ring } from './path-parse.js';
 export {
   pointInRing,
   pointInPolygon,
@@ -9,10 +9,10 @@ export {
   bboxIntersects,
   ringSignedArea,
   polygonArea,
-} from './polygon';
-export type { Bbox } from './polygon';
-export { isElementInsideClip, pathArea, pathAreaMm2 } from './hit-test';
-export { insetRingPath, pathAreaScaled } from './offset';
-export { elementBbox } from './bbox';
-export { resolveSnap } from './snap';
-export type { SnapCandidate, SnapInput, SnapResult } from './snap';
+} from './polygon.js';
+export type { Bbox } from './polygon.js';
+export { isElementInsideClip, pathArea, pathAreaMm2 } from './hit-test.js';
+export { insetRingPath, pathAreaScaled } from './offset.js';
+export { elementBbox } from './bbox.js';
+export { resolveSnap } from './snap.js';
+export type { SnapCandidate, SnapInput, SnapResult } from './snap.js';

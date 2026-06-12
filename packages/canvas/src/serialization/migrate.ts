@@ -4,7 +4,7 @@
 // CURRENT-1 in sequence. Each migrator is PURE, operates on the OLD shape, and
 // takes/returns a plain record. Migrators are NEVER deleted.
 
-import { CURRENT_SCHEMA_VERSION } from '../schema/versions';
+import { CURRENT_SCHEMA_VERSION } from '../schema/versions.js';
 
 /** Thrown on structural corruption, an unknown version, or a too-new document. */
 export class CanvasSchemaError extends Error {

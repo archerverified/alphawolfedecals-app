@@ -76,15 +76,19 @@ export function buildOutlineSvg(input: BuildOutlineInput): string {
   lines.push(`     data-version="${input.version ?? 1}">`);
   lines.push(`  <metadata>${esc(input.metadata)}</metadata>`);
 
-  let installSeq = 0;
+  // Auto-numbering continues past the highest EXPLICIT order so mixed
+  // explicit/auto payloads cannot emit duplicate data-install-order values.
+  let installSeq = Math.max(
+    0,
+    ...input.views.flatMap((v) => v.panels.map((p) => p.installOrder ?? 0)),
+  );
   for (const view of input.views) {
     const t = view.translate ?? { x: 0, y: 0 };
     lines.push(
       `  <g id="view-${esc(view.view)}" data-view="${esc(view.view)}" transform="translate(${t.x},${t.y})">`,
     );
     for (const panel of view.panels) {
-      installSeq += 1;
-      const order = panel.installOrder ?? installSeq;
+      const order = panel.installOrder ?? ++installSeq;
       const attrs = [
         `class="panel"`,
         `id="${esc(panelId(view.view, panel.name))}"`,

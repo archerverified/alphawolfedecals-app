@@ -17,6 +17,10 @@ function baseUrl(): string {
   return process.env.APP_BASE_URL ?? 'http://localhost:3000';
 }
 
+// Requester-controlled year/make/model land in the email HTML — escape them.
+const escapeHtml = (s: string): string =>
+  s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
 export type ShipResult = { ok: true; emailed: boolean } | { ok: false; reason: 'not_found' };
 
 export async function shipRequestAndNotify(
@@ -38,7 +42,7 @@ export async function shipRequestAndNotify(
 
   let emailed = false;
   if (updated.requesterEmail) {
-    const name = `${updated.year} ${updated.make} ${updated.model}`;
+    const name = escapeHtml(`${updated.year} ${updated.make} ${updated.model}`);
     const link = shippedVehicleId
       ? `${baseUrl()}/vehicles/${shippedVehicleId}`
       : `${baseUrl()}/vehicles/select`;

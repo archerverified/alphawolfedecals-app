@@ -68,15 +68,15 @@ function viewBounds(view: LayoutSheetView): Bounds | null {
   let maxX = -Infinity;
   let maxY = -Infinity;
   for (const p of view.panels) {
-    try {
-      const b = geometry.bbox(geometry.parsePath(p.outlinePath));
-      minX = Math.min(minX, b.minX + view.translate.x);
-      minY = Math.min(minY, b.minY + view.translate.y);
-      maxX = Math.max(maxX, b.maxX + view.translate.x);
-      maxY = Math.max(maxY, b.maxY + view.translate.y);
-    } catch {
-      // Unparseable path: ignore for bounds; validation upstream rejects it anyway.
-    }
+    // parsePath never throws — but a degenerate path yields an empty/short ring
+    // whose zero-bbox would silently anchor the union at the origin. Filter.
+    const rings = geometry.parsePath(p.outlinePath).filter((r) => r.length >= 3);
+    if (rings.length === 0) continue;
+    const b = geometry.bbox(rings);
+    minX = Math.min(minX, b.minX + view.translate.x);
+    minY = Math.min(minY, b.minY + view.translate.y);
+    maxX = Math.max(maxX, b.maxX + view.translate.x);
+    maxY = Math.max(maxY, b.maxY + view.translate.y);
   }
   return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;
 }
@@ -86,8 +86,8 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
     throw new Error('[svg] buildLayoutSheetSvg: at least one view is required');
   }
 
-  // Union bounds of all placed view content, with headroom below each view for
-  // its label + dimension callout (90 content-units before scaling).
+  // Union bounds of all placed view content, with headroom below each view
+  // for its label + dimension callout.
   const perView = input.views
     .map((v) => ({ v, b: viewBounds(v) }))
     .filter((x): x is { v: LayoutSheetView; b: Bounds } => x.b !== null);
@@ -101,7 +101,8 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
     maxY: Math.max(...perView.map(({ b }) => b.maxY)),
   };
 
-  const calloutRoom = 110; // content-units reserved under the tallest view
+  // Content-units reserved under the views for labels + dimension callouts.
+  const calloutRoom = 110;
   const cw = union.maxX - union.minX;
   const ch = union.maxY - union.minY + calloutRoom;
   const s = Math.min(CONTENT.w / cw, CONTENT.h / ch);

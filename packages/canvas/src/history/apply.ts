@@ -10,8 +10,8 @@ import type {
   ElementId,
   PanelId,
   PanelState,
-} from '../schema/types';
-import type { Command, ElementPatch } from './command';
+} from '../schema/types.js';
+import type { Command, ElementPatch } from './command.js';
 
 /** Internal: throw on a logically-impossible command (corrupt history). */
 class CommandError extends Error {

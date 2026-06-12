@@ -1,6 +1,6 @@
 // Pure-TS polygon math (ADR-0006 §0.2, §6). No DOM / Path2D / Canvas2D.
 
-import type { Ring } from './path-parse';
+import type { Ring } from './path-parse.js';
 
 /** Axis-aligned bounding box. */
 export interface Bbox {
