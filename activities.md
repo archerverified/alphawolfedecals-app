@@ -6,6 +6,56 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-12 — Panel numbering + legend restyle on template sheets (Archer change spec, PR #142)
+
+**Status:** ✅ one reviewed PR, squash-merged (b7b82c7), prod deploy verified
+READY. Full protocol: 7-angle fresh-context review, every confirmed finding
+fixed in-branch before merge, verdict + before/after thumbnails in the PR body.
+
+**What changed.**
+
+- NO panel-name text on the vehicle art anymore (both renderers drew
+  "installOrder. Name" at every panel centre). Each panel now carries ONLY a
+  subtle numeral: 13px black at 40% opacity, centred; a white casing inside
+  the same low-opacity group keeps it perceptible over dark wrapped art
+  (coach wheel arch, X3 tailgate — pure 40% black vanished there). Tiny/thin
+  panels get a leader tick to a numeral just outside — off the LEFT end at
+  the band's own centreline (above-the-edge placement collided on the
+  coach's stacked bands).
+- PANEL LEGEND strip mapping number → part name. ONE placement rule
+  everywhere: full-width strip below the views — layout sheets reserve it
+  above the footer rule, QC overlays append it under the art (canvas
+  extends; compositors own the extension via shared compositeQcOverlayPng).
+  Two columns past 8 panels; pitch shrinks to the strip width; long names
+  ellipsize.
+- STABLE per-template numbering — `packages/db/src/svg/numbering.ts`: pure
+  derivation from panel rows (views front→driver→back→passenger→top, then
+  reading rows top-to-bottom by Y-overlap clustering, left-to-right within a
+  row). Any future surface (export pack, editor) derives identical numbers
+  via `numberViews()` — THE single entry point both renderers use. Raw
+  minX ordering was rejected: nose curvature numbered the coach 4,3,2
+  top-to-bottom.
+- Dimension callouts (#00AEEF) untouched from PR #141. Customer-facing UI
+  untouched (editor inspector + zone selector keep full names).
+
+**Artifacts replaced.** All 4 layout sheets re-uploaded (vehicle-templates
+bucket, 2026-06-12); all 8 PNGs in
+docs/deployment/screenshots/2026-06-11-goal-6/ replaced (4 QC overlays +
+4 layout sheets). Zero panel/DB writes.
+
+**Review (7 fresh-context finder angles, verdict in PR #142).** 10 confirmed
+findings fixed before merge — highlights: legend-height divergence between
+compositors and renderer when a view drops for degenerate geometry (shared
+helper now derives from the SAME views); author script assumed 16:9 art;
+unknown-view ordering inverted between sheet layout and numbering; legend had
+no width control (names are Studio free-text and now live ONLY in the
+legend). Noted for Archer: vehicle pages + Studio still prefix names with
+installOrder — a different number than the new sheet numerals; relabeling
+that UI prefix is a possible follow-up (explicitly out of scope per the
+spec). Noted, accepted: numbering is derived, not persisted — if the
+clustering algorithm is ever tuned, regenerated sheets renumber; persist at
+publish time if that becomes unacceptable.
+
 ## 2026-06-12 — Studio dimension-callout restyle (Archer change spec, PR #141)
 
 **Status:** ✅ one reviewed PR, squash-merged (d4cec2d), prod deploy READY.
