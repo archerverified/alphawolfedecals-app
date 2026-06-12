@@ -9,6 +9,7 @@
 // Pure string assembly; rasterisation (PNG) happens in storage.uploadLayoutSheet.
 
 import { geometry } from '@alphawolf/canvas';
+import { defaultAxisForView } from './calibrate.js';
 
 const SHEET_W = 1920;
 const SHEET_H = 1080;
@@ -79,6 +80,96 @@ function viewBounds(view: LayoutSheetView): Bounds | null {
     maxY = Math.max(maxY, b.maxY + view.translate.y);
   }
   return Number.isFinite(minX) ? { minX, minY, maxX, maxY } : null;
+}
+
+// --- assembly from panel rows -------------------------------------------------
+// Panel rows store view-local geometry only (no sheet placement), so views are
+// laid out in a row by content bbox — the same convention CanvasStage and the
+// ZoneDiagram use — and the dimension callouts state the vehicle's REAL
+// dimensions (the calibrated source of truth), not document units. Shared by
+// the Studio publish action (apps/web) and the AW panel-authoring script.
+
+const VIEW_ORDER = ['front', 'driver', 'back', 'passenger', 'top'];
+const VIEW_GUTTER = 600;
+
+export type LayoutSheetMeta = {
+  title: string;
+  yearLabel: string;
+  code: string | null;
+  scaleDenom: number;
+  dims: { lengthMm: number; widthMm: number; heightMm: number };
+};
+
+export type LayoutPanelRow = {
+  name: string;
+  view: string;
+  svgPath: string;
+  wrapSafeZone: unknown;
+  installOrder: number;
+};
+
+const mmToInches = (mm: number): string => (mm / 25.4).toFixed(1);
+const fmtMm = (mm: number): string => mm.toLocaleString('en-US');
+
+function calloutFor(view: string, dims: LayoutSheetMeta['dims']): string {
+  const axis = defaultAxisForView(view);
+  const mm = axis === 'length' ? dims.lengthMm : axis === 'width' ? dims.widthMm : dims.heightMm;
+  return `Overall ${axis} ${fmtMm(mm)} mm · ${mmToInches(mm)} in`;
+}
+
+const titleCase = (s: string): string => s.charAt(0).toUpperCase() + s.slice(1);
+
+export function assembleLayoutSheetFromRows(
+  meta: LayoutSheetMeta,
+  panels: LayoutPanelRow[],
+): LayoutSheetInput {
+  const byView = new Map<string, LayoutPanelRow[]>();
+  for (const p of panels) {
+    const arr = byView.get(p.view) ?? [];
+    arr.push(p);
+    byView.set(p.view, arr);
+  }
+  const ordered = [...byView.keys()].sort((a, b) => VIEW_ORDER.indexOf(a) - VIEW_ORDER.indexOf(b));
+
+  const views: LayoutSheetInput['views'] = [];
+  let cursorX = 0;
+  for (const view of ordered) {
+    const vp = byView.get(view)!;
+    let minX = Infinity;
+    let minY = Infinity;
+    let maxX = -Infinity;
+    for (const p of vp) {
+      // Same degenerate-path filter as viewBounds (zero-bbox anchors the fit).
+      const rings = geometry.parsePath(p.svgPath).filter((r) => r.length >= 3);
+      if (rings.length === 0) continue;
+      const b = geometry.bbox(rings);
+      minX = Math.min(minX, b.minX);
+      minY = Math.min(minY, b.minY);
+      maxX = Math.max(maxX, b.maxX);
+    }
+    if (!Number.isFinite(minX)) continue;
+    views.push({
+      view,
+      translate: { x: cursorX - minX, y: -minY },
+      panels: vp.map((p) => ({
+        name: p.name,
+        outlinePath: p.svgPath,
+        wrapSafePath: (p.wrapSafeZone as { clip_path?: string } | null)?.clip_path ?? p.svgPath,
+        installOrder: p.installOrder,
+      })),
+      dimensionLabel: calloutFor(view, meta.dims),
+    });
+    cursorX += maxX - minX + VIEW_GUTTER;
+  }
+
+  return {
+    title: meta.title,
+    yearLabel: meta.yearLabel,
+    code: meta.code,
+    scaleDenom: meta.scaleDenom,
+    viewsLine: `${ordered.length}-View · ${ordered.map(titleCase).join(' / ')}`,
+    views,
+  };
 }
 
 export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
