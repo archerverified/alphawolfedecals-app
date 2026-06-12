@@ -363,6 +363,30 @@ export async function adminListVehicles(adminId: string): Promise<VehicleSummary
   });
 }
 
+export type StudioVehicleRow = VehicleSummary & {
+  panelCount: number;
+  alphaWolfTplId: string | null;
+  viewCount: number | null;
+};
+
+// Studio worklist rows (Goal 6): every vehicle with its authored-panel count,
+// so the worklist can show which templates still need panel data.
+export async function adminListStudioVehicles(adminId: string): Promise<StudioVehicleRow[]> {
+  return withUser(adminId, async (db) => {
+    const rows = await db.vehicle.findMany({
+      select: {
+        ...SUMMARY_SELECT,
+        alphaWolfTplId: true,
+        viewCount: true,
+        _count: { select: { panels: true } },
+      },
+      orderBy: [{ updatedAt: 'desc' }],
+      take: 500,
+    });
+    return rows.map(({ _count, ...v }) => ({ ...v, panelCount: _count.panels }));
+  });
+}
+
 export async function adminGetDetail(adminId: string, id: string): Promise<VehicleDetail | null> {
   return withUser(adminId, async (db) => {
     const v = await db.vehicle.findUnique({

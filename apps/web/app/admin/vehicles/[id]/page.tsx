@@ -59,40 +59,32 @@ export default async function AdminVehicleDetailPage({
           </form>
         ) : null}
 
-        <form action={setVehicleStatusAction} className="flex items-center gap-2">
-          <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
-          <input type="hidden" name="id" value={v.id} />
-          {v.status !== 'review' ? (
-            <button
-              type="submit"
-              name="status"
-              value="review"
-              className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-            >
-              Mark in review
-            </button>
-          ) : null}
-          {v.status !== 'draft' ? (
-            <button
-              type="submit"
-              name="status"
-              value="draft"
-              className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-            >
-              Back to draft
-            </button>
-          ) : null}
-          {v.status !== 'retired' ? (
-            <button
-              type="submit"
-              name="status"
-              value="retired"
-              className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
-            >
-              Retire
-            </button>
-          ) : null}
-        </form>
+        {/* One form per transition with the status in a HIDDEN input: relying
+            on the submit BUTTON's name/value drops the value with server-action
+            forms (the submitter is not reliably included in the FormData), so
+            "Retire"/"Mark in review" silently no-opped. Found by the Goal 6
+            template-studio e2e. */}
+        {(
+          [
+            ['review', 'Mark in review'],
+            ['draft', 'Back to draft'],
+            ['retired', 'Retire'],
+          ] as const
+        ).map(([status, label]) =>
+          v.status !== status ? (
+            <form key={status} action={setVehicleStatusAction}>
+              <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
+              <input type="hidden" name="id" value={v.id} />
+              <input type="hidden" name="status" value={status} />
+              <button
+                type="submit"
+                className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 transition hover:bg-zinc-50"
+              >
+                {label}
+              </button>
+            </form>
+          ) : null,
+        )}
 
         <form action={newVersionAction}>
           <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />

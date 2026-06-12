@@ -2,6 +2,7 @@
 // non-PII catalog data — the repo runs on withSystem). Initial year list is
 // loaded server-side; the rest of the cascade streams in on the client.
 
+import Link from 'next/link';
 import { vehicles } from '@alphawolf/db';
 import { VehicleBrowser } from '../../../components/vehicles/VehicleBrowser';
 
@@ -27,6 +28,15 @@ export default async function VehicleSelectPage() {
           </p>
         </header>
         <VehicleBrowser initialYears={years} />
+        {/* PRD §4.2: route vehicles we don't carry into the request queue
+            (Goal 6 D4 discovery — the form existed but had no entry point). */}
+        <p className="mt-8 text-sm text-zinc-500">
+          Don’t see your vehicle?{' '}
+          <Link href="/vehicles/request" className="font-medium text-zinc-900 underline">
+            Request it
+          </Link>{' '}
+          — we’ll email you when the template is ready.
+        </p>
       </div>
     </main>
   );
