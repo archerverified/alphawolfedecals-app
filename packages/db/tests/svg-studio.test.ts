@@ -11,8 +11,17 @@ import {
   buildLayoutSheetSvg,
   type LayoutSheetInput,
 } from '../src/svg/layout-sheet';
+import { panelNumbers } from '../src/svg/numbering';
 import { buildQcOverlaySvg, viewScanWindows } from '../src/svg/qc-overlay';
-import { brand, dimensionText, renderDimensionCallout } from '../src/svg/theme';
+import {
+  brand,
+  dimensionText,
+  legendMetrics,
+  panelNumber,
+  renderDimensionCallout,
+  renderPanelLegend,
+  renderPanelNumber,
+} from '../src/svg/theme';
 import { validateOutlineSvg } from '../src/svg/validate';
 
 const BOAT_INPUT: BuildOutlineInput = {
@@ -184,6 +193,18 @@ describe('buildLayoutSheetSvg', () => {
     expect(svg).not.toContain('#9aa3b5"><line');
   });
 
+  test('no panel names on the art — subtle numerals + a legend strip', () => {
+    const svg = buildLayoutSheetSvg(SHEET);
+    // Each name appears exactly once: in the legend, never inside a view group.
+    expect(svg.match(/Port Hull — Bow &amp; Mid/g)).toHaveLength(1);
+    expect(svg).toContain('PANEL LEGEND');
+    // The on-art numeral is the bare number at the spec's subtle opacity.
+    expect(svg).toContain(`<g opacity="${panelNumber.opacity}">`);
+    expect(svg).not.toContain('1. Port Hull');
+    // Legend numbers are spatial (driver before passenger here — same order).
+    expect(svg).toMatch(/font-weight="700">1<\/text><text[^>]*>Port Hull — Bow &amp; Mid/);
+  });
+
   test('throws on empty input', () => {
     expect(() => buildLayoutSheetSvg({ ...SHEET, views: [] })).toThrow(/at least one view/);
   });
@@ -293,8 +314,24 @@ describe('buildQcOverlaySvg', () => {
     expect(dim).not.toBeNull();
     expect(Number(dim![1])).toBeGreaterThan(420);
     expect(Number(dim![1])).toBeLessThan(980);
-    // XML-hostile panel names are escaped.
+    // XML-hostile panel names are escaped (in the legend — their only home).
     expect(svg).toContain('Hood &amp; Fascia');
+  });
+
+  test('panel names live only in the appended legend; numerals stay subtle', () => {
+    const svg = buildQcOverlaySvg(INPUT);
+    // viewBox grows by the legend strip (2 panels → one 2-row column).
+    const legendH = legendMetrics(2).height;
+    expect(svg).toContain(`viewBox="0 0 1920 ${1080 + legendH}"`);
+    expect(svg).toContain('PANEL LEGEND');
+    // One occurrence per name — the legend; nothing drawn over the art.
+    expect(svg.match(/Front Door/g)).toHaveLength(1);
+    expect(svg).not.toContain('1. Front Door');
+    expect(svg).toContain(`<g opacity="${panelNumber.opacity}">`);
+    // Numbering is spatial (front view first), NOT installOrder: the front
+    // view's Hood & Fascia (installOrder 2) is panel 1.
+    expect(svg).toMatch(/font-weight="700">1<\/text><text[^>]*>Hood &amp; Fascia/);
+    expect(svg).toMatch(/font-weight="700">2<\/text><text[^>]*>Front Door/);
   });
 
   test('escapes label text and survives degenerate panel paths', () => {
@@ -354,5 +391,142 @@ describe('renderDimensionCallout', () => {
       label: 'Overall height 1,676 mm · 66.0 in',
     });
     expect(g).toContain('rotate(-90');
+  });
+});
+
+describe('panelNumbers', () => {
+  const rect = (x: number, y: number, w = 100, h = 50): string =>
+    `M${x} ${y} L${x + w} ${y} L${x + w} ${y + h} L${x} ${y + h} Z`;
+
+  test('orders by view (front first), then reading rows top-to-bottom, left-to-right', () => {
+    const panels = [
+      { view: 'passenger', name: 'P-rear', installOrder: 9, outlinePath: rect(500, 0) },
+      { view: 'driver', name: 'D-low', installOrder: 2, outlinePath: rect(100, 200) },
+      { view: 'driver', name: 'D-high', installOrder: 3, outlinePath: rect(100, 50) },
+      { view: 'driver', name: 'D-right', installOrder: 1, outlinePath: rect(400, 50) },
+      { view: 'front', name: 'Hood', installOrder: 8, outlinePath: rect(0, 0) },
+    ];
+    expect(panelNumbers(panels)).toEqual([5, 4, 2, 3, 1]);
+  });
+
+  test('stacked bands number top-to-bottom even when lower bands start further left', () => {
+    // The coach failure mode: full-length bands whose minX differs by nose
+    // curvature — raw minX ordering would read 3,2,1 down the sheet.
+    const panels = [
+      { view: 'driver', name: 'Beltline', installOrder: 3, outlinePath: rect(15, 200, 900, 30) },
+      { view: 'driver', name: 'Window', installOrder: 2, outlinePath: rect(30, 100, 880, 80) },
+      { view: 'driver', name: 'Upper', installOrder: 1, outlinePath: rect(55, 40, 850, 50) },
+    ];
+    expect(panelNumbers(panels)).toEqual([3, 2, 1]);
+  });
+
+  test('side-by-side run stays left-to-right despite roofline minY differences', () => {
+    const panels = [
+      { view: 'driver', name: 'Quarter', installOrder: 1, outlinePath: rect(700, 90, 200, 200) },
+      { view: 'driver', name: 'Door', installOrder: 2, outlinePath: rect(400, 140, 280, 150) },
+      { view: 'driver', name: 'Fender', installOrder: 3, outlinePath: rect(100, 150, 280, 140) },
+    ];
+    expect(panelNumbers(panels)).toEqual([3, 2, 1]);
+  });
+
+  test('is stable: same rows in any input order derive the same numbers', () => {
+    const panels = [
+      { view: 'driver', name: 'A', installOrder: 1, outlinePath: rect(0, 0) },
+      { view: 'front', name: 'B', installOrder: 2, outlinePath: rect(0, 0) },
+      { view: 'back', name: 'C', installOrder: 3, outlinePath: rect(0, 0) },
+    ];
+    const byPanel = new Map(panelNumbers(panels).map((n, i) => [panels[i]!.name, n]));
+    const reversed = [...panels].reverse();
+    const byPanelRev = new Map(panelNumbers(reversed).map((n, i) => [reversed[i]!.name, n]));
+    expect(byPanelRev).toEqual(byPanel);
+  });
+
+  test('degenerate outlines sort after positioned panels but stay numbered', () => {
+    const panels = [
+      { view: 'driver', name: 'Ghost', installOrder: 1, outlinePath: 'M0 0 Z' },
+      { view: 'driver', name: 'Door', installOrder: 2, outlinePath: rect(0, 0) },
+    ];
+    expect(panelNumbers(panels)).toEqual([2, 1]);
+  });
+
+  test('unknown views sort after known views, by name, and never merge rows', () => {
+    // Two non-canonical views whose local Y-extents overlap must not cluster
+    // into one reading row — their coordinate spaces are unrelated.
+    const panels = [
+      { view: 'starboard', name: 'S1', installOrder: 1, outlinePath: rect(0, 0) },
+      { view: 'port', name: 'P1', installOrder: 2, outlinePath: rect(500, 0) },
+      { view: 'port', name: 'P2', installOrder: 3, outlinePath: rect(0, 0) },
+      { view: 'driver', name: 'Known', installOrder: 4, outlinePath: rect(0, 0) },
+    ];
+    // driver first; then port (alphabetical) reading left-to-right; then starboard.
+    expect(panelNumbers(panels)).toEqual([4, 3, 2, 1]);
+  });
+});
+
+describe('renderPanelNumber', () => {
+  const bigBox = { minX: 0, minY: 0, maxX: 300, maxY: 200 };
+
+  test('centres a bare numeral at the spec opacity when the panel fits it', () => {
+    const g = renderPanelNumber({ bbox: bigBox, n: 7 });
+    expect(() => parseSync(`<svg>${g}</svg>`)).not.toThrow();
+    expect(g).toContain(`opacity="${panelNumber.opacity}"`);
+    expect(g).toContain('>7</text>');
+    expect(g).not.toContain('<line');
+  });
+
+  test('thin strip leads off its left end at the band centreline', () => {
+    const g = renderPanelNumber({ bbox: { minX: 50, minY: 100, maxX: 350, maxY: 110 }, n: 12 });
+    expect(g).toContain('<line');
+    // Numeral sits left of the panel at the band's own y — stacked bands keep
+    // distinct centrelines, so leader numerals cannot collide.
+    const x = Number(g.match(/<text x="([-\d.]+)"/)![1]);
+    expect(x).toBeLessThan(50);
+    const y = Number(g.match(/<text[^>]*y="([-\d.]+)"/)![1]);
+    expect(y).toBeGreaterThan(100);
+    expect(y).toBeLessThan(115);
+  });
+
+  test('thin strip clamped on the left flips the leader to the right end', () => {
+    const g = renderPanelNumber({
+      bbox: { minX: 10, minY: 100, maxX: 300, maxY: 110 },
+      n: 3,
+      clamp: { minX: 0, minY: 0, maxX: 1920, maxY: 1080 },
+    });
+    const x = Number(g.match(/<text x="([-\d.]+)"/)![1]);
+    expect(x).toBeGreaterThan(300);
+    expect(g).toContain('text-anchor="start"');
+  });
+
+  test('tall sliver puts the numeral beside the panel', () => {
+    const g = renderPanelNumber({ bbox: { minX: 50, minY: 0, maxX: 60, maxY: 300 }, n: 4 });
+    expect(g).toContain('text-anchor="start"');
+    const x = Number(g.match(/<text x="([-\d.]+)"/)![1]);
+    expect(x).toBeGreaterThan(60);
+  });
+});
+
+describe('renderPanelLegend', () => {
+  test('ellipsizes names past the column budget — overprint would destroy the mapping', () => {
+    const g = renderPanelLegend({
+      entries: [{ n: 1, name: 'A'.repeat(80) }],
+      x: 0,
+      y: 0,
+      width: 1800,
+    });
+    expect(() => parseSync(`<svg>${g}</svg>`)).not.toThrow();
+    expect(g).toContain('…');
+    expect(g).not.toContain('A'.repeat(60));
+  });
+
+  test('shrinks column pitch when the token pitch would overflow the strip width', () => {
+    const entries = Array.from({ length: 40 }, (_, i) => ({ n: i + 1, name: `Panel ${i + 1}` }));
+    const g = renderPanelLegend({ entries, x: 0, y: 0, width: 1000 });
+    // 5 columns into 1000px → pitch 200; the last column starts inside the strip.
+    const xs = [...g.matchAll(/text-anchor="end"[^>]*/g)];
+    expect(xs.length).toBe(40);
+    const numberXs = [...g.matchAll(/<text x="([\d.]+)" y="[\d.]+" text-anchor="end"/g)].map((m) =>
+      Number(m[1]),
+    );
+    expect(Math.max(...numberXs)).toBeLessThan(1000);
   });
 });

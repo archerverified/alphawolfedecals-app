@@ -40,7 +40,7 @@ import {
   wrapSafeZoneFor,
   type OutlineViewSpec,
 } from '../src/svg/index.js';
-import { buildMeasuredQcViews } from './lib/qc-views.js';
+import { buildMeasuredQcViews, compositeQcOverlayPng } from './lib/qc-views.js';
 import { setVehiclePanels, type PanelInput } from '../src/repos/vehicles.js';
 import { createSource, listForVehicle } from '../src/repos/template-sources.js';
 import { findUserByEmailForAuth } from '../src/repos/users.js';
@@ -80,7 +80,11 @@ const qcOnly = process.argv.includes('--qc-only');
 const publish = process.argv.includes('--publish');
 const ADMIN_EMAIL = process.env.AW_ADMIN_EMAIL;
 
-async function wrappedSheetPng(vehicleId: string, storageKey: string): Promise<Buffer> {
+async function wrappedSheetPng(
+  vehicleId: string,
+  storageKey: string,
+  height: number,
+): Promise<Buffer> {
   const cache = `/tmp/aw-svgs/${vehicleId.slice(0, 8)}.svg`;
   let svgText: string;
   if (fs.existsSync(cache)) {
@@ -91,7 +95,7 @@ async function wrappedSheetPng(vehicleId: string, storageKey: string): Promise<B
     svgText = await res.text();
   }
   return sharp(Buffer.from(svgText), { density: 96 })
-    .resize(1920, 1080, { fit: 'fill' })
+    .resize(1920, height, { fit: 'fill' })
     .png()
     .toBuffer();
 }
@@ -100,12 +104,12 @@ async function wrappedSheetPng(vehicleId: string, storageKey: string): Promise<B
 // inside the band between the header and the footer rule.
 const SHEET_CONTENT_BAND = SHEET_FORMAT.contentBand;
 
-async function overlaySvg(
+async function overlayFor(
   def: TemplateDef,
   panels: PanelInput[],
   dims: { lengthMm: number; widthMm: number; heightMm: number; wheelbaseMm?: number | null },
   basePng: Buffer,
-): Promise<string> {
+): Promise<{ svg: string; views: Awaited<ReturnType<typeof buildMeasuredQcViews>> }> {
   // AW panels are authored sheet-absolute (translate 0,0), so panel geometry
   // composites 1:1; callouts anchor on the measured ink extent of each view.
   const views = await buildMeasuredQcViews({
@@ -114,12 +118,15 @@ async function overlaySvg(
     band: SHEET_CONTENT_BAND,
     basePng,
   });
-  return buildQcOverlaySvg({
-    viewBox: def.viewBox,
-    dims,
+  return {
+    svg: buildQcOverlaySvg({
+      viewBox: def.viewBox,
+      dims,
+      views,
+      contentBand: SHEET_CONTENT_BAND,
+    }),
     views,
-    contentBand: SHEET_CONTENT_BAND,
-  });
+  };
 }
 
 async function main(): Promise<void> {
@@ -232,20 +239,22 @@ async function main(): Promise<void> {
       );
     }
 
-    // QC overlay.
+    // QC overlay. The wrapped sheet is rasterised at 1920 wide with height
+    // FROM THE DEF'S VIEWBOX — a fixed 1080 only registers when the viewBox
+    // is 16:9; compositeQcOverlayPng owns the legend-strip extension.
     if (vehicle.svgStorageKey) {
-      const base = await wrappedSheetPng(def.vehicleId, vehicle.svgStorageKey);
-      const overlay = await sharp(Buffer.from(await overlaySvg(def, panels, dims, base)), {
-        density: 96,
-      })
-        .resize(1920, 1080, { fit: 'fill' })
-        .png()
-        .toBuffer();
+      const rasterHeight = Math.round((1920 * def.viewBox.height) / def.viewBox.width);
+      const base = await wrappedSheetPng(def.vehicleId, vehicle.svgStorageKey, rasterHeight);
+      const overlay = await overlayFor(def, panels, dims, base);
       const out = path.join(QC_DIR, `${file.replace('.json', '')}-overlay.png`);
-      await sharp(base)
-        .composite([{ input: overlay }])
-        .png()
-        .toFile(out);
+      const composed = await compositeQcOverlayPng({
+        basePng: base,
+        overlaySvg: overlay.svg,
+        views: overlay.views,
+        rasterWidth: 1920,
+        rasterHeight,
+      });
+      fs.writeFileSync(out, composed);
       console.log(`   QC overlay -> ${out}`);
     }
 

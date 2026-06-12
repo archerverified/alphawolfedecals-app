@@ -9,14 +9,18 @@
 // Pure string assembly; rasterisation (PNG) happens in storage.uploadLayoutSheet.
 
 import { geometry } from '@alphawolf/canvas';
+import { numberViews, VIEW_ORDER } from './numbering.js';
 import { panelUnionBounds } from './qc-overlay.js';
 import {
   annotationsForView,
   brand,
   dimensionCallout,
   escXml as esc,
+  legendMetrics,
   r2,
   renderDimensionCallout,
+  renderPanelLegend,
+  renderPanelNumber,
   type DimensionAnnotation,
 } from './theme.js';
 
@@ -82,7 +86,6 @@ type Bounds = { minX: number; minY: number; maxX: number; maxY: number };
 // dimensions (the calibrated source of truth), not document units. Shared by
 // the Studio publish action (apps/web) and the AW panel-authoring script.
 
-const VIEW_ORDER = ['front', 'driver', 'back', 'passenger', 'top'];
 const VIEW_GUTTER = 600;
 
 export type LayoutSheetMeta = {
@@ -113,7 +116,15 @@ export function assembleLayoutSheetFromRows(
     arr.push(p);
     byView.set(p.view, arr);
   }
-  const ordered = [...byView.keys()].sort((a, b) => VIEW_ORDER.indexOf(a) - VIEW_ORDER.indexOf(b));
+  // Same view ranking as panelNumbers — unknown views go LAST (indexOf's -1
+  // would put them first, inverting the sheet order against the numbering).
+  const viewRank = (v: string): number => {
+    const i = VIEW_ORDER.indexOf(v);
+    return i === -1 ? VIEW_ORDER.length : i;
+  };
+  const ordered = [...byView.keys()].sort(
+    (a, b) => viewRank(a) - viewRank(b) || a.localeCompare(b),
+  );
 
   const views: LayoutSheetInput['views'] = [];
   let cursorX = 0;
@@ -207,11 +218,18 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
   const leftmost = perView.reduce((m, x) => (x.b.minX < m.b.minX ? x : m), perView[0]!);
   const roomLeft = leftmost.v.annotations?.some((x) => x.kind === 'height') ? VERT_CALLOUT_ROOM : 0;
 
+  // Stable numbering + the legend strip (the ONE placement rule: a full-width
+  // strip below the views, here reserved between the content and the footer).
+  const { numberOf, bboxOf, entries } = numberViews(input.views);
+  const LEGEND_GAP = 18;
+  const legendH = legendMetrics(entries.length).height;
+  const contentH = CONTENT.h - legendH - LEGEND_GAP;
+
   const cw = union.maxX - union.minX;
   const ch = union.maxY - union.minY;
-  const s = Math.min((CONTENT.w - roomLeft) / cw, (CONTENT.h - roomBottom) / ch);
+  const s = Math.min((CONTENT.w - roomLeft) / cw, (contentH - roomBottom) / ch);
   const ox = CONTENT.x + roomLeft + (CONTENT.w - roomLeft - cw * s) / 2 - union.minX * s;
-  const oy = CONTENT.y + (CONTENT.h - roomBottom - ch * s) / 2 - union.minY * s;
+  const oy = CONTENT.y + (contentH - roomBottom - ch * s) / 2 - union.minY * s;
 
   // Font sizes are computed in sheet units (the outer coordinate space) so the
   // sheet stays legible regardless of the art's unit scale.
@@ -219,7 +237,7 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
   lines.push(
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${SHEET_W} ${SHEET_H}" font-family="Helvetica, Arial, sans-serif">`,
   );
-  lines.push(`  <rect width="${SHEET_W}" height="${SHEET_H}" fill="#f8f8f6"/>`);
+  lines.push(`  <rect width="${SHEET_W}" height="${SHEET_H}" fill="${brand.paper}"/>`);
 
   // Header band.
   lines.push(`  <rect width="${SHEET_W}" height="${HEADER_H}" fill="${INK}"/>`);
@@ -249,15 +267,13 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
       lines.push(
         `      <path d="${esc(p.wrapSafePath)}" fill="${WRAP_SAFE}" fill-opacity="0.05" stroke="${WRAP_SAFE}" stroke-width="1.5" stroke-dasharray="6 5" vector-effect="non-scaling-stroke"/>`,
       );
-      // Panel label at the outline bbox centre, sized in content units.
-      try {
-        const pb = geometry.bbox(geometry.parsePath(p.outlinePath));
-        const fs = Math.min(15 / s, (pb.maxY - pb.minY) / 4);
+      // No names on the art — only the subtle numeral (legend carries names).
+      // Degenerate outlines draw no numeral; their legend row still lists them.
+      const pb = bboxOf.get(p);
+      if (pb) {
         lines.push(
-          `      <text x="${r2((pb.minX + pb.maxX) / 2)}" y="${r2((pb.minY + pb.maxY) / 2)}" text-anchor="middle" fill="#3f4658" font-size="${r2(fs)}">${p.installOrder}. ${esc(p.name)}</text>`,
+          '      ' + renderPanelNumber({ bbox: pb, n: numberOf.get(p)!, unitScale: 1 / s }),
         );
-      } catch {
-        // No label for unparseable outlines.
       }
     }
     lines.push('    </g>');
@@ -332,6 +348,17 @@ export function buildLayoutSheetSvg(input: LayoutSheetInput): string {
     }
     lines.push('  </g>');
   }
+
+  // Legend strip: number → part name, pinned above the footer rule.
+  lines.push(
+    '  ' +
+      renderPanelLegend({
+        entries,
+        x: CONTENT.x,
+        y: CONTENT.y + contentH + LEGEND_GAP,
+        width: CONTENT.w,
+      }),
+  );
 
   // Footer.
   lines.push(

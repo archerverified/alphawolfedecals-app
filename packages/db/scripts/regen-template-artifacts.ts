@@ -24,7 +24,7 @@ import {
   SHEET_FORMAT,
 } from '../src/svg/index.js';
 import { templatePublicUrl, uploadLayoutSheet } from '../src/storage/supabase.js';
-import { buildMeasuredQcViews } from './lib/qc-views.js';
+import { buildMeasuredQcViews, compositeQcOverlayPng } from './lib/qc-views.js';
 
 const QC_DIR = process.env.AW_QC_DIR ?? '/tmp/aw-qc';
 const upload = process.argv.includes('--upload');
@@ -190,18 +190,15 @@ async function regenOne(v: VehicleRow, slug: string): Promise<void> {
     translates,
   });
 
-  const overlay = await sharp(
-    Buffer.from(buildQcOverlaySvg({ viewBox, dims, views, contentBand: band })),
-    { density: 96 },
-  )
-    .resize(pngW, pngH, { fit: 'fill' })
-    .png()
-    .toBuffer();
   const overlayOut = path.join(QC_DIR, `${slug}-overlay.png`);
-  await sharp(basePng)
-    .composite([{ input: overlay }])
-    .png()
-    .toFile(overlayOut);
+  const composed = await compositeQcOverlayPng({
+    basePng,
+    overlaySvg: buildQcOverlaySvg({ viewBox, dims, views, contentBand: band }),
+    views,
+    rasterWidth: pngW,
+    rasterHeight: pngH,
+  });
+  fs.writeFileSync(overlayOut, composed);
   console.log(`   QC overlay   -> ${overlayOut}`);
 
   // --- 1/20 layout sheet --------------------------------------------------

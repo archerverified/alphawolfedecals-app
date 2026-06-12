@@ -1,11 +1,12 @@
-// Shared QC-view assembly for the authoring and regen scripts: group panel
-// rows by view, build the QC panel shapes, then replace the panel-union
-// bounds with the measured ink extent of each view's art. ONE implementation
-// so the overlay produced at authoring time and the one regenerated from DB
-// rows cannot drift.
+// Shared QC-view assembly + compositing for the authoring and regen scripts:
+// group panel rows by view, build the QC panel shapes, replace the panel-union
+// bounds with the measured ink extent of each view's art, and composite the
+// overlay onto the base raster. ONE implementation so the overlay produced at
+// authoring time and the one regenerated from DB rows cannot drift.
 
+import sharp from 'sharp';
 import type { Bounds, QcOverlayView } from '../../src/svg/index.js';
-import { panelUnionBounds, viewScanWindows } from '../../src/svg/index.js';
+import { brand, legendMetrics, panelUnionBounds, viewScanWindows } from '../../src/svg/index.js';
 import { measureArtBounds } from './art-bounds.js';
 
 export type QcPanelRow = {
@@ -52,4 +53,32 @@ export async function buildMeasuredQcViews(opts: {
     v.artBounds = (measured[v.view] ?? v.artBounds) as Bounds;
   }
   return views;
+}
+
+/**
+ * Composite a QC overlay SVG onto its base art raster. The overlay's viewBox
+ * is taller than the art by the legend strip (see buildQcOverlaySvg), so the
+ * base canvas extends by the same amount — derived HERE from the same views
+ * the overlay rendered (a row count from elsewhere can disagree when a view
+ * is dropped for degenerate geometry) and scaled to the raster width (the
+ * sheet-px == raster-px identity only holds at 1920).
+ */
+export async function compositeQcOverlayPng(opts: {
+  basePng: Buffer;
+  overlaySvg: string;
+  views: QcOverlayView[];
+  rasterWidth: number;
+  rasterHeight: number;
+}): Promise<Buffer> {
+  const count = opts.views.reduce((n, v) => n + v.panels.length, 0);
+  const legendPx = Math.round((legendMetrics(count).height * opts.rasterWidth) / 1920);
+  const overlay = await sharp(Buffer.from(opts.overlaySvg), { density: 96 })
+    .resize(opts.rasterWidth, opts.rasterHeight + legendPx, { fit: 'fill' })
+    .png()
+    .toBuffer();
+  return sharp(opts.basePng)
+    .extend({ bottom: legendPx, background: brand.paper })
+    .composite([{ input: overlay }])
+    .png()
+    .toBuffer();
 }
