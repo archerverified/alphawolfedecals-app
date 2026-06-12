@@ -6,6 +6,133 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-11 — Goal 6 — Template Studio + AW panel data (CLOSEOUT)
+
+**Status:** ✅ Studio pipeline merged via reviewed PRs; the 3 AW catalogue
+templates have published, calibrated panel sets ON PROD; editor + B2C zone
+selector verified functional on AW-TPL-0001; request-queue worklist live with
+a real notify-on-publish send verified. Diagram:
+[`docs/vault/diagrams/goal-6-template-studio.md`](docs/vault/diagrams/goal-6-template-studio.md).
+**The one human launch item: Archer's visual approval of the AW panel sets**
+(QC overlays in `docs/deployment/screenshots/2026-06-11-goal-6/`) — published
+regardless per the prompt (his pass adjusts, not blocks).
+
+**Per-PR.**
+
+- **#135 foundations (merged):** declared-views validator (2/3-view AW sheets),
+  `setVehiclePanels` identity-preserving sync (panel UUIDs survive re-author —
+  saved artwork keys on them), `template_sources` provenance table + admin-only
+  fail-closed RLS, `insetRingPath`/`pathAreaScaled` geometry. THREE adversarial
+  review rounds: round 1 found a bowtie self-intersection class + convex-corner
+  clamp escaping the panel; round 2 caught the round-1 fix's own regression
+  (reflex bevel = secant of the inset arc, 29% under-clearance) — final design
+  ENFORCES the clearance contract in code (dense boundary sampling, reject-
+  don't-repair), verified by a 2,500-case fuzz. Live DB migrations applied;
+  `vehicle_panels_identity_uk` constraint added.
+- **#136 Studio server layer:** outline builder (provenance REQUIRED — the
+  license wall as code), per-view mm-per-unit calibration (printable_area_mm2
+  is finally a REAL area — closes the Goal 5 decision-5 launch item), 1/20
+  layout-sheet builder (SVG, the AW sheet format; zero new deps), Studio
+  actions (admin+CSRF, PostHog template_authored/template_published, Sentry
+  tags), shared shipRequestAndNotify (queue + publish paths send the identical
+  email + vehicle_request_fulfilled). Review caught a Render DEPLOY-KILLER
+  (@alphawolf/canvas had no node-loadable dist — parse service would crash-loop;
+  CI green regardless) and the Server-Action 1MB body cap making the ingest
+  unusable → rebuilt on the asset.ts signed-URL direct-upload pattern; bucket
+  codified in provision-storage.ts.
+- **#137 Studio UI:** /admin/studio worklist (requests + library with panel
+  counts) + authoring workspace (draw/refine polygons over the wrapped-art
+  backdrop, measure-tool calibration, save/publish with fulfills-request link)
+  - "Don't see your vehicle? Request it" CTA (PRD §4.2 entry point was never
+    wired). Review found the workspace needed pointer capture (stuck drags
+    silently corrupt geometry) and that the SAME submit-button/value bug fixed on
+    the vehicle detail page also silently broke the request queue's transitions —
+    one-form-per-transition everywhere now. e2e: template-studio.spec.ts covers
+    the full author→calibrate→save→publish loop (2 passed locally).
+- **#138 AW panel data (D2):** authored over the templates' OWN wrapped art
+  (sheet-absolute polygons; ink-bbox view calibration). X3 15 panels/4 views,
+  boat 6/2, coach 12/3 — 33 calibrated rows live on prod + outline.svg +
+  layout sheets in storage + provenance rows. `db:author-aw` script is
+  re-runnable (QC-only or publish mode).
+- **#139 smoke + runbook (D3/D5, merged):** aw-template.spec.ts (editor places onto a
+  REAL X3 panel; zone selector renders 15 panels, toggles, checklist mirrors)
+  joins the prod smoke; smoke.yml gains workflow_dispatch;
+  docs/product/template-studio-runbook.md (non-dev, photo spec + ≤60min flow).
+
+**VERIFICATION (DoD).**
+
+1. Studio pipeline merged via reviewed PRs (every PR: fresh-context review +
+   independent security review where RLS/auth/admin; verdicts in PR bodies) ✅
+2. AW-TPL-0001/2/3 published panel sets on prod (33 rows, all calibrated >0);
+   editor verified on AW-TPL-0001 (e2e + screenshots); zone selector renders +
+   toggles AW panels ✅
+3. QC overlays + prod screenshots in docs/deployment/screenshots/2026-06-11-goal-6/;
+   Archer visual approval flagged as the only human item ✅
+4. Request worklist live; notify-on-publish verified with ONE REAL SEND
+   (request 5422d239 → Studio publish → Resend → archer@1stimpression.co) ✅
+5. Prod smoke green incl. AW coverage (run 27389695494: 4 passed, 2.2m —
+   mvp-flow + brief-wizard + aw-template against production); Supabase
+   advisors unchanged at the 2-WARN baseline ✅
+6. Runbook committed; closeout ritual complete ✅
+
+**DECISIONS (non-obvious calls, decided alone per the prompt's policy).**
+
+1. Studio = operator-assisted authoring (draw over source backdrop) composing
+   the EXISTING validator/publish machinery; automated photo edge-extraction
+   deferred — no tracing capability exists in the repo, a CV dep isn't
+   justified at ≤60min/vehicle, and the strategy doc's own "operator
+   confirm/adjust" step makes manual drawing the honest MVP. PDF/AI/EPS
+   vectorization still composes the parse service where needed.
+2. Validator extended with DECLARED VIEWS (the AW boat is 2-view, coach
+   3-view); the 4-across aspect-ratio formula only applies to the default
+   4-view contract — declared-view sheets are scale-checked by measurement
+   calibration instead.
+3. printable_area_mm2 now stores CALIBRATED REAL mm² (per-view silhouette
+   span ↔ stated dimensions). Nothing consumed the old document-scale values
+   (the export pack already recalculates proportionally), so this is purely
+   additive honesty. The Transit's 6 rows still carry doc-scale values —
+   left for a future Studio re-author rather than a blind backfill.
+4. AW panels authored in SHEET-ABSOLUTE coordinates (translate 0,0): QC
+   overlays composite 1:1 over the wrapped art, and both consumers re-layout
+   views from content bboxes so absolute placement is free.
+5. AW vehicle rows kept in place (setVehiclePanels adds panels; outlineSvgUrl/
+   thumb untouched so the catalogue display didn't change; authored outline
+   stored as provenance at <id>/outline.svg).
+6. Layout sheet is SVG (+PNG raster), not PDF: the AW wrapped sheets ARE the
+   format, and it needs zero new dependencies.
+7. Request statuses keep the existing vocabulary (pending/in_progress/
+   shipped/rejected) over the prompt's requested→published; "shipped" is the
+   publish event. Worklist = /admin/studio surfacing the queue; transitions
+   reuse the existing actions.
+8. Notify-on-publish kept on the direct sendEmail path (the prompt's "existing
+   email path", loud since #134) rather than migrating to the notifications
+   package — extracted to ONE shared helper so queue + Studio cannot drift;
+   migration to the dispatch pattern noted as future work.
+9. The 2/3-view AW templates map port/starboard + bus sides onto the
+   driver/passenger view vocabulary (consumers and the slot-free view enum
+   stay unchanged).
+10. Created a durable `studio-operator@alphawolfdecals.com` admin account
+    (password in `~/.alphawolf-studio-operator` on this machine) — the script
+    publish identity + Archer's Studio login until his own account is promoted.
+11. Coach window bands authored as PANELS with finish "none" (perforated-film
+    zones a customer can include/exclude) rather than omitted as glass.
+12. Editor default element sizes can exceed small AW panels (doc-unit density
+    differs per sheet) → the OOB cue fires until resized. Cosmetic; noted for
+    Archer's pass rather than rescaling defaults this goal.
+
+**Honest gaps / follow-ups.**
+
+- Archer visual pass on the 3 AW panel sets (THE launch item) — overlays in
+  the screenshots folder; adjust via /admin/studio (panel identities are
+  stable, artwork survives re-authoring if names are kept).
+- Studio UI doesn't persist per-view calibration spans between sessions
+  (re-enter on re-author; the JSON/script path records them).
+- Wheel-arch-shaped (concave flattened-arc) panels are REJECTED by the
+  wrap-safe generator (true-positive under-clearance) — needs hand-authored
+  wrap-safe paths or an arc-join offset later.
+- Re-shipping a request re-emails (matches legacy queue semantics) — add an
+  idempotency guard if it ever bites.
+
 ## 2026-06-11 — PR #134 — Resend error-swallow fix + caller hardening (merged)
 
 **Status:** ✅ Merged to main (squash). Fresh-context code review + separate
