@@ -415,12 +415,17 @@ export function StudioWorkspace({
                         className="cursor-grab"
                         onPointerDown={(e) => {
                           e.stopPropagation();
+                          // Pointer capture retargets click/dblclick to the
+                          // capture target, so an onDoubleClick here would
+                          // never fire — detect the double-press via
+                          // pointerdown's detail count instead (it increments
+                          // BEFORE any capture retargeting applies).
+                          if (e.detail === 2) {
+                            removeVertex(p, i);
+                            return;
+                          }
                           capturePointer(e);
                           drag.current = { kind: 'vertex', key: p.key, index: i };
-                        }}
-                        onDoubleClick={(e) => {
-                          e.stopPropagation();
-                          removeVertex(p, i);
                         }}
                       />
                     ))
