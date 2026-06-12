@@ -1,0 +1,98 @@
+{
+  "$comment": "AW-TPL-0002 Contender 36.5' Bass Boat panel set (Goal 6 D2). Sheet-absolute coordinates over wrapped.svg (1920x1080). 2-view: port profile (top, bow LEFT) = driver; starboard profile (bottom, bow RIGHT) = passenger. Hull freeboard panels only — console/T-top/outboard are no-wrap. View span 1536u = 11125mm overall.",
+  "vehicleId": "aa000002-0000-4000-8000-000000000002",
+  "provenanceNote": "Authored over Alpha Wolf owned wrapped art (aa000002/wrapped.svg), Goal 2a manual import of in-house Contender sheet. Calibrated against stated 11125x3050x2400 mm.",
+  "viewBox": { "width": 1920, "height": 1080 },
+  "views": [
+    {
+      "view": "driver",
+      "spanUnits": 1536,
+      "axis": "length",
+      "panels": [
+        {
+          "name": "Port Bow",
+          "points": [
+            [200, 297],
+            [262, 258],
+            [620, 243],
+            [620, 372],
+            [340, 348],
+            [222, 318]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 1,
+          "notes": "Bow taper — keep registration numbers clear"
+        },
+        {
+          "name": "Port Mid Hull",
+          "points": [
+            [620, 243],
+            [1150, 250],
+            [1150, 396],
+            [620, 372]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 2
+        },
+        {
+          "name": "Port Stern",
+          "points": [
+            [1150, 250],
+            [1600, 268],
+            [1622, 300],
+            [1638, 380],
+            [1150, 396]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 3,
+          "notes": "Ends at transom corner; outboard stays clear"
+        }
+      ]
+    },
+    {
+      "view": "passenger",
+      "spanUnits": 1536,
+      "axis": "length",
+      "panels": [
+        {
+          "name": "Starboard Stern",
+          "points": [
+            [272, 760],
+            [288, 836],
+            [310, 868],
+            [760, 884],
+            [760, 738],
+            [310, 756]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 4
+        },
+        {
+          "name": "Starboard Mid Hull",
+          "points": [
+            [760, 738],
+            [1290, 731],
+            [1290, 836],
+            [760, 884]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 5
+        },
+        {
+          "name": "Starboard Bow",
+          "points": [
+            [1290, 731],
+            [1648, 746],
+            [1710, 785],
+            [1688, 806],
+            [1570, 836],
+            [1290, 836]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 6,
+          "notes": "Bow taper — keep registration numbers clear"
+        }
+      ]
+    }
+  ]
+}

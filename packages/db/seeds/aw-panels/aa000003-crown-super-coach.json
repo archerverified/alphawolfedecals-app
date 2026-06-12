@@ -1,0 +1,169 @@
+{
+  "$comment": "AW-TPL-0003 Crown Super Coach 1973 panel set (Goal 6 D2). Sheet-absolute coordinates over wrapped.svg (1920x1080). 3-view: driver profile (top, front RIGHT), passenger profile (bottom-left), rear (bottom-right). Window bands included as perf-vinyl zones (finish none). View spans: profiles 1435u = 12000mm; rear 332u = 2438mm.",
+  "vehicleId": "aa000003-0000-4000-8000-000000000003",
+  "provenanceNote": "Authored over Alpha Wolf owned wrapped art (aa000003/wrapped.svg), Goal 2a manual import of in-house Crown Super Coach sheet. Calibrated against stated 12000x2438x3200 mm.",
+  "viewBox": { "width": 1920, "height": 1080 },
+  "views": [
+    {
+      "view": "driver",
+      "spanUnits": 1435,
+      "axis": "length",
+      "panels": [
+        {
+          "name": "Upper Band",
+          "points": [
+            [95, 112],
+            [1400, 112],
+            [1400, 162],
+            [70, 162]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 1
+        },
+        {
+          "name": "Window Band",
+          "points": [
+            [70, 162],
+            [1400, 162],
+            [1410, 230],
+            [62, 230]
+          ],
+          "finishHint": "none",
+          "installOrder": 2,
+          "notes": "Glass — perforated film zone"
+        },
+        {
+          "name": "Beltline Stripe",
+          "points": [
+            [55, 245],
+            [1430, 245],
+            [1430, 290],
+            [55, 290]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 3
+        },
+        {
+          "name": "Lower Side Rear",
+          "points": [
+            [50, 290],
+            [720, 290],
+            [720, 420],
+            [60, 420],
+            [44, 380]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 4
+        },
+        {
+          "name": "Lower Side Front",
+          "points": [
+            [720, 290],
+            [1380, 290],
+            [1430, 330],
+            [1430, 420],
+            [720, 420]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 5
+        }
+      ]
+    },
+    {
+      "view": "passenger",
+      "spanUnits": 1435,
+      "axis": "length",
+      "panels": [
+        {
+          "name": "Upper Band",
+          "points": [
+            [95, 562],
+            [1400, 562],
+            [1430, 612],
+            [70, 612]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 6
+        },
+        {
+          "name": "Window Band",
+          "points": [
+            [70, 612],
+            [1430, 612],
+            [1440, 680],
+            [62, 680]
+          ],
+          "finishHint": "none",
+          "installOrder": 7,
+          "notes": "Glass — perforated film zone; door glass included"
+        },
+        {
+          "name": "Beltline Stripe",
+          "points": [
+            [55, 695],
+            [1440, 695],
+            [1440, 740],
+            [55, 740]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 8
+        },
+        {
+          "name": "Lower Side Front",
+          "points": [
+            [50, 740],
+            [720, 740],
+            [720, 870],
+            [60, 870],
+            [44, 830]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 9,
+          "notes": "Entry door zone — door face wraps with the panel"
+        },
+        {
+          "name": "Lower Side Rear",
+          "points": [
+            [720, 740],
+            [1390, 740],
+            [1440, 780],
+            [1440, 870],
+            [720, 870]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 10
+        }
+      ]
+    },
+    {
+      "view": "back",
+      "spanUnits": 332,
+      "axis": "width",
+      "panels": [
+        {
+          "name": "Rear Window Band",
+          "points": [
+            [1572, 600],
+            [1880, 600],
+            [1880, 765],
+            [1572, 765]
+          ],
+          "finishHint": "none",
+          "installOrder": 11,
+          "notes": "Glass — perforated film zone"
+        },
+        {
+          "name": "Rear Panel",
+          "points": [
+            [1572, 765],
+            [1880, 765],
+            [1880, 905],
+            [1572, 905]
+          ],
+          "finishHint": "gloss",
+          "installOrder": 12
+        }
+      ]
+    }
+  ]
+}
