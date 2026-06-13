@@ -18,6 +18,7 @@ export * as orders from './repos/orders.js';
 export * as credits from './repos/credits.js';
 export * as briefs from './repos/briefs.js';
 export * as generation from './repos/generation.js';
+export * as share from './repos/share.js';
 export * as storage from './storage/supabase.js';
 export * as svg from './svg/index.js';
 
@@ -91,6 +92,7 @@ export type {
   RecordJobInput,
   InsertImageInput,
 } from './repos/generation.js';
+export type { ShareConcept, PublicShare, VoteResult } from './repos/share.js';
 export { CREDIT_CONFIG, PLAN_LIMITS } from './credit-config.js';
 export type { PlanName } from './credit-config.js';
 export { AI_CONFIG, AI_MODELS, estimateImageCostUsd } from './ai-config.js';
