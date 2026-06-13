@@ -100,6 +100,13 @@ model User {
   // B2C plan attribution (B2C-001). Defaults to free at signup; gates live in
   // credit-config.ts and are enforced server-side (B2C-011).
   plan               UserPlan      @default(free)
+  // Growth loops (Goal 9 / referral give-2/get-2). referral_code is THIS user's
+  // own public referral code (minted lazily, unique, plaintext — NOT PII).
+  // referred_by_code is captured ONCE at signup from a ?ref= link and is
+  // immutable thereafter (set-once trigger + format CHECK in auth_rls.sql /
+  // migration). Both are opaque tokens, never encrypted.
+  referralCode       String?       @unique @map("referral_code")
+  referredByCode     String?       @map("referred_by_code")
   status             AccountStatus @default(pending_verification)
   failedLoginCount   Int           @default(0) @map("failed_login_count")
   lockedUntil        DateTime?     @map("locked_until")
@@ -115,6 +122,8 @@ model User {
   creditLedger     CreditLedger[]
   templateSources  TemplateSource[]         @relation("TemplateSourceCreatedBy")
   generationRuns   GenerationRun[]
+  referralsMade    ReferralAttribution[]    @relation("ReferralReferrer")
+  referralReceived ReferralAttribution?     @relation("ReferralReferee")
 
   @@index([accountType])
   @@index([status])
@@ -613,6 +622,13 @@ model CreditLedger {
   // make double-spend impossible and refunds idempotent (ON CONFLICT target
   // of app_refund_credits). Not expressible in Prisma — raw SQL by design.
   runId     String?      @map("run_id") @db.Uuid
+  // The referee a referrer-side referral grant was earned for (Goal 9). Plain
+  // Uuid (no relation, audit-row pattern like projects.owner_user_id) — the
+  // TYPED idempotency key for the referrer grant: the partial unique
+  // credit_ledger_referral_referrer_once is (user_id, referee_user_id) WHERE
+  // source='referral' AND reason='referral_referrer'. NULL on every non-referrer
+  // row. Architecture review C2: key on a column, not a concatenated reason.
+  refereeUserId String?  @map("referee_user_id") @db.Uuid
   createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz
 
   user User           @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -620,6 +636,30 @@ model CreditLedger {
 
   @@index([userId, createdAt])
   @@map("credit_ledger")
+}
+
+// Referral attribution (Goal 9 / growth loops). One row per REFEREE (the
+// referee_user_id UNIQUE is the once-per-referee anchor): records which referrer
+// a verified new signup attributed to, so give-2/get-2 credits are granted
+// exactly once. Written ONLY on the system connection from verifySignupOtp;
+// referrer can read their own rows (RLS), referee cannot (no need; privacy —
+// the referrer's identity is not exposed to the referee). See repos/referrals.ts.
+model ReferralAttribution {
+  id             String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  refereeUserId  String   @unique @map("referee_user_id") @db.Uuid
+  referrerUserId String   @map("referrer_user_id") @db.Uuid
+  // The referral_code used (denormalized for audit; the referrer is the truth).
+  code           String
+  // Signup context for after-the-fact ring/Sybil detection (architecture review
+  // H3) — not a live block.
+  refereeIp      String?  @map("referee_ip")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  referee  User @relation("ReferralReferee", fields: [refereeUserId], references: [id], onDelete: Cascade)
+  referrer User @relation("ReferralReferrer", fields: [referrerUserId], references: [id], onDelete: Cascade)
+
+  @@index([referrerUserId])
+  @@map("referral_attributions")
 }
 
 // Design brief (Goal 5 / B2C-002) — the guided wizard's persisted state. One

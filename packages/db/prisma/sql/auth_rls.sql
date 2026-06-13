@@ -273,6 +273,32 @@ create trigger users_plan_system_managed
   for each row
   execute function users_block_plan_change();
 
+-- referred_by_code (Goal 9 / referral) is SET-ONCE: captured at signup
+-- (createUser INSERT) and immutable thereafter — for EVERYONE, including the
+-- system role. Mirrors users_block_account_type_change (a permanent attribute);
+-- without this a hand-crafted UPDATE on the withUser connection could re-point a
+-- user's referrer after the fact. search_path pinned (keeps the Supabase
+-- function_search_path_mutable advisor quiet — unlike the older account_type
+-- trigger which is the one outstanding baseline WARN).
+create or replace function users_block_referred_by_change() returns trigger
+  language plpgsql
+  set search_path = public, pg_temp
+  as $$
+  begin
+    if new.referred_by_code is distinct from old.referred_by_code then
+      raise exception 'referred_by_code is set-once (captured at signup) and cannot be changed'
+        using errcode = 'check_violation';
+    end if;
+    return new;
+  end;
+  $$;
+
+drop trigger if exists users_referred_by_set_once on users;
+create trigger users_referred_by_set_once
+  before update on users
+  for each row
+  execute function users_block_referred_by_change();
+
 -- ----------------------------------------------------------------------------
 -- Vehicle template library RLS (GH-003 / GH-004 / GH-017). See ADR-0005.
 --
@@ -1015,3 +1041,21 @@ alter table concept_votes force row level security;
 -- credit_ledger). RLS with no policy already denies app_user; this is defense
 -- in depth.
 revoke select, insert, update, delete on concept_votes from app_user;
+
+-- referral_attributions ---------------------------------------------------------
+-- Referral give-2/get-2 anchor (Goal 9). Written ONLY on the system connection
+-- from verifySignupOtp (credit_ledger doctrine). RLS lets a REFERRER read their
+-- own attributions (to show "you've referred N") but a referee CANNOT read the
+-- row — its referrer_user_id would leak who referred them. Writes are stripped
+-- from app_user (no INSERT/UPDATE/DELETE), so a customer can neither forge an
+-- attribution nor mint themselves referral credits.
+alter table referral_attributions enable row level security;
+alter table referral_attributions force row level security;
+
+-- Below the blanket grant (re-applied each idempotent run, then stripped here).
+revoke insert, update, delete on referral_attributions from app_user;
+
+drop policy if exists referral_attributions_referrer_read on referral_attributions;
+create policy referral_attributions_referrer_read on referral_attributions
+  for select
+  using (referrer_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid);
