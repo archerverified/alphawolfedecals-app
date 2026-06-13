@@ -173,6 +173,11 @@ export async function grantReferralIfAttributed(input: {
     // count excludes THIS referee so a re-run (the row may already exist) never
     // trips it. Idempotent on (user_id, referee_user_id).
     if (referrer.status === 'active') {
+      // Serialize per-referrer so two referees verifying at once can't both read
+      // count = cap-1 and overshoot the cap (READ COMMITTED). Same xact-scoped
+      // advisory-lock pattern as app_spend_credits; released at tx end.
+      await db.$executeRaw`
+        SELECT pg_advisory_xact_lock(hashtext('referral_cap'), hashtext(${referrer.id}))`;
       await db.$executeRaw`
         INSERT INTO credit_ledger (user_id, delta, source, reason, referee_user_id)
         SELECT ${referrer.id}::uuid, ${grant}, 'referral', 'referral_referrer',

@@ -1,17 +1,11 @@
 import Link from 'next/link';
+import { referrals } from '@alphawolf/db';
 import { SignupForm } from '../../../components/auth/SignupForm';
 import { getOrCreateFormCsrfToken } from '../../../lib/csrf';
 
 export const metadata = {
   title: 'Sign up — Alpha Wolf Wrap Studio',
 };
-
-function sanitizeRef(value: string | string[] | undefined): string | undefined {
-  const raw = Array.isArray(value) ? value[0] : value;
-  if (!raw) return undefined;
-  const code = raw.trim().toUpperCase();
-  return /^[A-Z0-9]{6,20}$/.test(code) ? code : undefined;
-}
 
 export default async function CustomerSignupPage({
   searchParams,
@@ -20,7 +14,10 @@ export default async function CustomerSignupPage({
 }) {
   const csrfToken = await getOrCreateFormCsrfToken();
   const { ref } = await searchParams;
-  const referralCode = sanitizeRef(ref);
+  // Reuse the single sanitizer (no drift). The server action re-sanitizes and
+  // the DB CHECK is the backstop; this just controls the hidden field + banner.
+  const referralCode =
+    referrals.sanitizeReferralCode(Array.isArray(ref) ? ref[0] : ref) ?? undefined;
   return (
     <>
       <div className="mb-6">
