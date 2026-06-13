@@ -73,6 +73,16 @@ type UserRow = {
 // Signup path — runs as the system role (no app.current_user_id) because the
 // user does not exist yet.
 export async function createUser(input: CreateUserInput): Promise<DecryptedUser> {
+  // Rider-5 defense-in-depth (security review): in PRODUCTION runtime, refuse a
+  // signup on a reserved synthetic test domain. So no real prod account can ever
+  // hold an email that the admin-elevation guard (isSyntheticTestEmail) trusts —
+  // closing the latent footgun where synthetic elevation rested solely on the
+  // dev route's NODE_ENV gate. E2E/integration run with NODE_ENV != production,
+  // so they still create their @e2e.alphawolf.test / @test.alphawolf.example
+  // identities.
+  if (process.env.NODE_ENV === 'production' && isSyntheticTestEmail(input.email)) {
+    throw new Error('[db] reserved test-domain emails cannot sign up in production');
+  }
   return withSystem(async (db) => {
     const [emailEnc, firstNameEnc, lastNameEnc, lookupHash] = await Promise.all([
       encryptPii(db, input.email),

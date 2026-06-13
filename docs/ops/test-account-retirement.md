@@ -34,6 +34,11 @@ prod, and the e2e cleanup didn't retire them.
    (`@e2e.alphawolf.test`, `@test.alphawolf.example`) elevate freely — E2E and the
    RLS integration tests need an admin — and those accounts are retired by the
    routine below. Revocation is always allowed.
+3. **`createUser` rejects reserved synthetic domains in production runtime**
+   (defense in depth, per the §3 security review): no real prod account can ever
+   hold an email that the elevation guard trusts, so synthetic elevation no longer
+   rests solely on the dev route's `NODE_ENV` gate. E2E/integration run with
+   `NODE_ENV != production`, so they still create their test identities.
 
 Net invariant: **the only `is_admin=true` accounts that can persist to prod are
 either real staff (deliberate CLI) or synthetic test identities (retired).**

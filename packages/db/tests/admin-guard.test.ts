@@ -5,7 +5,7 @@
 
 import { describe, expect, test } from 'vitest';
 
-import { isSyntheticTestEmail, setUserAdminByEmail } from '../src/repos/users';
+import { createUser, isSyntheticTestEmail, setUserAdminByEmail } from '../src/repos/users';
 
 describe('isSyntheticTestEmail', () => {
   test('accepts the synthetic test domains', () => {
@@ -27,5 +27,25 @@ describe('setUserAdminByEmail guard', () => {
     await expect(setUserAdminByEmail('attacker@gmail.com', true)).rejects.toThrow(
       /operator override/i,
     );
+  });
+});
+
+describe('createUser production test-domain guard (defense in depth)', () => {
+  test('rejects a reserved synthetic-domain signup in production runtime', async () => {
+    const prev = process.env.NODE_ENV;
+    try {
+      process.env.NODE_ENV = 'production';
+      await expect(
+        createUser({
+          email: 'sneaky@e2e.alphawolf.test',
+          firstName: 'X',
+          lastName: 'Y',
+          passwordHash: 'not-a-real-hash',
+          accountType: 'customer',
+        }),
+      ).rejects.toThrow(/reserved test-domain/i);
+    } finally {
+      process.env.NODE_ENV = prev;
+    }
   });
 });
