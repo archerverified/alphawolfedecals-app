@@ -18,7 +18,9 @@ async function main(): Promise<void> {
     console.error('usage: db:make-admin <email> [--revoke]');
     process.exit(1);
   }
-  const user = await setUserAdminByEmail(email, !revoke);
+  // The deliberate human operator path — passes operatorOverride so a real-staff
+  // email can be promoted (the rider-5 guard blocks non-test elevation otherwise).
+  const user = await setUserAdminByEmail(email, !revoke, { operatorOverride: true });
   if (!user) {
     console.error(`[db] no user found for ${email}`);
     process.exit(1);

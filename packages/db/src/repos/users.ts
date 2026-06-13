@@ -172,15 +172,41 @@ export async function getOwnUser(userId: string): Promise<DecryptedUser | null> 
 }
 
 // Grant/revoke the internal-admin flag (ADR-0005). Runs on the system role:
+// Synthetic test-identity domains (Goal 9 rider 5). E2E uses @e2e.alphawolf.test;
+// the RLS integration tests use @test.alphawolf.example. These are the ONLY
+// identities the dev admin-promotion paths may elevate without an operator
+// override — see setUserAdminByEmail.
+const TEST_IDENTITY_DOMAINS = ['@e2e.alphawolf.test', '@test.alphawolf.example'];
+
+export function isSyntheticTestEmail(email: string): boolean {
+  const e = email.trim().toLowerCase();
+  return TEST_IDENTITY_DOMAINS.some((d) => e.endsWith(d));
+}
+
 // is_admin is staff provisioning, done out-of-band (a CLI script or the
 // dev-only promote endpoint), not by the user about themselves, so there is no
 // app.current_user_id to scope by. Looks the user up by email hash so operators
 // can promote by email without first resolving an id. Returns the updated user,
 // or null if no user matches the email.
+//
+// RIDER-5 GUARD (Goal 9): granting admin to a NON-test account requires a
+// deliberate operatorOverride. Root cause of the 8 is_admin=true customer
+// accounts that leaked to prod: the dev /api/dev/make-admin endpoint had no
+// target restriction, and local/E2E runs hit the LIVE shared DB. Now that
+// endpoint is restricted to @e2e.alphawolf.test AND a real-account elevation can
+// only happen through the db:make-admin CLI (which passes operatorOverride).
+// Synthetic test identities still elevate freely (E2E + the RLS integration
+// tests need an admin); revocation is always allowed.
 export async function setUserAdminByEmail(
   email: string,
   isAdmin: boolean,
+  opts: { operatorOverride?: boolean } = {},
 ): Promise<DecryptedUser | null> {
+  if (isAdmin && !isSyntheticTestEmail(email) && !opts.operatorOverride) {
+    throw new Error(
+      '[db] refusing to grant admin to a non-test account without an explicit operator override',
+    );
+  }
   return withSystem(async (db) => {
     const lookupHash = await emailLookupHash(db, email);
     const existing = (await db.user.findUnique({
