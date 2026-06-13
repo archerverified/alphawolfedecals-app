@@ -12,6 +12,12 @@ export const CREDIT_CONFIG = {
   conceptGenerationCost: 1,
   // Cost of one iteration / tweak request (Phase 2 / B2C-008).
   iterationCost: 1,
+  // Referral give-2/get-2 (Goal 9): credits granted to EACH side when a verified
+  // new signup attributes a referral code. Grant-only (no Stripe).
+  referralGrant: 2,
+  // Abuse ceiling: max distinct referees a single referrer earns credits for.
+  // The referee always gets their bonus; a referrer past the cap stops earning.
+  referralReferrerCap: 25,
 } as const;
 
 // Free-plan limits (B2C-011), enforced server-side. PRD §3 step 2 + §9.4.

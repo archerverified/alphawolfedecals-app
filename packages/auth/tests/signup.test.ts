@@ -154,6 +154,17 @@ vi.mock('@alphawolf/db', () => ({
       return 5;
     },
   },
+  referrals: {
+    sanitizeReferralCode(input: unknown) {
+      if (typeof input !== 'string') return null;
+      const code = input.trim().toUpperCase();
+      return /^[A-Z0-9]{6,20}$/.test(code) ? code : null;
+    },
+    // No referral code in these fixtures — attribution is a no-op.
+    async grantReferralIfAttributed() {
+      return { attributed: false as const, reason: 'no_code' as const };
+    },
+  },
 }));
 
 // Use console transport so Resend is never called from these tests.

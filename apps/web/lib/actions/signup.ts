@@ -93,6 +93,9 @@ export async function signupCustomerAction(
         lastName: form.get('lastName'),
         email: form.get('email'),
         password: form.get('password'),
+        // Referral code carried from a ?ref= link (Goal 9). A malformed value is
+        // ignored downstream — never blocks signup.
+        referralCode: form.get('referralCode'),
       },
       meta,
     );
@@ -231,6 +234,17 @@ export async function verifyOtpAction(_prev: ActionState, form: FormData): Promi
         source: 'grant',
         reason: 'signup',
       });
+    }
+    // Referral funnel (Goal 9). The referee just got their give-2/get-2 bonus;
+    // the referrer's matching grant landed in the same transaction.
+    if (result.referral?.attributed) {
+      await captureServerEvent('referral_signup_attributed', result.userId, {});
+      if (result.referral.creditsGranted > 0) {
+        await captureServerEvent('referral_credits_granted', result.userId, {
+          amount: result.referral.creditsGranted,
+          side: 'referee',
+        });
+      }
     }
     const dest = result.accountType === 'shop_user' ? '/welcome/shop' : '/welcome';
     redirect(dest);
