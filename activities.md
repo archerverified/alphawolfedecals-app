@@ -6,6 +6,20 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-13 — Cowork session — Goal 8 DEFERRED · roadmap resequenced · admin cleanup · Goal 9 prompt drafted
+
+**Context:** First post-Fable session (Fable 5 retired; executor now Claude/Opus in Cowork + Claude Code). Reviewed the Goal 6 numbering mini-task (PR #142) and Goal 7 closeout from the prior transcript; no code changes to those — verification only.
+
+**DECISIONS (Archer, this session):**
+1. **Goal 8 (print paneling engine) DEFERRED to post-launch.** Printer/media config only powers the shop-side paneling engine (`prd.md` §4.6/§10.9/§10.10). The live product is B2C — deliverable is the portable export pack (`prd-b2c-guided-design-flow.md` §5), paneled by the receiving shop in its own RIP; shop-side production is a stated v2 non-goal (§2.3) and `prd.md` §3 already excludes building paneling/RIP. So printer info buys the B2C app nothing — it's a build-time pre-req only if AW prints in-house or onboards partner shops. **Active chain resequenced to 9 → 10 → launch**, with 8 and S after. Goal numbers kept as stable identities (NOT renumbered). Roadmap updated: `docs/product/roadmap-goals-6-10.md`.
+2. **3 hygiene riders rescued** from the deferred Goal 8 prompt into Goal 9: test-account retirement, PostHog test-traffic filtering, PRD §10 bake-off truth-up.
+
+**ACTIONS COMPLETED:**
+- **Admin cleanup (prod DB write, system maintenance):** the 8 `is_admin=true` accounts flagged in the Goal 7 report were confirmed as e2e/proof-run artifacts (all created 2026-06-12 00:36–01:27, machine cadence, `account_type=customer`, normal OTP signup flow, own ~0 projects — not a breach). Revoked `is_admin` on all 8 (explicit IDs, scoped `UPDATE`). **Verified: 0 admin accounts remain.** Open follow-up (now Goal 9 rider 5): root-cause WHY customer signups got `is_admin=true` in prod, and add a guard. NOTE: separately surfaced a Supabase advisory — RLS disabled on `public.rate_limits` and `public._prisma_migrations` — flagged for the Goal 10 audit, NOT changed.
+- **Goal 9 prompt drafted** via /prompt-engineer: `prompts/10-goal-9-growth-loops.md` (share-for-feedback + voting, referral give-2/get-2, shop locator, polish pass + 3 riders). Audit-first note baked in: before/after slider already shipped in Goal 7 — excluded from scope.
+
+**PR DELIVERY (resolved via GitHub API):** the Cowork sandbox `.git` is not writable (host holds the repo; lock files can't be removed) and local `git commit`/`clone` both failed — an early clone even produced an orphan commit (no parent). Worked around by building the commit **server-side through the GitHub REST API** with Archer's PAT: read main's tree, created blobs for the 3 files, committed with parent `a2abc735`, updated branch `chore/roadmap-resequence-goal8-defer`, opened **PR #157** (base `main`, docs-only: this `activities.md` entry + `docs/product/roadmap-goals-6-10.md` + `prompts/10-goal-9-growth-loops.md`). The earlier orphan ref was force-replaced before the PR opened. PAT used transiently — never written to any file or committed; **Archer to revoke it post-merge** (it was shared in plaintext chat).
+
 ## 2026-06-12 — Goal 7 — AI generation (B2C Phase 2) — CLOSEOUT
 
 **Status:** ✅ ALL 9 deliverables shipped via reviewed, CI-green PRs (#143–#155,
