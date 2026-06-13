@@ -995,3 +995,23 @@ create policy generation_images_owner_insert on generation_images
         and r.user_id = nullif(current_setting('app.current_user_id', true), '')::uuid
     )
   );
+
+-- concept_votes -----------------------------------------------------------------
+-- Public share-for-feedback votes (Goal 9). This table has NO authenticated
+-- surface: every read (tally) and write (cast/change a vote) happens on the
+-- SYSTEM connection from the token-validated public share loader + vote route
+-- (apps/web/app/(public)/share). So app_user gets ZERO access — RLS is enabled
+-- + FORCED with no policy at all (every app_user row read/write fails closed),
+-- and the blanket table grants from the top of this file are revoked as
+-- belt-and-braces. The system role (BYPASSRLS) is the only writer, exactly like
+-- the credit-grant path: a hand-crafted INSERT on the withUser connection can
+-- neither see nor stuff this ballot box. No PII lives here — voter_token is an
+-- opaque per-visitor cookie id.
+alter table concept_votes enable row level security;
+alter table concept_votes force row level security;
+
+-- ORDER MATTERS: stays BELOW the blanket grant at the top of the file, which an
+-- idempotent re-run re-grants before this strips it back off (same pattern as
+-- credit_ledger). RLS with no policy already denies app_user; this is defense
+-- in depth.
+revoke select, insert, update, delete on concept_votes from app_user;

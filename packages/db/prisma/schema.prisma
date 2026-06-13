@@ -495,7 +495,11 @@ model Project {
   // the chosen vehicle label; editable.
   name          String        @default("Untitled project")
   status        ProjectStatus @default(draft)
-  // 12-char public handoff token for project transfer (GH-012). Not secret.
+  // 12-char public handoff token. Not secret. Spec'd for project transfer
+  // (GH-012, not yet built); Goal 9 reuses it as the share-for-feedback token,
+  // so it is now PUBLIC-BY-DISTRIBUTION (every share link carries it). GH-012
+  // must NOT treat token possession as authority to claim/transfer a project —
+  // see the capability-creep note in repos/share.ts.
   transferToken String?       @unique @map("transfer_token")
   // Set when status flips to `deleted`; drives the 30-day recovery window (PRD §8.2).
   deletedAt     DateTime?     @map("deleted_at") @db.Timestamptz
@@ -508,6 +512,7 @@ model Project {
   orders         Order[]
   brief          DesignBrief?
   generationRuns GenerationRun[]
+  conceptVotes   ConceptVote[]
 
   @@index([ownerUserId, status])
   @@map("projects")
@@ -813,4 +818,37 @@ model GenerationImage {
 
   @@index([runId])
   @@map("generation_images")
+}
+
+// ----------------------------------------------------------------------------
+// Growth loops (Goal 9). Public share-for-feedback votes on a project's 3 AI
+// concept directions. The share page is scoped by projects.transfer_token (the
+// existing "not secret" public handoff token — no parallel token scheme) and is
+// fully unauthenticated: a visitor 👍 one of the concepts.
+//
+// SECURITY: concept_votes is written + read ONLY on the system connection, from
+// the token-validated public vote route and the public share loader. app_user
+// has NO access — RLS is enabled + FORCED with no policy (fail closed) and the
+// blanket table write grants are revoked (auth_rls.sql). The page exposes ONLY
+// concept text + a vote tally — never owner identity, brief internals, or PII.
+//
+// voter_token is an opaque per-visitor cookie id (random, NOT PII). The unique
+// (project_id, voter_token) DEDUPES HONEST VISITORS — one vote per browser per
+// project, changeable (a visitor can move their 👍 to another concept). It is
+// NOT a ballot-stuffing defense (a client that drops cookies gets a fresh
+// token); the abuse ceiling is the per-IP rate limit on the vote route.
+// ----------------------------------------------------------------------------
+model ConceptVote {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  projectId  String   @map("project_id") @db.Uuid
+  conceptKey String   @map("concept_key")
+  voterToken String   @map("voter_token")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt  DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, voterToken])
+  @@index([projectId])
+  @@map("concept_votes")
 }

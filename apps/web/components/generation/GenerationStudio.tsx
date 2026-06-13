@@ -42,6 +42,7 @@ import {
 } from '@/lib/generation/gallery';
 import { BeforeAfterSlider } from './BeforeAfterSlider';
 import { GenerateButton } from './GenerateButton';
+import { ShareForFeedback } from './ShareForFeedback';
 import { WaitlistSheet } from './WaitlistSheet';
 
 type GenerationContext = Extract<GenerationContextResult, { ok: true }>;
@@ -412,6 +413,10 @@ export function GenerationStudio({
                 ))}
               </nav>
             ) : null}
+          </div>
+
+          <div className="mb-4">
+            <ShareForFeedback projectId={projectId} />
           </div>
 
           <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
