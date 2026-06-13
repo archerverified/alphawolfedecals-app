@@ -111,7 +111,16 @@ export async function getReferralStats(userId: string): Promise<ReferralStats> {
 }
 
 export type ReferralGrantResult =
-  | { attributed: true; referrerUserId: string; creditsGranted: number }
+  | {
+      attributed: true;
+      referrerUserId: string;
+      creditsGranted: number;
+      // Whether THIS call actually inserted each side's grant (false on a
+      // re-run that found it already present, or a capped referrer) — lets the
+      // caller fire referral_credits_granted exactly once per side.
+      refereeCredited: boolean;
+      referrerCredited: boolean;
+    }
   | { attributed: false; reason: 'no_code' | 'invalid_code' | 'self' | 'not_active' | 'not_found' };
 
 type UserRefRow = {
@@ -163,8 +172,9 @@ export async function grantReferralIfAttributed(input: {
               ${input.refereeIp ?? null})
       ON CONFLICT (referee_user_id) DO NOTHING`;
 
-    // Referee bonus — idempotent on the partial unique.
-    await db.$executeRaw`
+    // Referee bonus — idempotent on the partial unique. Affected-row count tells
+    // us whether THIS call credited the referee (vs a heal re-run).
+    const refereeInserted = await db.$executeRaw`
       INSERT INTO credit_ledger (user_id, delta, source, reason)
       VALUES (${input.refereeUserId}::uuid, ${grant}, 'referral', 'referral_referee')
       ON CONFLICT (user_id) WHERE source = 'referral' AND reason = 'referral_referee' DO NOTHING`;
@@ -172,13 +182,14 @@ export async function grantReferralIfAttributed(input: {
     // Referrer bonus — only if active and under the per-referrer cap. The cap
     // count excludes THIS referee so a re-run (the row may already exist) never
     // trips it. Idempotent on (user_id, referee_user_id).
+    let referrerInserted = 0;
     if (referrer.status === 'active') {
       // Serialize per-referrer so two referees verifying at once can't both read
       // count = cap-1 and overshoot the cap (READ COMMITTED). Same xact-scoped
       // advisory-lock pattern as app_spend_credits; released at tx end.
       await db.$executeRaw`
         SELECT pg_advisory_xact_lock(hashtext('referral_cap'), hashtext(${referrer.id}))`;
-      await db.$executeRaw`
+      referrerInserted = await db.$executeRaw`
         INSERT INTO credit_ledger (user_id, delta, source, reason, referee_user_id)
         SELECT ${referrer.id}::uuid, ${grant}, 'referral', 'referral_referrer',
                ${input.refereeUserId}::uuid
@@ -192,6 +203,12 @@ export async function grantReferralIfAttributed(input: {
           WHERE source = 'referral' AND reason = 'referral_referrer' DO NOTHING`;
     }
 
-    return { attributed: true, referrerUserId: referrer.id, creditsGranted: grant };
+    return {
+      attributed: true,
+      referrerUserId: referrer.id,
+      creditsGranted: grant,
+      refereeCredited: refereeInserted > 0,
+      referrerCredited: referrerInserted > 0,
+    };
   });
 }

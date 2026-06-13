@@ -26,8 +26,19 @@ const EMAIL_REFEREE = 'alpha-ref-referee@test.alphawolf.example';
 // Self-referral by a second inbox: same gmail mailbox, plus-tagged.
 const EMAIL_SELF_A = 'alpha.ring@gmail.com';
 const EMAIL_SELF_B = 'alpharing+promo@gmail.com';
+const EMAIL_CAP_REFERRER = 'alpha-cap-referrer@test.alphawolf.example';
+const EMAIL_CAP_A = 'alpha-cap-a@test.alphawolf.example';
+const EMAIL_CAP_B = 'alpha-cap-b@test.alphawolf.example';
 
-const FIXTURE_EMAILS = [EMAIL_REFERRER, EMAIL_REFEREE, EMAIL_SELF_A, EMAIL_SELF_B];
+const FIXTURE_EMAILS = [
+  EMAIL_REFERRER,
+  EMAIL_REFEREE,
+  EMAIL_SELF_A,
+  EMAIL_SELF_B,
+  EMAIL_CAP_REFERRER,
+  EMAIL_CAP_A,
+  EMAIL_CAP_B,
+];
 
 async function deleteFixtureUser(email: string): Promise<void> {
   await withSystem(async (db) => {
@@ -117,6 +128,35 @@ describe('anti-abuse', () => {
     const res = await referrals.grantReferralIfAttributed({ refereeUserId: lonelyRefereeId });
     expect(res).toEqual({ attributed: false, reason: 'invalid_code' });
     expect(await credits.getCreditBalance(lonelyRefereeId)).toBe(SIGNUP);
+  });
+});
+
+describe('per-referrer cap (the boundary)', () => {
+  test('a referrer at the cap stops earning, but the referee still gets theirs', async () => {
+    const cap = CREDIT_CONFIG.referralReferrerCap;
+    const capReferrerId = await newUser(EMAIL_CAP_REFERRER);
+    const capCode = (await referrals.ensureReferralCode(capReferrerId))!;
+
+    // Seed the referrer to cap-1 prior referral_referrer grants with synthetic
+    // referees (referee_user_id has no FK, so random uuids are fine).
+    await withSystem(
+      (db) => db.$executeRaw`
+        INSERT INTO credit_ledger (user_id, delta, source, reason, referee_user_id)
+        SELECT ${capReferrerId}::uuid, 2, 'referral', 'referral_referrer', gen_random_uuid()
+        FROM generate_series(1, ${cap - 1})`,
+    );
+
+    // Referee A lands the referrer exactly AT the cap → referrer still credited.
+    const refA = await newUser(EMAIL_CAP_A, capCode);
+    const resA = await referrals.grantReferralIfAttributed({ refereeUserId: refA });
+    expect(resA.attributed && resA.referrerCredited).toBe(true);
+
+    // Referee B is over the cap → referrer NOT credited, but B gets their bonus.
+    const refB = await newUser(EMAIL_CAP_B, capCode);
+    const resB = await referrals.grantReferralIfAttributed({ refereeUserId: refB });
+    expect(resB.attributed && resB.referrerCredited).toBe(false);
+    expect(resB.attributed && resB.refereeCredited).toBe(true);
+    expect(await credits.getCreditBalance(refB)).toBe(SIGNUP + GRANT);
   });
 });
 

@@ -54,9 +54,9 @@ export default async function ProjectsPage() {
           <div className="flex items-center gap-2">
             <Link
               href="/refer"
-              className="inline-flex items-center justify-center rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-100"
+              className="inline-flex items-center justify-center gap-1.5 rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-800 shadow-sm transition hover:bg-zinc-100"
             >
-              🎁 Refer a friend
+              <span aria-hidden>🎁</span> Refer a friend
             </Link>
             <Link
               href="/vehicles/select"

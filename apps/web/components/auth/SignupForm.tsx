@@ -49,7 +49,8 @@ export function SignupForm({ variant, csrfToken, referralCode }: Props) {
         <>
           <input type="hidden" name="referralCode" value={referralCode} />
           <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
-            🎁 You were invited — you’ll both get bonus design credits when you verify.
+            <span aria-hidden>🎁</span> You were invited — you’ll both get bonus design credits when
+            you verify.
           </p>
         </>
       ) : null}

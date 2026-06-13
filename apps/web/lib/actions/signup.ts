@@ -235,14 +235,21 @@ export async function verifyOtpAction(_prev: ActionState, form: FormData): Promi
         reason: 'signup',
       });
     }
-    // Referral funnel (Goal 9). The referee just got their give-2/get-2 bonus;
-    // the referrer's matching grant landed in the same transaction.
+    // Referral funnel (Goal 9). Fire give-2/get-2 for BOTH sides — the referrer
+    // isn't in this request, but their grant landed in the same transaction.
+    // Each side fires only when actually credited this run (idempotent).
     if (result.referral?.attributed) {
       await captureServerEvent('referral_signup_attributed', result.userId, {});
-      if (result.referral.creditsGranted > 0) {
+      if (result.referral.refereeCredited) {
         await captureServerEvent('referral_credits_granted', result.userId, {
           amount: result.referral.creditsGranted,
           side: 'referee',
+        });
+      }
+      if (result.referral.referrerCredited) {
+        await captureServerEvent('referral_credits_granted', result.referral.referrerUserId, {
+          amount: result.referral.creditsGranted,
+          side: 'referrer',
         });
       }
     }
