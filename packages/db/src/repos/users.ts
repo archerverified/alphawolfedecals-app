@@ -31,6 +31,9 @@ type CreateUserInput = {
   phone?: string | null;
   passwordHash: string;
   accountType: AccountType;
+  // Referral code captured at signup from a ?ref= link (Goal 9). Already
+  // sanitized by the caller; the DB CHECK + set-once trigger are the backstop.
+  referredByCode?: string | null;
 };
 
 async function rowToUser(db: TxClient, row: UserRow): Promise<DecryptedUser> {
@@ -88,6 +91,7 @@ export async function createUser(input: CreateUserInput): Promise<DecryptedUser>
         phoneEncrypted: phoneEnc,
         passwordHash: input.passwordHash,
         accountType: input.accountType,
+        referredByCode: input.referredByCode ?? null,
         status: 'pending_verification',
       },
     })) as unknown as UserRow;

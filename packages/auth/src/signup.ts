@@ -9,7 +9,13 @@
 // Both flows email an OTP. Verification activates the user account and, for
 // shops, provisions the shop org.
 
-import { authEvents, credits, shops as shopRepo, users as userRepo } from '@alphawolf/db';
+import {
+  authEvents,
+  credits,
+  referrals,
+  shops as shopRepo,
+  users as userRepo,
+} from '@alphawolf/db';
 import { z } from 'zod';
 import {
   generateOtpCode,
@@ -151,12 +157,18 @@ export async function signupCustomer(
 
   try {
     const passwordHash = await hashPassword(parsed.data.password);
+    // Referral capture (Goal 9): sanitize the ?ref= value out-of-band so a
+    // malformed code is ignored, never blocking signup. Stored set-once.
+    const referredByCode = referrals.sanitizeReferralCode(
+      (raw as { referralCode?: unknown } | null)?.referralCode,
+    );
     const user = await userRepo.createUser({
       email: parsed.data.email,
       firstName: parsed.data.firstName,
       lastName: parsed.data.lastName,
       passwordHash,
       accountType: 'customer',
+      referredByCode,
     });
     await authEvents.logAuthEvent({
       userId: user.id,
@@ -301,6 +313,18 @@ export async function resendVerificationOtp(
   return { ok: true };
 }
 
+// Referral outcome surfaced from verifySignupOtp so the web layer can fire the
+// PostHog events for BOTH sides (the referrer isn't in this request).
+export type VerifyReferral =
+  | {
+      attributed: true;
+      creditsGranted: number;
+      referrerUserId: string;
+      refereeCredited: boolean;
+      referrerCredited: boolean;
+    }
+  | { attributed: false; creditsGranted: number };
+
 export type VerifyResult =
   | {
       ok: true;
@@ -311,6 +335,10 @@ export type VerifyResult =
       // grant already present, or if the grant failed non-fatally). Lets the
       // caller fire the credits_granted analytics event without re-querying.
       creditsGranted: number;
+      // Referral outcome (Goal 9), present only for customer signups that
+      // carried a referral code. Lets the caller fire the referral_signup_
+      // attributed / referral_credits_granted events for BOTH sides.
+      referral?: VerifyReferral;
     }
   | {
       ok: false;
@@ -385,6 +413,30 @@ export async function verifySignupOtp(args: {
     });
   }
 
+  // Referral give-2/get-2 (Goal 9). Runs AFTER activation (verified email) and
+  // is non-fatal + idempotent — a hiccup never blocks signup, and an ops re-run
+  // of grantReferralIfAttributed heals it. Only customers carry referral codes.
+  let referral: VerifyReferral | undefined;
+  if (user.accountType === 'customer') {
+    try {
+      const res = await referrals.grantReferralIfAttributed({
+        refereeUserId: user.id,
+        refereeIp: meta.ip ?? null,
+      });
+      referral = res.attributed
+        ? {
+            attributed: true,
+            creditsGranted: res.creditsGranted,
+            referrerUserId: res.referrerUserId,
+            refereeCredited: res.refereeCredited,
+            referrerCredited: res.referrerCredited,
+          }
+        : { attributed: false, creditsGranted: 0 };
+    } catch (error) {
+      console.error('[auth/signup] referral grant failed (non-fatal)', { userId: user.id, error });
+    }
+  }
+
   let shopId: string | undefined;
   if (user.accountType === 'shop_user') {
     const pending = pendingShopData.get(user.id);
@@ -411,6 +463,7 @@ export async function verifySignupOtp(args: {
     accountType: user.accountType,
     creditsGranted,
     ...(shopId ? { shopId } : {}),
+    ...(referral ? { referral } : {}),
   };
 }
 

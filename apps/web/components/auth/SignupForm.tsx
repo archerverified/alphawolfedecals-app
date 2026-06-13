@@ -9,6 +9,9 @@ type Variant = 'customer' | 'shop';
 type Props = {
   variant: Variant;
   csrfToken: string;
+  // Referral code from a ?ref= link (Goal 9, customer signups only). Carried as
+  // a hidden field so the give-2/get-2 grant attributes at verify.
+  referralCode?: string;
 };
 
 type FormState = {
@@ -20,7 +23,7 @@ type FormState = {
 
 const initialState: FormState = { ok: false };
 
-export function SignupForm({ variant, csrfToken }: Props) {
+export function SignupForm({ variant, csrfToken, referralCode }: Props) {
   const action = variant === 'shop' ? signupShopAction : signupCustomerAction;
   const [state, formAction, pending] = useActionState<FormState, FormData>(action, initialState);
   const [password, setPassword] = useState('');
@@ -42,6 +45,15 @@ export function SignupForm({ variant, csrfToken }: Props) {
   return (
     <form action={formAction} className="flex flex-col gap-4" noValidate>
       <input type="hidden" name={CSRF_FIELD_NAME} value={csrfToken} />
+      {variant === 'customer' && referralCode ? (
+        <>
+          <input type="hidden" name="referralCode" value={referralCode} />
+          <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
+            <span aria-hidden>🎁</span> You were invited — you’ll both get bonus design credits when
+            you verify.
+          </p>
+        </>
+      ) : null}
 
       <div className="grid grid-cols-2 gap-3">
         <Field
