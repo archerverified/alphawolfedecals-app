@@ -75,7 +75,7 @@ export function ReferralPanel({ url, qrSvg, referredCount, creditsEarned }: Prop
             <div>
               <dt className="text-xs text-zinc-500">Credits earned</dt>
               <dd
-                className="text-lg font-semibold tabular-nums text-sky-700"
+                className="text-lg font-semibold tabular-nums text-emerald-700"
                 data-testid="referral-earned"
               >
                 {creditsEarned}

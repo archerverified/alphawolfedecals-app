@@ -86,10 +86,12 @@ export function ShareVoting({ token, concepts: initial }: Props) {
             >
               <div className="relative aspect-[4/3] w-full bg-zinc-100">
                 {c.imageUrl ? (
+                  // object-contain: a wrap vote must show the WHOLE vehicle —
+                  // object-cover would crop the design that's being voted on.
                   <img
                     src={c.imageUrl}
                     alt={`Concept ${i + 1}: ${c.title}`}
-                    className="h-full w-full object-cover"
+                    className="h-full w-full object-contain"
                   />
                 ) : (
                   <div className="flex h-full items-center justify-center text-xs text-zinc-400">
