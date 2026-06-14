@@ -35,6 +35,22 @@ person.is_test  =  true
 Every insight/dashboard with "Filter out internal and test users" enabled then
 excludes synthetic accounts. (Apply once; it's a project-level setting.)
 
+✅ **APPLIED 2026-06-14 (Goal 9.1 D3)** via the PostHog API (`project-settings-
+update`, project 433901). The stored `test_account_filters` now reads (the existing
+internal-cohort filter is preserved):
+
+```
+[ { key: id,      type: cohort, value: 320658, operator: not_in },   # pre-existing
+  { key: is_test, type: person, value: ["true"], operator: is_not } ] # NEW (this goal)
+```
+
+`is_not true` is the "keep real users" form (matches the existing `not_in` cohort
+convention and keeps anonymous/untagged traffic) — enabling the per-insight toggle
+excludes `is_test=true` persons. NOTE: `is_test` is not yet in the project taxonomy
+because no synthetic account has signed up since the `$set` shipped (#163) and the
+retired cohort predates the tag, so empirical exclusion can't be shown until tagged
+traffic lands — the filter is configured and correct, verification is forward-looking.
+
 ## What's covered / not covered
 
 - **Covered:** all events from a synthetic account AFTER it activates — the bulk
