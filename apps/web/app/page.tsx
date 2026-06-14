@@ -1,5 +1,12 @@
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { SiteFooter } from '../components/SiteFooter';
+
+// Canonical home (Goal 10 D6) — resolves against metadataBase in the root layout.
+export const metadata: Metadata = {
+  alternates: { canonical: '/' },
+  openGraph: { url: '/' },
+};
 
 export default function HomePage() {
   return (

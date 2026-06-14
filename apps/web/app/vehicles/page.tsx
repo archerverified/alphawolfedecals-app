@@ -3,6 +3,7 @@
 // cards; each card is an entry point into the detail route, not the interaction
 // itself. The cascade/search browse lives at /vehicles/select.
 
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { vehicles } from '@alphawolf/db';
 import { AwTemplateCard } from '../../components/vehicles/AwTemplateCard';
@@ -10,8 +11,12 @@ import { AwTemplateCard } from '../../components/vehicles/AwTemplateCard';
 // Reads live published templates per request.
 export const dynamic = 'force-dynamic';
 
-export const metadata = {
-  title: 'Vehicle templates — Alpha Wolf Wrap Studio',
+// Title via the root template; canonical + OG for the catalogue (Goal 10 D6).
+export const metadata: Metadata = {
+  title: 'Vehicle templates',
+  description: 'Browse Alpha Wolf wrap-safe vehicle templates and start your custom wrap design.',
+  alternates: { canonical: '/vehicles' },
+  openGraph: { url: '/vehicles', title: 'Vehicle templates' },
 };
 
 export default async function VehiclesPage() {
