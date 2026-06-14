@@ -11,6 +11,7 @@
 
 import { expect, test, type Page } from '@playwright/test';
 import { signUpAndVerify, signIn, uniqueEmail } from './support/flows';
+import { cleanupCreatedProjects } from './support/cleanup';
 
 const AW_X3_VEHICLE_ID = 'aa000001-0000-4000-8000-000000000001';
 
@@ -41,6 +42,13 @@ test.describe('Goal 6 — editor + zone selector on AW-TPL-0001', () => {
     'Against a deployed target set SMOKE_CUSTOMER_EMAIL/PASSWORD — dev-otp is 404 in production.',
   );
 
+  // Self-clean (Goal 9.1 D1): soft-delete the X3 project this spec creates so the
+  // persistent smoke account doesn't leak it into the live DB every deploy.
+  const createdProjectIds: string[] = [];
+  test.afterEach(async ({ page }) => {
+    await cleanupCreatedProjects(page, createdProjectIds);
+  });
+
   test('editor places text + shape on X3 panels; wizard zones render and toggle', async ({
     page,
     request,
@@ -59,6 +67,7 @@ test.describe('Goal 6 — editor + zone selector on AW-TPL-0001', () => {
     // The X3 catalogue card resolves and a project opens IN THE EDITOR —
     // this alone was impossible before the panel data shipped.
     const projectId = await createProjectOnX3(page);
+    createdProjectIds.push(projectId);
     await page.getByTestId('canvas-ready').waitFor({ state: 'attached', timeout: 60_000 });
     await expect(page.getByTestId('editor-root')).toBeVisible();
 

@@ -14,6 +14,7 @@
 import * as path from 'path';
 import { expect, test, type Page } from '@playwright/test';
 import { signUpAndVerify, signIn, uniqueEmail } from './support/flows';
+import { cleanupCreatedProjects } from './support/cleanup';
 
 const SEEDED_VEHICLE_ID = 'a0000000-0000-4000-8000-000000000001';
 
@@ -48,6 +49,13 @@ test.describe('Goal 5 brief wizard', () => {
     'Against a deployed target set SMOKE_CUSTOMER_EMAIL/PASSWORD — dev-otp is 404 in production.',
   );
 
+  // Self-clean (Goal 9.1 D1): soft-delete the project this spec creates so the
+  // persistent smoke account doesn't leak it into the live DB every deploy.
+  const createdProjectIds: string[] = [];
+  test.afterEach(async ({ page }) => {
+    await cleanupCreatedProjects(page, createdProjectIds);
+  });
+
   test('brief: zones → style → materials → review → save → resume', async ({ page, request }) => {
     // Dev-mode cold compiles + the full signup→wizard journey + TWO upload
     // round-trips (photo + logo, B2C-004) blow well past test.slow()'s 3×30s —
@@ -65,6 +73,7 @@ test.describe('Goal 5 brief wizard', () => {
       await signIn(page, email, '/vehicles/select');
     }
     const projectId = await createProject(page);
+    createdProjectIds.push(projectId);
 
     // Enter the wizard from the editor header.
     await page.getByTestId('open-brief').click();
