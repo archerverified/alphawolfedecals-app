@@ -5,7 +5,7 @@
 // fires shop_handoff_clicked with its source so the B2B funnel is measurable.
 
 import { useState } from 'react';
-import { MapPin, Store } from 'lucide-react';
+import { Check, MapPin, Store } from 'lucide-react';
 import type { PublicShop } from '@alphawolf/db';
 
 import { capture } from '@/lib/analytics';
@@ -16,8 +16,21 @@ type Props = {
   directory: DirectoryShop[];
 };
 
+// Only ever follow http(s) links — a curated directory entry can't become a
+// javascript:/data: href sink.
+function safeHref(url: string | undefined, fallback: string): string {
+  if (!url) return fallback;
+  try {
+    const u = new URL(url);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? url : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
 export function ShopLocator({ platformShops, directory }: Props) {
   const [query, setQuery] = useState('');
+  const [chosen, setChosen] = useState<string | null>(null);
 
   function handoff(source: 'platform' | 'directory' | 'maps', meta: Record<string, unknown> = {}) {
     capture('shop_handoff_clicked', { source, ...meta });
@@ -40,25 +53,54 @@ export function ShopLocator({ platformShops, directory }: Props) {
         <section>
           <h2 className="mb-2 text-sm font-medium text-zinc-700">Alpha Wolf partner shops</h2>
           <ul className="flex flex-col gap-2">
-            {platformShops.map((s) => (
-              <li
-                key={s.id}
-                data-testid={`platform-shop-${s.id}`}
-                className="flex items-center justify-between gap-3 rounded-lg border border-zinc-200 bg-white px-4 py-3"
-              >
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-medium text-zinc-900">{s.name}</p>
-                  {s.city ? <p className="text-xs text-zinc-500">{s.city}</p> : null}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => handoff('platform', { shop_id: s.id })}
-                  className="inline-flex shrink-0 items-center gap-1.5 rounded-md bg-sky-600 px-3 py-1.5 text-sm font-medium text-white transition-colors hover:bg-sky-700"
+            {platformShops.map((s) => {
+              const isChosen = chosen === s.id;
+              return (
+                <li
+                  key={s.id}
+                  data-testid={`platform-shop-${s.id}`}
+                  className={
+                    'rounded-lg border bg-white px-4 py-3 ' +
+                    (isChosen ? 'border-sky-500 ring-1 ring-sky-500' : 'border-zinc-200')
+                  }
                 >
-                  <Store className="size-4" aria-hidden /> Choose
-                </button>
-              </li>
-            ))}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-zinc-900">{s.name}</p>
+                      {s.city ? <p className="text-xs text-zinc-500">{s.city}</p> : null}
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setChosen(s.id);
+                        handoff('platform', { shop_id: s.id });
+                      }}
+                      aria-pressed={isChosen}
+                      className={
+                        'inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ' +
+                        (isChosen
+                          ? 'bg-sky-100 text-sky-800'
+                          : 'bg-sky-600 text-white hover:bg-sky-700')
+                      }
+                    >
+                      {isChosen ? (
+                        <Check className="size-4" aria-hidden />
+                      ) : (
+                        <Store className="size-4" aria-hidden />
+                      )}
+                      {isChosen ? 'Chosen' : 'Choose'}
+                    </button>
+                  </div>
+                  {isChosen ? (
+                    <p className="mt-2 text-xs text-zinc-600" aria-live="polite">
+                      Take your downloaded spec pack to{' '}
+                      <span className="font-medium">{s.name}</span> and mention Alpha Wolf Wrap
+                      Studio — they’ll print and install it.
+                    </p>
+                  ) : null}
+                </li>
+              );
+            })}
           </ul>
         </section>
       ) : null}
@@ -80,13 +122,13 @@ export function ShopLocator({ platformShops, directory }: Props) {
                   </p>
                 </div>
                 <a
-                  href={s.url ?? mapsSearchUrl(`${s.name} ${s.city}`)}
+                  href={safeHref(s.url, mapsSearchUrl(`${s.name} ${s.city}`))}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => handoff('directory', { name: s.name })}
                   className="shrink-0 text-sm font-medium text-sky-700 underline-offset-2 hover:underline"
                 >
-                  Visit →
+                  Visit <span className="sr-only">(opens in a new tab)</span>→
                 </a>
               </li>
             ))}
@@ -104,6 +146,7 @@ export function ShopLocator({ platformShops, directory }: Props) {
       >
         <MapPin className="size-4" aria-hidden />
         Search wrap shops near you on the map
+        <span className="sr-only">(opens in a new tab)</span>
       </a>
     </div>
   );

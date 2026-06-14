@@ -75,26 +75,26 @@ export async function createShopWithAdminMembership(
 
 // Public shop directory entry (Goal 9 / D3 locator). ONLY opted-in shops, and
 // ONLY whitelisted, consented columns: the company name (shown only because the
-// shop opted into public_listing), the coarse public_city the shop chose to
-// publish, and the existing public receive_code (the handoff token). The
-// encrypted address/website/phone and the owner identity NEVER cross this
-// boundary.
+// shop opted into public_listing) and the coarse public_city the shop chose to
+// publish. The encrypted address/website/phone, the owner identity, AND the
+// receive_code (the shop's project-transfer token — never broadcast in bulk)
+// NEVER cross this boundary. A future "hand off to this shop" flow fetches the
+// receive_code server-side, scoped to the one chosen shop, at handoff time.
 export type PublicShop = {
   id: string;
   name: string;
   city: string | null;
-  receiveCode: string;
 };
 
 // System read (the locator is public-ish directory data): returns the opted-in
 // platform shops. RLS is bypassed on withSystem, but the WHERE public_listing
 // and the explicit column select are the boundary — a non-opted-in shop is never
-// returned and its address is never decrypted.
+// returned, and its address / receive_code are never read.
 export async function listPublicShops(): Promise<PublicShop[]> {
   return withSystem(async (db) => {
     const shops = await db.shop.findMany({
       where: { publicListing: true },
-      select: { id: true, companyNameEncrypted: true, publicCity: true, receiveCode: true },
+      select: { id: true, companyNameEncrypted: true, publicCity: true },
       orderBy: { createdAt: 'asc' },
     });
     const out: PublicShop[] = [];
@@ -103,7 +103,6 @@ export async function listPublicShops(): Promise<PublicShop[]> {
         id: s.id,
         name: await decryptPii(db, s.companyNameEncrypted),
         city: s.publicCity,
-        receiveCode: s.receiveCode,
       });
     }
     return out;
