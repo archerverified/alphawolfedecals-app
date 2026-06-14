@@ -18,6 +18,11 @@ export const CREDIT_CONFIG = {
   // Abuse ceiling: max distinct referees a single referrer earns credits for.
   // The referee always gets their bonus; a referrer past the cap stops earning.
   referralReferrerCap: 25,
+  // Ring detection (Goal 10 D3): if a referrer already has this many prior
+  // attributions from the SAME referee IP, a further same-IP signup stops earning
+  // the referrer bonus (one device/NAT farming one code). 2 prior allowed (shared
+  // office/household), the 3rd+ from that IP is blocked. The referee bonus is untouched.
+  referralRingIpThreshold: 2,
 } as const;
 
 // Free-plan limits (B2C-011), enforced server-side. PRD §3 step 2 + §9.4.

@@ -29,6 +29,13 @@ const EMAIL_SELF_B = 'alpharing+promo@gmail.com';
 const EMAIL_CAP_REFERRER = 'alpha-cap-referrer@test.alphawolf.example';
 const EMAIL_CAP_A = 'alpha-cap-a@test.alphawolf.example';
 const EMAIL_CAP_B = 'alpha-cap-b@test.alphawolf.example';
+// Goal 10 D3 anti-abuse fixtures.
+const EMAIL_DISP_REFERRER = 'alpha-disp-referrer@test.alphawolf.example';
+const EMAIL_DISP_REFEREE = 'alpha-disp-referee@mailinator.com'; // disposable domain
+const EMAIL_RING_REFERRER = 'alpha-ring-referrer@test.alphawolf.example';
+const EMAIL_RING_A = 'alpha-ring-a@test.alphawolf.example';
+const EMAIL_RING_B = 'alpha-ring-b@test.alphawolf.example';
+const EMAIL_RING_C = 'alpha-ring-c@test.alphawolf.example';
 
 const FIXTURE_EMAILS = [
   EMAIL_REFERRER,
@@ -38,6 +45,12 @@ const FIXTURE_EMAILS = [
   EMAIL_CAP_REFERRER,
   EMAIL_CAP_A,
   EMAIL_CAP_B,
+  EMAIL_DISP_REFERRER,
+  EMAIL_DISP_REFEREE,
+  EMAIL_RING_REFERRER,
+  EMAIL_RING_A,
+  EMAIL_RING_B,
+  EMAIL_RING_C,
 ];
 
 async function deleteFixtureUser(email: string): Promise<void> {
@@ -75,7 +88,10 @@ beforeAll(async () => {
   if (!process.env.DATABASE_URL_APP) {
     throw new Error('referrals-rls.integration: DATABASE_URL_APP (the app_user role) must be set.');
   }
-  await Promise.all(FIXTURE_EMAILS.map(deleteFixtureUser));
+  // Sequential, not Promise.all: withSystem runs on the pooled connection
+  // (connection_limit=1), so N concurrent fixture deletes exhaust the pool and
+  // trip "unable to start a transaction" (Goal 10 D3 — the cohort grew).
+  for (const email of FIXTURE_EMAILS) await deleteFixtureUser(email);
 
   referrerId = await newUser(EMAIL_REFERRER);
   referrerCode = (await referrals.ensureReferralCode(referrerId))!;
@@ -83,7 +99,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  await Promise.all(FIXTURE_EMAILS.map(deleteFixtureUser));
+  // Sequential, not Promise.all: withSystem runs on the pooled connection
+  // (connection_limit=1), so N concurrent fixture deletes exhaust the pool and
+  // trip "unable to start a transaction" (Goal 10 D3 — the cohort grew).
+  for (const email of FIXTURE_EMAILS) await deleteFixtureUser(email);
   await _resetClientForTests();
 });
 
@@ -134,6 +153,47 @@ describe('anti-abuse', () => {
     const res = await referrals.grantReferralIfAttributed({ refereeUserId: lonelyRefereeId });
     expect(res).toEqual({ attributed: false, reason: 'invalid_code' });
     expect(await credits.getCreditBalance(lonelyRefereeId)).toBe(SIGNUP);
+  });
+
+  test('a disposable/throwaway-domain referee earns NO attribution (Goal 10 D3)', async () => {
+    const dispReferrerId = await newUser(EMAIL_DISP_REFERRER);
+    const dispCode = (await referrals.ensureReferralCode(dispReferrerId))!;
+    const dispRefereeId = await newUser(EMAIL_DISP_REFEREE, dispCode); // @mailinator.com
+
+    const res = await referrals.grantReferralIfAttributed({ refereeUserId: dispRefereeId });
+    expect(res).toEqual({ attributed: false, reason: 'disposable' });
+    // Neither side gets the referral bonus; the referee keeps only its signup grant.
+    expect(await credits.getCreditBalance(dispReferrerId)).toBe(SIGNUP);
+    expect(await credits.getCreditBalance(dispRefereeId)).toBe(SIGNUP);
+  });
+
+  test('same-IP RING heuristic withholds the referrer bonus past the threshold (Goal 10 D3)', async () => {
+    const threshold = CREDIT_CONFIG.referralRingIpThreshold; // 2 prior allowed
+    const ringReferrerId = await newUser(EMAIL_RING_REFERRER);
+    const ringCode = (await referrals.ensureReferralCode(ringReferrerId))!;
+    const ip = '203.0.113.7'; // one device/NAT farming the code
+
+    // The first `threshold` same-IP referees still credit the referrer.
+    const emails = [EMAIL_RING_A, EMAIL_RING_B, EMAIL_RING_C];
+    const results = [];
+    for (const email of emails) {
+      const id = await newUser(email, ringCode);
+      results.push(await referrals.grantReferralIfAttributed({ refereeUserId: id, refereeIp: ip }));
+    }
+
+    // A and B (prior same-IP count 0 then 1, both < 2) credit the referrer.
+    expect(results[0]!.attributed && results[0]!.referrerCredited).toBe(true);
+    expect(results[1]!.attributed && results[1]!.referrerCredited).toBe(true);
+    // C (prior same-IP count = 2 >= threshold) is ring-blocked on the referrer side…
+    expect(
+      results[2]!.attributed &&
+        (results[2] as { referrerRingBlocked: boolean }).referrerRingBlocked,
+    ).toBe(true);
+    expect(results[2]!.attributed && results[2]!.referrerCredited).toBe(false);
+    // …but C still gets their own referee bonus.
+    expect(results[2]!.attributed && results[2]!.refereeCredited).toBe(true);
+    // Referrer earned exactly `threshold` referral bonuses, not 3.
+    expect(await credits.getCreditBalance(ringReferrerId)).toBe(SIGNUP + threshold * GRANT);
   });
 });
 

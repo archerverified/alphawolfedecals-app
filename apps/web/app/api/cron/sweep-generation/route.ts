@@ -14,7 +14,7 @@
 
 import { NextResponse } from 'next/server';
 
-import { generation, maintenance } from '@alphawolf/db';
+import { generation, maintenance, AI_CONFIG } from '@alphawolf/db';
 
 import { captureServerEvent } from '../../../../lib/notifications/posthog-server';
 
@@ -74,5 +74,30 @@ export async function GET(request: Request): Promise<NextResponse> {
     });
   }
 
-  return NextResponse.json({ ok: true, swept, maintenance: maintenanceResult });
+  // Daily GLOBAL AI spend-cap monitor (Goal 10 D3). The per-request gate (the
+  // generation action) blocks a customer when the day's spend would breach the
+  // cap; THIS is the proactive daily signal so the spend rails are observable at
+  // launch scale. Emits a PostHog alert event with the day's global total, the
+  // cap, and whether we've crossed the 80% warn threshold. Isolated + non-fatal,
+  // like the maintenance sweep — a spend-read failure never fails the cron.
+  let spendStatus: {
+    spentTodayUsd: number;
+    capUsd: number;
+    pctOfCap: number;
+    alert: boolean;
+  } | null = null;
+  try {
+    const spentTodayUsd = await generation.spendTodaySystem();
+    const capUsd = AI_CONFIG.dailySpendCapUsd;
+    const pctOfCap = capUsd > 0 ? Math.round((spentTodayUsd / capUsd) * 100) : 0;
+    spendStatus = { spentTodayUsd, capUsd, pctOfCap, alert: pctOfCap >= 80 };
+    await captureServerEvent('ai_daily_spend_status', 'system', { auth, ...spendStatus });
+  } catch (err) {
+    await captureServerEvent('ai_daily_spend_status_failed', 'system', {
+      auth,
+      error: err instanceof Error ? err.message : 'unknown',
+    });
+  }
+
+  return NextResponse.json({ ok: true, swept, maintenance: maintenanceResult, spendStatus });
 }
