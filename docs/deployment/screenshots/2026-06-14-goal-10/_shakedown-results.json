@@ -1,0 +1,125 @@
+{
+  "results": [
+    {
+      "name": "01-landing",
+      "path": "/",
+      "status": 200,
+      "consoleErrors": [
+        "Loading the script 'https://va.vercel-scripts.com/v1/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inlin",
+        "Loading the script 'https://va.vercel-scripts.com/v1/speed-insights/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self"
+      ],
+      "axeViolations": []
+    },
+    {
+      "name": "02-vehicles",
+      "path": "/vehicles",
+      "status": 200,
+      "consoleErrors": [
+        "Loading the script 'https://va.vercel-scripts.com/v1/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inlin",
+        "Loading the script 'https://va.vercel-scripts.com/v1/speed-insights/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self"
+      ],
+      "axeViolations": []
+    },
+    {
+      "name": "03-signin",
+      "path": "/signin",
+      "status": 200,
+      "consoleErrors": [
+        "Loading the script 'https://va.vercel-scripts.com/v1/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inlin",
+        "Loading the script 'https://va.vercel-scripts.com/v1/speed-insights/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self"
+      ],
+      "axeViolations": []
+    },
+    {
+      "name": "04-signup",
+      "path": "/signup",
+      "status": 200,
+      "consoleErrors": [
+        "Loading the script 'https://va.vercel-scripts.com/v1/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inlin",
+        "Loading the script 'https://va.vercel-scripts.com/v1/speed-insights/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self"
+      ],
+      "axeViolations": []
+    },
+    {
+      "name": "05-signup-shop",
+      "path": "/signup-shop",
+      "status": 200,
+      "consoleErrors": [
+        "Loading the script 'https://va.vercel-scripts.com/v1/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inlin",
+        "Loading the script 'https://va.vercel-scripts.com/v1/speed-insights/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self"
+      ],
+      "axeViolations": []
+    },
+    {
+      "name": "06-find-a-shop",
+      "path": "/find-a-shop",
+      "status": 200,
+      "consoleErrors": [
+        "Loading the script 'https://va.vercel-scripts.com/v1/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inlin",
+        "Loading the script 'https://va.vercel-scripts.com/v1/speed-insights/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self"
+      ],
+      "axeViolations": []
+    },
+    {
+      "name": "07-terms",
+      "path": "/terms",
+      "status": 200,
+      "consoleErrors": [
+        "Loading the script 'https://va.vercel-scripts.com/v1/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inlin",
+        "Loading the script 'https://va.vercel-scripts.com/v1/speed-insights/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self"
+      ],
+      "axeViolations": []
+    },
+    {
+      "name": "08-privacy",
+      "path": "/privacy",
+      "status": 200,
+      "consoleErrors": [
+        "Loading the script 'https://va.vercel-scripts.com/v1/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inlin",
+        "Loading the script 'https://va.vercel-scripts.com/v1/speed-insights/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self"
+      ],
+      "axeViolations": []
+    },
+    {
+      "name": "09-not-found-404",
+      "path": "/this-route-does-not-exist-404",
+      "status": 404,
+      "consoleErrors": [
+        "Failed to load resource: the server responded with a status of 404 (Not Found)",
+        "Loading the script 'https://va.vercel-scripts.com/v1/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self' 'unsafe-inlin",
+        "Loading the script 'https://va.vercel-scripts.com/v1/speed-insights/script.debug.js' violates the following Content Security Policy directive: \"script-src 'self"
+      ],
+      "axeViolations": []
+    },
+    {
+      "name": "auth-projects",
+      "path": "/projects",
+      "status": 200,
+      "authed": true
+    },
+    {
+      "name": "auth-refer",
+      "path": "/refer",
+      "status": 200,
+      "authed": true
+    }
+  ],
+  "footer": {
+    "termsReachable": false,
+    "privacyReachable": false
+  },
+  "seo": {
+    "/robots.txt": {
+      "status": 200,
+      "snippet": " User-Agent: * Disallow: / "
+    },
+    "/sitemap.xml": {
+      "status": 200,
+      "snippet": " /* Copyright 2014 The Chromium Authors * Use of this source code is governed by a BSD-style license that can be * found in the LICENSE file. */ :root { color-scheme: light dark; } div.header { border"
+    }
+  },
+  "auth": {
+    "customer": "customer: OTP=retrieved, landed /signup",
+    "shop": "not-attempted"
+  }
+}
