@@ -6,6 +6,91 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-14 — Goal 9.1 — Cleanup & closeout (stop the test-data leak, retire the backlog, finish 2 riders) — CLOSEOUT
+
+**Status:** ✅ ALL 6 deliverables (D1–D6) shipped via reviewed, CI-green, squash-merged
+PRs (#166, #167, #168) + executed prod actions, all verified this session against the
+LIVE DB + GitHub. Spend ≈ $0 (no AI/Stripe). Diagram:
+[`docs/vault/diagrams/goal-9_1-cleanup.md`](docs/vault/diagrams/goal-9_1-cleanup.md).
+
+**The leak, root-caused (systematic-debugging Phase 1).** The prod smoke (`.github/
+workflows/smoke.yml`) runs THREE specs on every Vercel prod deploy — `mvp-flow` +
+`brief-wizard` + `aw-template` — all signed in as ONE persistent pre-seeded
+`@alphawolf.test` smoke account, each creating ~3 projects with NO teardown. 148
+projects / 52 orders had accumulated in the live shared DB. The smoke seed domain
+`@alphawolf.test` is deliberately OUT of `RETIRE_SUFFIXES` (deleting it breaks the
+smoke), so an account sweep could never fix it.
+
+**What shipped / was done.**
+
+- **D1 (#166) — leak stopped.** (1) Self-clean: the 3 prod specs track created project
+  ids + soft-delete them in `afterEach` via the authenticated `/projects` UI (net-zeros
+  the smoke account's active set per run). (2) A daily maintenance sweep folded into the
+  EXISTING `sweep-generation` cron (no 2nd cron — Hobby limits): a shared `@alphawolf/db`
+  `maintenance` module hard-purges leaked test projects (owner cohort + `ownerShopId IS
+NULL` (spares the routed-order fixture) + settled >30min) and retires straggler
+  synthetic accounts. PROVEN in prod: the deployed cron purged **106 projects + 207
+  storage objects**; self-clean signature observed (created→`status='deleted'` projects).
+- **D2 — backlog retired (autonomous `--apply`, guarded).** Dry-run reviewed (cohort 63,
+  all in `RETIRE_SUFFIXES`, 0 admin, tripwire empty), `--apply --max=70` → **RETIRED 63/63,
+  0 failures** (34 projects + 64 storage objects). Users **80 → 17**; reals intact. The §3
+  independent security review BLOCKED first (the `template_sources` RESTRICT-FK would abort
+  the run mid-cohort) → fixed (`retireOne` deletes template_sources first; per-account
+  isolation; `--max` ceiling), then re-verified safe. Evidence doc updated (#167).
+- **D3 (#167) — PostHog test-traffic filter APPLIED** via the PostHog API
+  (`project-settings-update`): added `person.is_test is_not true` to `test_account_filters`,
+  preserving the existing internal-cohort filter. Empirical exclusion is forward-looking
+  (no synthetic signup since the `$set` shipped in #163; `is_test` not yet in taxonomy).
+- **D4 (#167) — referral give-2/get-2 PROVEN live.** The integration test never ran green
+  live: its `newUser` fixture skipped the signup grant the real flow applies → fixed
+  (faithful to `auth/signup.ts`). Now **6/6 on the live DB**: +2 each side once, idempotent,
+  self-referral blocked, unknown-code no-op, cap boundary, app_user can't forge (RLS).
+  Fixtures cleaned (`referral_attributions` back to 0). Prod referral code was already
+  correct — a test-fixture gap.
+- **D5 (#167) — rate_limits verdict + admin-guard regression.** Audited: the Supabase anon
+  key NEVER reaches the browser (no `NEXT_PUBLIC` anon key, no browser client; all DB access
+  is server-side Prisma; rate_limits is `withSystem`-only) → the RLS-disabled advisory is
+  defense-in-depth, NOT a live hole → documented + deferred to Goal 10 (with a ready-made,
+  app-safe ENABLE-RLS fix). New `make-admin-guard.test.ts` pins the route guard (the e2e
+  path that leaked is_admin): 404 in prod, 403 non-test, 200 only for `@e2e.alphawolf.test`.
+- **D6 (#168) — full-app shakedown** against a LOCAL ephemeral build (`next dev` + throwaway
+  local Postgres, mock AI, console email — **never prod**, net-zero). 22 pages (customer +
+  shop), axe WCAG-2.2-AA, full-page gallery + coverage matrix → `docs/deployment/screenshots/
+2026-06-14-goal-9_1/shakedown/`. **2 serious axe violations found + FIXED in-goal**
+  (`/refer` QR `role="img"`; `/brief` caption contrast `zinc-400→zinc-500`), re-scanned → 0.
+
+**DECISIONS (no-questions policy).**
+
+1. Fold the test-data sweep into the existing daily cron rather than add a 2nd cron (Hobby
+   plan cron limits + prior sub-daily breakage). Both sweeps idempotent + fail-isolated.
+2. Self-clean = soft-delete via the existing authenticated path (minimal surface); the cron
+   is the true row-level hard-purge guarantee (the CI `retries:2` multiplier means `afterEach`
+   alone is insufficient — architecture review).
+3. Project-purge spares `ownerShopId IS NOT NULL` (the seeded routed-order fixtures) and the
+   operator (not in the purge cohort).
+4. The live operator login is **`@alphawolfdecals.com`** (NOT `@1stimpression.co`, Archer's
+   contact email) — it owns the 3 `template_sources`; the suffix allowlist correctly excluded
+   it (the security review's "test account" guess was wrong — the allowlist, not the guess,
+   is the gate).
+5. rate_limits: defense-in-depth → defer to Goal 10 (don't blindly ENABLE RLS without a policy).
+6. D6 on a local ephemeral Postgres (no Docker; free-tier Supabase branching unavailable;
+   parse worker + storage + real-AI are bound to prod, so those flows are env-limited — covered
+   by the prod smoke + Goal 7 proof, documented in the coverage matrix, not defects).
+
+**Verification.** users 80→17, admins 0, referral_attributions 0, operator + template_sources
+intact; Supabase advisors unchanged by 9.1 (2-WARN baseline + a pre-existing Goal-9
+`concept_votes` INFO — 9.1 added no schema); Sentry: 0 new errors post-merge.
+
+**Carryovers for Goal 10.**
+
+- rate_limits / \_prisma_migrations: ENABLE RLS (app-safe — superuser bypasses) + 2nd review.
+- Vercel Analytics/Speed-Insights `.debug.js` CSP block — confirm on the live prod site.
+- Stale `@alphawolf.test` smoke accounts (16 accumulated; only the active SMOKE_CUSTOMER/SHOP
+  needed) + ~7 stale routed-order fixtures — retire all but the active pair (needs the active
+  creds). The prod smoke workflow's concurrency `cancel-in-progress` cancels long runs mid-test,
+  leaving drafts for the cron — acceptable (cron backstops), but worth a longer timeout.
+- `concept_votes` RLS-enabled-no-policy INFO advisory (from Goal 9).
+
 ## 2026-06-13 — Goal 9 — Growth loops + polish + 3 hygiene riders — CLOSEOUT
 
 **Status:** ✅ ALL 7 deliverables shipped via reviewed, CI-green, squash-merged PRs
