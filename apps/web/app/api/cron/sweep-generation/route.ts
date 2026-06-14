@@ -14,7 +14,7 @@
 
 import { NextResponse } from 'next/server';
 
-import { generation } from '@alphawolf/db';
+import { generation, maintenance } from '@alphawolf/db';
 
 import { captureServerEvent } from '../../../../lib/notifications/posthog-server';
 
@@ -48,5 +48,29 @@ export async function GET(request: Request): Promise<NextResponse> {
   }
   const swept = await generation.sweepStaleRuns(SWEEP_TTL_MINUTES);
   await captureServerEvent('generation_swept', 'system', { count: swept, auth });
-  return NextResponse.json({ ok: true, swept });
+
+  // Test-data sweep (Goal 9.1 D1) — folded into this existing daily cron rather
+  // than a 2nd cron entry (Hobby plan caps cron count + frequency; a sub-daily
+  // cron previously broke all deploys). sweepTestData does ONE decrypt pass then:
+  //   * hard-purges the per-deploy prod-smoke leak (projects owned by the
+  //     synthetic / @alphawolf.test smoke cohort, ownerShopId NULL, settled
+  //     >30min) — the server-side guarantee behind the smoke's own soft-delete
+  //     self-clean. ownerShopId NULL spares the seeded routed-order fixture.
+  //   * retires straggler synthetic ACCOUNTS (RETIRE_SUFFIXES only — never
+  //     @alphawolf.test) that local runs leave behind.
+  // withSystem maintenance, cohort-scoped: a real account/its data never matches.
+  // Isolated from the generation sweep above: a maintenance failure must NOT take
+  // down the (already-completed) refund sweep or fail the cron's health.
+  let maintenanceResult: Awaited<ReturnType<typeof maintenance.sweepTestData>> | null = null;
+  try {
+    maintenanceResult = await maintenance.sweepTestData();
+    await captureServerEvent('test_data_swept', 'system', { auth, ...maintenanceResult });
+  } catch (err) {
+    await captureServerEvent('test_data_sweep_failed', 'system', {
+      auth,
+      error: err instanceof Error ? err.message : 'unknown',
+    });
+  }
+
+  return NextResponse.json({ ok: true, swept, maintenance: maintenanceResult });
 }

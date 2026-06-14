@@ -36,6 +36,7 @@
 import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
 import * as path from 'path';
 import { signIn, signUpAndVerify, uniqueEmail } from './support/flows';
+import { cleanupCreatedProjects } from './support/cleanup';
 
 const TINY_SVG = path.resolve(__dirname, 'fixtures/tiny-logo.svg');
 
@@ -76,6 +77,14 @@ test.describe('MVP smoke — customer design → submit loop', () => {
     'Against a deployed target set SMOKE_CUSTOMER_EMAIL/PASSWORD (pre-seeded verified account) — dev-otp is 404 in production.',
   );
 
+  // Self-clean (Goal 9.1 D1): every project this loop creates is tracked + soft-
+  // deleted after the test, so the persistent smoke account net-zeros its own
+  // data each run instead of leaking ~1 project/deploy forever.
+  const createdProjectIds: string[] = [];
+  test.afterEach(async ({ page }) => {
+    await cleanupCreatedProjects(page, createdProjectIds);
+  });
+
   test('design a wrap and submit it for production', async ({ page, request }) => {
     // The upload step below legitimately needs up to ~2.5 min when the
     // free-tier Render parse worker cold-starts — raise the TEST timeout too,
@@ -90,6 +99,8 @@ test.describe('MVP smoke — customer design → submit loop', () => {
     await page.getByTestId('start-project-name').fill('Smoke MVP Wrap');
     await page.getByTestId('start-project-submit').click();
     await expect(page).toHaveURL(/\/projects\/.+\/editor/);
+    const createdId = page.url().match(/\/projects\/([0-9a-f-]+)\/editor/)?.[1];
+    if (createdId) createdProjectIds.push(createdId);
 
     const canvasHost = page.getByTestId('canvas-host');
     await canvasHost.waitFor({ state: 'visible', timeout: 20_000 });

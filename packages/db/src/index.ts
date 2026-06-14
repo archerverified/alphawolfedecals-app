@@ -20,6 +20,7 @@ export * as briefs from './repos/briefs.js';
 export * as generation from './repos/generation.js';
 export * as share from './repos/share.js';
 export * as referrals from './repos/referrals.js';
+export * as maintenance from './repos/maintenance.js';
 export * as storage from './storage/supabase.js';
 export * as svg from './svg/index.js';
 
