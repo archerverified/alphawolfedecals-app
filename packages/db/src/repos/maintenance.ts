@@ -179,6 +179,12 @@ async function removeStorageKeys(keys: string[]): Promise<number> {
 // Delete one test account + everything it created (mirrors db:cleanup-e2e).
 // Projects do NOT cascade from users (schema note), so they're deleted first; the
 // user cascades credit_ledger / referral_attributions / otp / auth events.
+//
+// template_sources.created_by is a REQUIRED relation (ON DELETE RESTRICT), so a
+// user that authored Studio ingest rows (a de-admined Goal-6 Studio E2E identity
+// can) would BLOCK user.delete() with an FK violation — caught by the §3 security
+// review. Those rows are admin-authored test provenance; delete them first.
+// (Nothing references a template_source as a parent, so the row delete is safe.)
 export async function retireOne(userId: string): Promise<{ projects: number; storage: number }> {
   const { storageKeys, projectCount } = await withSystem(async (db) => {
     const projects = await db.project.findMany({
@@ -188,6 +194,7 @@ export async function retireOne(userId: string): Promise<{ projects: number; sto
     const projectIds = projects.map((p) => p.id);
     const keys = await collectProjectStorageKeys(db, projectIds);
     await db.project.deleteMany({ where: { ownerUserId: userId } });
+    await db.templateSource.deleteMany({ where: { createdById: userId } });
     await db.user.delete({ where: { id: userId } });
     return { storageKeys: keys, projectCount: projectIds.length };
   });
@@ -201,7 +208,13 @@ export async function retireOne(userId: string): Promise<{ projects: number; sto
 // Hobby 60s function ceiling — leftovers drain on the next tick.
 export async function retireTestAccounts(
   opts: { limit?: number; test?: TestUser[]; adminNonTest?: number } = {},
-): Promise<{ retired: number; projects: number; storage: number; adminNonTest: number }> {
+): Promise<{
+  retired: number;
+  projects: number;
+  storage: number;
+  adminNonTest: number;
+  failed: number;
+}> {
   const limit = opts.limit ?? 50;
   let test = opts.test;
   let adminNonTest = opts.adminNonTest ?? 0;
@@ -211,14 +224,23 @@ export async function retireTestAccounts(
     adminNonTest = c.adminNonTest.length;
   }
   const batch = test.slice(0, limit);
+  let retired = 0;
   let projects = 0;
   let storage = 0;
+  let failed = 0;
   for (const u of batch) {
-    const res = await retireOne(u.id);
-    projects += res.projects;
-    storage += res.storage;
+    // Per-account isolation: one account that can't be deleted (e.g. an
+    // unexpected RESTRICT FK) must not abort the rest of the sweep.
+    try {
+      const res = await retireOne(u.id);
+      retired += 1;
+      projects += res.projects;
+      storage += res.storage;
+    } catch {
+      failed += 1;
+    }
   }
-  return { retired: batch.length, projects, storage, adminNonTest };
+  return { retired, projects, storage, adminNonTest, failed };
 }
 
 // ── Project purge (the per-deploy smoke leak) ────────────────────────────────
@@ -291,6 +313,7 @@ export async function sweepTestData(
   storagePurged: number;
   accountsRetired: number;
   accountProjects: number;
+  accountsFailed: number;
   adminTripwire: number;
 }> {
   const users = await classifyAllUsers();
@@ -313,6 +336,7 @@ export async function sweepTestData(
     storagePurged: purge.storage,
     accountsRetired: retire.retired,
     accountProjects: retire.projects,
+    accountsFailed: retire.failed,
     adminTripwire: retire.adminNonTest,
   };
 }

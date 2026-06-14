@@ -52,16 +52,44 @@ async function main(): Promise<void> {
     return;
   }
 
+  // Blast-radius ceiling for an IRREVERSIBLE op (§3 security review): abort if the
+  // freshly-classified cohort exceeds an explicit `--max=<n>`. Cheap TOCTOU guard
+  // against a classification that somehow over-matches between dry-run and apply.
+  const maxArg = process.argv.find((a) => a.startsWith('--max='));
+  const max = maxArg ? Number(maxArg.slice('--max='.length)) : null;
+  if (max !== null && test.length > max) {
+    console.error(
+      `\n✋ ABORT: cohort ${test.length} exceeds --max=${max}. Re-review the dry run before applying.\n`,
+    );
+    process.exitCode = 1;
+    return;
+  }
+
+  // Per-account isolation: one account that can't be deleted must not leave the
+  // prod DB half-retired — log, continue, report, and exit non-zero so failures
+  // are visible.
+  let retired = 0;
   let projects = 0;
   let storage = 0;
+  const failures: string[] = [];
   for (const u of test) {
-    const res = await retireOne(u.id);
-    projects += res.projects;
-    storage += res.storage;
+    try {
+      const res = await retireOne(u.id);
+      retired += 1;
+      projects += res.projects;
+      storage += res.storage;
+    } catch (err) {
+      failures.push(`${redact(u.email)}: ${err instanceof Error ? err.message : 'unknown'}`);
+    }
   }
   console.log(
-    `\nRETIRED ${test.length} account(s): ${projects} project(s) and ${storage} storage object(s) removed.\n`,
+    `\nRETIRED ${retired}/${test.length} account(s): ${projects} project(s) and ${storage} storage object(s) removed.\n`,
   );
+  if (failures.length > 0) {
+    console.error(`⚠️  ${failures.length} account(s) FAILED to retire:`);
+    for (const f of failures) console.error(`  - ${f}`);
+    process.exitCode = 1;
+  }
 }
 
 main()
