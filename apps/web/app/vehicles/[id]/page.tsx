@@ -2,6 +2,7 @@
 // 4-view outline, dimensions, and the body-panel breakdown. The editor that
 // consumes these panels is Step 5 (GH-008) — the CTA is a placeholder here.
 
+import type { Metadata } from 'next';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { vehicles, storage, PLAN_LIMITS } from '@alphawolf/db';
@@ -13,6 +14,25 @@ import { bodyTypeLabel, formatDimensions, vehicleTitle } from '../../../lib/vehi
 import { numberedPanels } from '../../../lib/vehicles/panel-numbers';
 
 export const dynamic = 'force-dynamic';
+
+// Per-page canonical + title for the indexable detail pages (Goal 10 D6 — these
+// are the bulk of the sitemap'd surface). Inherits the root metadataBase/OG.
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}): Promise<Metadata> {
+  const { id } = await params;
+  const vehicle = await vehicles.getPublishedDetail(id);
+  if (!vehicle) return {};
+  const title = `${vehicleTitle(vehicle)} wrap template`;
+  return {
+    title,
+    description: `Design a custom wrap on the ${vehicleTitle(vehicle)} — an accurate, wrap-safe Alpha Wolf template.`,
+    alternates: { canonical: `/vehicles/${id}` },
+    openGraph: { title, url: `/vehicles/${id}` },
+  };
+}
 
 export default async function VehicleDetailPage({
   params,

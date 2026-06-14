@@ -219,7 +219,7 @@ describe('share token is view+vote ONLY — never project-claim/transfer authori
     expect((payload as Record<string, unknown>).ownerUserId).toBeUndefined();
 
     // Exercise the token's ONLY write path; it must not touch ownership/transfer.
-    await share.recordConceptVote({ token: aToken, conceptKey: 'c1', voterToken: 'gh012-visitor' });
+    await share.recordConceptVote({ token: aToken, conceptKey: 'c1', voterToken: 'visitor-3' });
 
     const after = await withSystem((db) =>
       db.project.findUnique({

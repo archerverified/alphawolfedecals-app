@@ -59,6 +59,6 @@ export default function robots(): MetadataRoute.Robots {
       ...AI_CRAWLERS.map((userAgent) => ({ userAgent, disallow: '/' })),
     ],
     sitemap: `${base}/sitemap.xml`,
-    host: base,
+    host: new URL(base).host, // bare hostname (the Host: directive takes no scheme)
   };
 }
