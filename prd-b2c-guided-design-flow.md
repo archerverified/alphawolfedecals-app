@@ -220,5 +220,5 @@ Pricing verified June 2026 (pricepertoken.com normalization, 1024×1024).
   | Concept drafts (3 directions) | Flux Depth Dev | **nano_banana_edit** |
   | Iterations | FLUX.1 Kontext Dev | kontext_dev (as planned) |
   | Final render | FLUX.2 Pro | flux2_pro_edit |
-- **Unchanged invariants:** one provider adapter (fal.ai), models swappable by config; the logo is NEVER AI-rendered (rule 1); structure-conditioned on the template view render (rule 2). Economics held — the real prod proof run cost **$0.70** for a full journey (within the §10 $0.50–0.65 estimate band).
+- **Unchanged invariants:** one provider adapter (fal.ai), models swappable by config; the logo is NEVER AI-rendered (rule 1); structure-conditioned on the template view render (rule 2). Economics held — the real prod proof run cost **$0.70** for a full journey (just above the §10 $0.50–0.65 estimate band, within noise).
 - **Open follow-up:** the full 20-brief bake-off when fal caps raise; richer Transit conditioning render before nano runs on outline-only vehicles (Goal 7 launch list).
