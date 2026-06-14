@@ -168,10 +168,12 @@ describe('voting — idempotent per visitor + concept validation', () => {
 
 describe('concept_votes — sealed ballot box (app_user has zero access)', () => {
   test('the project owner cannot read votes via the app_user connection', async () => {
-    const rows = await withUser(aId, (db) =>
-      db.conceptVote.findMany({ where: { projectId: aProjectId } }),
-    );
-    expect(rows).toHaveLength(0);
+    // app_user's grants on concept_votes are REVOKED (auth_rls.sql), not merely
+    // RLS-filtered — so the read is denied at the GRANT level (a permission error),
+    // a strictly stronger seal than an empty result set.
+    await expect(
+      withUser(aId, (db) => db.conceptVote.findMany({ where: { projectId: aProjectId } })),
+    ).rejects.toThrow(/permission denied/i);
   });
 
   test('app_user cannot INSERT a vote (no ballot stuffing through the app role)', async () => {
@@ -192,5 +194,40 @@ describe('concept_votes — sealed ballot box (app_user has zero access)', () =>
   test('the real tally (read by the system loader) is unaffected by the app_user attempts', async () => {
     const data = (await share.loadPublicShare(aToken))!;
     expect(data.totalVotes).toBe(2);
+  });
+});
+
+describe('share token is view+vote ONLY — never project-claim/transfer authority (GH-012)', () => {
+  test('holding the token yields no ownership and its only write path cannot transfer the project', async () => {
+    // projects.transfer_token was spec'd for project transfer but is reused purely
+    // as the public share token (share.ts capability-creep note). Lock the boundary:
+    // the public surface exposes NO owner identity (the precondition for a claim),
+    // and the token's single mutation (a vote) never changes who owns the project.
+    const before = await withSystem((db) =>
+      db.project.findUnique({
+        where: { id: aProjectId },
+        select: { ownerUserId: true, transferToken: true },
+      }),
+    );
+    expect(before?.ownerUserId).toBe(aId);
+    expect(before?.transferToken).toBe(aToken);
+
+    // The public payload never carries the owner id — a token holder can't even
+    // learn who to claim from, let alone become the owner.
+    const payload = (await share.loadPublicShare(aToken))!;
+    expect(JSON.stringify(payload)).not.toContain(aId);
+    expect((payload as Record<string, unknown>).ownerUserId).toBeUndefined();
+
+    // Exercise the token's ONLY write path; it must not touch ownership/transfer.
+    await share.recordConceptVote({ token: aToken, conceptKey: 'c1', voterToken: 'visitor-3' });
+
+    const after = await withSystem((db) =>
+      db.project.findUnique({
+        where: { id: aProjectId },
+        select: { ownerUserId: true, transferToken: true },
+      }),
+    );
+    expect(after?.ownerUserId).toBe(aId); // owner unchanged by token use
+    expect(after?.transferToken).toBe(aToken); // token not consumed/rotated into a transfer
   });
 });

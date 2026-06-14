@@ -215,9 +215,23 @@ create policy auth_events_self_select on auth_events
   for select
   using (user_id = nullif(current_setting('app.current_user_id', true), '')::uuid);
 
--- rate_limits has no user-scoping; it's a global, server-managed table. RLS off.
--- Still locked down via grants: only app_user can read/write.
-alter table rate_limits disable row level security;
+-- rate_limits is a global, server-managed table touched ONLY via withSystem (the
+-- superuser, which BYPASSRLS) — see rate-limit.ts. app_user never reads or writes
+-- it. RLS is ENABLED with no policy (deny-all to app_user/anon/authenticated): this
+-- closes the PostgREST / anon-key read-write vector the Supabase advisory flagged
+-- (docs/ops/rate-limits-rls-verdict.md) WITHOUT affecting the app, since the
+-- superuser bypasses RLS. The blanket app_user grants are stripped belt-and-braces
+-- (same doctrine as concept_votes / credit_ledger). Goal 10 D1.
+alter table rate_limits enable row level security;
+revoke select, insert, update, delete on rate_limits from app_user;
+
+-- _prisma_migrations is Prisma's migration ledger, written ONLY by `prisma migrate
+-- deploy` over the DIRECT (superuser) connection. app_user never touches it. RLS is
+-- enabled (deny-all, no policy) to close the same PostgREST/anon vector; the
+-- superuser bypasses RLS so migrate deploy is unaffected. Quoted — Prisma named the
+-- table with a leading underscore. Goal 10 D1.
+alter table "_prisma_migrations" enable row level security;
+revoke select, insert, update, delete on "_prisma_migrations" from app_user;
 
 -- ----------------------------------------------------------------------------
 -- account_type is permanent. Enforce with a trigger that rejects any UPDATE
@@ -226,6 +240,10 @@ alter table rate_limits disable row level security;
 
 create or replace function users_block_account_type_change() returns trigger
   language plpgsql
+  -- Pin search_path (Goal 10 D1, clears function_search_path_mutable advisory): the
+  -- body uses only NEW/OLD + built-ins (all in pg_catalog, always implicitly in
+  -- scope), so an empty search_path can't break it and blocks search_path injection.
+  set search_path = ''
   as $$
   begin
     if new.account_type is distinct from old.account_type then

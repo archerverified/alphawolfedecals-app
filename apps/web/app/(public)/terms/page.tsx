@@ -15,9 +15,9 @@ export default function TermsPage() {
     <main className="mx-auto max-w-3xl px-6 py-16">
       <h1 className="text-3xl font-semibold tracking-tight">Terms of Service</h1>
       <p className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        <strong>Draft — not yet in force.</strong> This is a placeholder pending legal review. It
-        does not constitute the operative Terms of Service and must be replaced with reviewed copy
-        before public launch.
+        <strong>[[PLACEHOLDER — pending Archer legal copy]]</strong> Draft — not yet in force. This
+        is a placeholder pending legal review. It does not constitute the operative Terms of Service
+        and must be replaced with reviewed copy before public launch.
       </p>
 
       <section className="mt-8 space-y-6 text-sm leading-6 text-neutral-700">
@@ -44,7 +44,7 @@ export default function TermsPage() {
         <div>
           <h2 className="text-lg font-medium text-neutral-900">4. Contact</h2>
           <p className="mt-2">
-            Questions about these terms: support@alphawolf.example. [Placeholder.]
+            Questions about these terms: support@alphawolfdecals.com. [Placeholder.]
           </p>
         </div>
       </section>

@@ -6,12 +6,14 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 const h = vi.hoisted(() => ({
   sweepMock: vi.fn(),
   sweepTestDataMock: vi.fn(),
+  spendTodayMock: vi.fn(),
   captureMock: vi.fn(),
 }));
 
 vi.mock('@alphawolf/db', () => ({
-  generation: { sweepStaleRuns: h.sweepMock },
+  generation: { sweepStaleRuns: h.sweepMock, spendTodaySystem: h.spendTodayMock },
   maintenance: { sweepTestData: h.sweepTestDataMock },
+  AI_CONFIG: { dailySpendCapUsd: 5 },
 }));
 vi.mock('@/lib/notifications/posthog-server', () => ({ captureServerEvent: h.captureMock }));
 
@@ -27,14 +29,20 @@ const NO_OP_SWEEP = {
   accountsRetired: 0,
   accountProjects: 0,
   accountsFailed: 0,
+  orphanShops: 0,
   adminTripwire: 0,
 };
+
+// Goal 10 D3: the cron also emits the daily global spend-cap status. Default the
+// spend read to $1 of the $5 cap → 20%, no alert.
+const SPEND_STATUS = { spentTodayUsd: 1, capUsd: 5, pctOfCap: 20, alert: false };
 
 beforeEach(() => {
   vi.clearAllMocks();
   delete process.env.CRON_SECRET;
   h.sweepMock.mockResolvedValue(2);
   h.sweepTestDataMock.mockResolvedValue(NO_OP_SWEEP);
+  h.spendTodayMock.mockResolvedValue(1);
 });
 
 afterEach(() => {
@@ -69,7 +77,12 @@ describe('GET /api/cron/sweep-generation', () => {
   it('accepts the Vercel cron header and sweeps with the 15-minute TTL', async () => {
     const res = await GET(request({ 'x-vercel-cron': '1' }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, swept: 2, maintenance: NO_OP_SWEEP });
+    expect(await res.json()).toEqual({
+      ok: true,
+      swept: 2,
+      maintenance: NO_OP_SWEEP,
+      spendStatus: SPEND_STATUS,
+    });
     expect(h.sweepMock).toHaveBeenCalledWith(15);
     expect(h.sweepTestDataMock).toHaveBeenCalledTimes(1);
     // F6: the event carries WHICH auth path fired, so the header-only path
@@ -83,13 +96,23 @@ describe('GET /api/cron/sweep-generation', () => {
       auth: 'header',
       ...NO_OP_SWEEP,
     });
+    // Goal 10 D3: the daily global spend-cap status is emitted as its own event.
+    expect(h.captureMock).toHaveBeenCalledWith('ai_daily_spend_status', 'system', {
+      auth: 'header',
+      ...SPEND_STATUS,
+    });
   });
 
   it('accepts the CRON_SECRET bearer for manual/ops invocations', async () => {
     process.env.CRON_SECRET = 's3cret';
     const res = await GET(request({ authorization: 'Bearer s3cret' }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, swept: 2, maintenance: NO_OP_SWEEP });
+    expect(await res.json()).toEqual({
+      ok: true,
+      swept: 2,
+      maintenance: NO_OP_SWEEP,
+      spendStatus: SPEND_STATUS,
+    });
     expect(h.captureMock).toHaveBeenCalledWith('generation_swept', 'system', {
       count: 2,
       auth: 'bearer',
@@ -102,7 +125,12 @@ describe('GET /api/cron/sweep-generation', () => {
     h.sweepTestDataMock.mockRejectedValue(new Error('decrypt blew up'));
     const res = await GET(request({ 'x-vercel-cron': '1' }));
     expect(res.status).toBe(200);
-    expect(await res.json()).toEqual({ ok: true, swept: 2, maintenance: null });
+    expect(await res.json()).toEqual({
+      ok: true,
+      swept: 2,
+      maintenance: null,
+      spendStatus: SPEND_STATUS,
+    });
     expect(h.captureMock).toHaveBeenCalledWith('generation_swept', 'system', {
       count: 2,
       auth: 'header',

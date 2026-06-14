@@ -3,7 +3,11 @@
 
 import { describe, expect, test } from 'vitest';
 
-import { normalizeEmailForAbuse, sanitizeReferralCode } from '../src/repos/referrals';
+import {
+  normalizeEmailForAbuse,
+  sanitizeReferralCode,
+  isDisposableEmailDomain,
+} from '../src/repos/referrals';
 
 describe('sanitizeReferralCode', () => {
   test('accepts a valid code and uppercases it', () => {
@@ -54,5 +58,23 @@ describe('normalizeEmailForAbuse — defeats second-email self-referral', () => 
     ];
     const normalized = new Set(forms.map(normalizeEmailForAbuse));
     expect(normalized.size).toBe(1);
+  });
+});
+
+describe('isDisposableEmailDomain (Goal 10 D3 — referral-farm block)', () => {
+  test('flags known throwaway providers (case-insensitive, plus-tag-proof)', () => {
+    expect(isDisposableEmailDomain('farm@mailinator.com')).toBe(true);
+    expect(isDisposableEmailDomain('x@YOPMAIL.com')).toBe(true);
+    expect(isDisposableEmailDomain('a+ref1@guerrillamail.com')).toBe(true);
+    expect(isDisposableEmailDomain('t@10minutemail.net')).toBe(true);
+  });
+
+  test('does NOT flag real / privacy providers or the operator domain', () => {
+    expect(isDisposableEmailDomain('real@gmail.com')).toBe(false);
+    expect(isDisposableEmailDomain('user@icloud.com')).toBe(false);
+    expect(isDisposableEmailDomain('ops@alphawolfdecals.com')).toBe(false);
+    expect(isDisposableEmailDomain('not-an-email')).toBe(false);
+    // suffix-spoof: a real domain that merely contains a disposable name
+    expect(isDisposableEmailDomain('x@mailinator.com.evil.com')).toBe(false);
   });
 });

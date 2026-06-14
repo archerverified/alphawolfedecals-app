@@ -1,0 +1,18 @@
+# gitleaks config — extends the default ruleset, allowlisting documented false
+# positives. Secret scanning runs in CI (.github/workflows/gitleaks.yml); this file
+# is the project's allowlist of values that the default `generic-api-key` rule
+# mis-flags as secrets but are not.
+title = "Alpha Wolf Wrap Studio"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic integration-test token fixtures are not secrets — gitleaks' generic-api-key rule flags quoted literals near the word 'token'. These are RFC-test data in packages/db/tests; no real credential is ever committed (Goal 10)."
+regexes = [
+  # Share-vote test fixture introduced in the Goal-10 GH-012 regression test
+  # (later renamed to the visitor-N convention); the literal still lives in history.
+  '''gh012-visitor''',
+  # The visitor-N voter-token fixtures used across the share-rls integration tests.
+  '''voterToken: 'visitor-[0-9a-z]+'''',
+]

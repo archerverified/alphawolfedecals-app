@@ -89,3 +89,24 @@ test('withUser scopes user.findMany to the current user — A never sees B', asy
   expect(rows[0]?.id).toBe(userAId);
   expect(rows.some((r) => r.id === userBId)).toBe(false);
 });
+
+test('RLS is ENABLED on the system-only tables (Goal 10 D1 regression guard)', async () => {
+  // rate_limits / _prisma_migrations / concept_votes are touched ONLY by the
+  // superuser (withSystem / prisma migrate). RLS-with-no-policy denies app_user +
+  // anon while the superuser bypasses it. A regression that silently flips RLS off
+  // re-opens the PostgREST/anon read-write vector (docs/ops/rate-limits-rls-verdict.md),
+  // so assert the enabled state can't drift back.
+  const rows = await withSystem(
+    (db) =>
+      db.$queryRaw<Array<{ relname: string; relrowsecurity: boolean }>>`
+        select c.relname, c.relrowsecurity
+        from pg_class c
+        join pg_namespace n on n.oid = c.relnamespace
+        where n.nspname = 'public'
+          and c.relname in ('rate_limits', '_prisma_migrations', 'concept_votes')`,
+  );
+  const enabled = new Map(rows.map((r) => [r.relname, r.relrowsecurity]));
+  expect(enabled.get('rate_limits')).toBe(true);
+  expect(enabled.get('_prisma_migrations')).toBe(true);
+  expect(enabled.get('concept_votes')).toBe(true);
+});
