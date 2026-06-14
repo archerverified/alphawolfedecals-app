@@ -110,7 +110,7 @@ export function ZonesStep({ data, patch, panels }: StepProps & { panels: BriefPa
           </ul>
         </>
       )}
-      <p className="mt-3 text-xs text-zinc-400" data-testid="zone-summary">
+      <p className="mt-3 text-xs text-zinc-500" data-testid="zone-summary">
         {included === null
           ? 'Full wrap — every panel included.'
           : `${included.length} of ${panels.length} panels included.`}

@@ -32,6 +32,7 @@ export function ReferralPanel({ url, qrSvg, referredCount, creditsEarned }: Prop
       <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
         <div
           className="mx-auto h-32 w-32 shrink-0 [&>svg]:h-full [&>svg]:w-full"
+          role="img"
           aria-label="Referral QR code"
           dangerouslySetInnerHTML={{ __html: qrSvg }}
         />
