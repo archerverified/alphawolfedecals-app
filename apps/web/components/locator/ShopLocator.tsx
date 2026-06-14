@@ -36,6 +36,8 @@ export function ShopLocator({ platformShops, directory }: Props) {
     capture('shop_handoff_clicked', { source, ...meta });
   }
 
+  const hasListings = platformShops.length > 0 || directory.length > 0;
+
   return (
     <div className="flex flex-col gap-6">
       <label className="flex flex-col gap-1">
@@ -45,9 +47,17 @@ export function ShopLocator({ platformShops, directory }: Props) {
           onChange={(e) => setQuery(e.currentTarget.value)}
           placeholder="e.g. Austin, TX or 78701"
           data-testid="locator-query"
-          className="rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+          className="rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
         />
       </label>
+
+      {!hasListings ? (
+        <p className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-4 py-4 text-sm text-zinc-500">
+          We’re still building our partner network in your area. Enter your location below to find a
+          trusted wrap shop near you on the map — bring your downloaded spec pack and they’ll take
+          it from there.
+        </p>
+      ) : null}
 
       {platformShops.length > 0 ? (
         <section>
@@ -61,7 +71,7 @@ export function ShopLocator({ platformShops, directory }: Props) {
                   data-testid={`platform-shop-${s.id}`}
                   className={
                     'rounded-lg border bg-white px-4 py-3 ' +
-                    (isChosen ? 'border-sky-500 ring-1 ring-sky-500' : 'border-zinc-200')
+                    (isChosen ? 'border-emerald-500 ring-1 ring-emerald-500' : 'border-zinc-200')
                   }
                 >
                   <div className="flex items-center justify-between gap-3">
@@ -79,8 +89,8 @@ export function ShopLocator({ platformShops, directory }: Props) {
                       className={
                         'inline-flex shrink-0 items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ' +
                         (isChosen
-                          ? 'bg-sky-100 text-sky-800'
-                          : 'bg-sky-600 text-white hover:bg-sky-700')
+                          ? 'bg-emerald-100 text-emerald-800'
+                          : 'bg-zinc-900 text-white hover:bg-zinc-800')
                       }
                     >
                       {isChosen ? (
