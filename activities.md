@@ -6,15 +6,114 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-13 — Goal 9 — Growth loops + polish + 3 hygiene riders — CLOSEOUT
+
+**Status:** ✅ ALL 7 deliverables shipped via reviewed, CI-green, squash-merged PRs
+(#158–#164, 6 PRs). Autonomous single Claude Code run (Opus). Diagram:
+[`docs/vault/diagrams/goal-9-growth-loops.md`](docs/vault/diagrams/goal-9-growth-loops.md).
+**Spend: $0** — non-AI goal; the share-page prod proof used a SQL-seeded synthetic
+project (no generation), cleaned up after.
+
+**PRs (in merge order):**
+
+- **#158 D1 — Share-for-feedback page.** Public `/share/<token>` (reuses
+  projects.transfer_token), 3 concepts + 👍 voting. New `concept_votes` = sealed
+  ballot box (RLS enabled+forced, 0 policies, app_user grants revoked; system-only).
+  Token-gated withSystem reads return ONLY whitelisted non-PII columns
+  (vehicle label + concept key/title/summary + WATERMARKED previewPath + tally).
+  Idempotent voting (httpOnly aw_voter cookie), per-IP rate limit, concept_key
+  validation. PostHog share_page_viewed / concept_voted. §3 second security review.
+- **#159 D2 — Referral give-2/get-2.** /signup?ref=<code> → verified signup grants
+  +2 to each side ONCE via the sanctioned append-only ledger (system-written,
+  partial-unique idempotent), grant-only (NO Stripe). New referral_attributions
+  (once-per-referee anchor) + users.referral_code/referred_by_code (set-once
+  trigger) + credit_ledger.referee_user_id (typed referrer idempotency key).
+  Anti-abuse: no self-referral by id OR normalized email (kills second-email
+  farming), verified+active gate, per-referrer cap w/ advisory lock. /refer page
+  (link+QR+stats). Architecture review (design-first) + §3 security review.
+- **#160 Rider 5 — admin-elevation guard + test-account retirement.** Root cause of
+  the 8 prod is_admin customers FOUND + FIXED: the dev /api/dev/make-admin endpoint
+  had NO target restriction × local/E2E hits the live shared DB × the NODE_ENV gate
+  checks the runtime not the DB. Now: make-admin → @e2e.alphawolf.test only;
+  setUserAdminByEmail refuses non-test elevation without operatorOverride (CLI);
+  createUser rejects reserved test domains in prod. New db:retire-test-accounts
+  routine (dry-run default, decrypted-domain allowlist = safety; RLS-safe). Policy:
+  docs/ops/test-account-retirement.md. **Verified: 0 admin-flagged accounts remain.**
+  §3 second security review.
+- **#161 D3 — Shop locator handoff.** "No shop? Find one near you" from the export
+  flow → opted-in platform shops first, then static directory, then a Maps fallback.
+  PII-safe: opt-in shops.public_listing + coarse shops.public_city; listPublicShops
+  returns ONLY name+city (no address/website/phone/owner/receive_code). PostHog
+  locator_opened / shop_handoff_clicked.
+- **#163 Riders 6+7 — hygiene.** is_test PostHog person property @ activation
+  (filter person.is_test=true; doc: docs/ops/posthog-test-traffic.md). PRD §10.1
+  truth-up: shipped default = nano-banana edit (overturns flux-depth paper pick).
+- **#164 D4 — polish pass.** design-review (diff-aware) on the growth surfaces:
+  HIGH — share concept images cropped the voted-on vehicle → object-contain;
+  aligned a stray sky accent back to the app's zinc-primary + emerald-positive;
+  locator empty-state helper. Design B→A−, AI-Slop A−→A. Report:
+  docs/deployment/audits/2026-06-13-goal-9-design-review.md.
+
+**PROD PROOF (committed evidence in docs/deployment/screenshots/2026-06-13-goal-9/):**
+
+- **Share page LIVE on prod** — SQL-seeded a synthetic project (3 concept directions
+  - a vote, owner = existing user, the seeded Transit), browsed the live
+    `/share/GOAL9PROOF99`: HTTP 200, all 3 concepts + "2024 Ford Transit 250" + the
+    crew-favorite tally render; **PII grep = empty** (no owner/email/name). Live vote
+    POST recorded (tally→2), invalid concept→400, bad token→404. Seed deleted (0 rows
+    left — standing e2e-cleanup rule). Evidence: share-page-prod.html + vote-response.json.
+- **Exact public-path columns** (the PII-safety note): `vehicle.{year,make,model}`,
+  `concept.{conceptKey,title,summary}`, watermarked `previewPath`→signed URL, `votes`.
+  Never project.name, owner identity, email, brief, contact, or unwatermarked originals.
+- **Referral give-2/get-2** — schema live + verified (2 partial uniques, attributions
+  table + RLS, set-once trigger, advisors clean). The end-to-end (idempotent grant,
+  self-referral-by-second-email block, cap boundary, attribution lockout) is proven by
+  `referrals-rls.integration.test.ts`. **A live 2-account run is BLOCKED on env** —
+  prod has no email-OTP path and there's no PII_ENCRYPTION_KEY in-session to simulate
+  the decrypt-based self-referral check via SQL. Archer runs `pnpm --filter
+@alphawolf/db test:integration` (or a real 2-account signup) to close it.
+- **Supabase advisors: 2-WARN baseline UNCHANGED** (function_search_path_mutable on
+  users_block_account_type_change; extension_in_public pg_trgm) + 1 intentional INFO
+  (rls_enabled_no_policy on concept_votes — the sealed ballot box). No new WARN. The
+  new rider-5 set-once trigger is search_path-pinned. Pre-existing RLS-disabled note on
+  rate_limits/\_prisma_migrations left untouched → flagged for the Goal 10 audit.
+
+**DECISIONS (no-questions policy, logged):**
+
+1. Reused projects.transfer_token as the share token (per prompt — no parallel scheme).
+   Flagged: it is now PUBLIC-BY-DISTRIBUTION → GH-012 transfer must not treat token
+   possession as authority (Goal 10).
+2. Referral: granted BOTH sides at verified signup (prompt: "attribution at signup
+   only") with a per-referrer cap as the ceiling. DEFERRED to Goal 10 (logged in
+   referrals.ts): first-real-use gating of the referrer grant, live ring/Sybil
+   detection, disposable-domain block; confirm the global daily AI spend cap is low
+   enough that farmed credits can't drain a day.
+3. Locator: shops are encrypted (no geo) → added an opt-in public_listing + coarse
+   public_city (PII-safe) instead of exposing platform-shop PII; with 0 opted-in shops
+   the directory + Maps fallback carry the page. A shop opt-in UI is future work.
+4. Rider 5: built + reviewed + documented the retirement routine; the bulk retirement
+   of the ~69 synthetic customers EXECUTION needs the prod env (PII_ENCRYPTION_KEY to
+   decrypt+classify) — run db:retire-test-accounts from that env. 0 admins already
+   confirmed remaining.
+5. D4 design-review: the authenticated wizard→generation→export flow needs an OTP-authed
+   prod session (unavailable) → audited at code level; full live audit flagged for Goal 10.
+
+**FLAGGED FOR GOAL 10:** transfer_token capability creep (GH-012); referral farming
+hardening + daily-spend-cap check; live design-review of the authed B2C flow;
+pre-existing RLS-disabled on rate_limits/\_prisma_migrations; the smoke golden-path is
+stale (memory: smoke-golden-path-stale) — it skipped on these deploys.
+
 ## 2026-06-13 — Cowork session — Goal 8 DEFERRED · roadmap resequenced · admin cleanup · Goal 9 prompt drafted
 
 **Context:** First post-Fable session (Fable 5 retired; executor now Claude/Opus in Cowork + Claude Code). Reviewed the Goal 6 numbering mini-task (PR #142) and Goal 7 closeout from the prior transcript; no code changes to those — verification only.
 
 **DECISIONS (Archer, this session):**
+
 1. **Goal 8 (print paneling engine) DEFERRED to post-launch.** Printer/media config only powers the shop-side paneling engine (`prd.md` §4.6/§10.9/§10.10). The live product is B2C — deliverable is the portable export pack (`prd-b2c-guided-design-flow.md` §5), paneled by the receiving shop in its own RIP; shop-side production is a stated v2 non-goal (§2.3) and `prd.md` §3 already excludes building paneling/RIP. So printer info buys the B2C app nothing — it's a build-time pre-req only if AW prints in-house or onboards partner shops. **Active chain resequenced to 9 → 10 → launch**, with 8 and S after. Goal numbers kept as stable identities (NOT renumbered). Roadmap updated: `docs/product/roadmap-goals-6-10.md`.
 2. **3 hygiene riders rescued** from the deferred Goal 8 prompt into Goal 9: test-account retirement, PostHog test-traffic filtering, PRD §10 bake-off truth-up.
 
 **ACTIONS COMPLETED:**
+
 - **Admin cleanup (prod DB write, system maintenance):** the 8 `is_admin=true` accounts flagged in the Goal 7 report were confirmed as e2e/proof-run artifacts (all created 2026-06-12 00:36–01:27, machine cadence, `account_type=customer`, normal OTP signup flow, own ~0 projects — not a breach). Revoked `is_admin` on all 8 (explicit IDs, scoped `UPDATE`). **Verified: 0 admin accounts remain.** Open follow-up (now Goal 9 rider 5): root-cause WHY customer signups got `is_admin=true` in prod, and add a guard. NOTE: separately surfaced a Supabase advisory — RLS disabled on `public.rate_limits` and `public._prisma_migrations` — flagged for the Goal 10 audit, NOT changed.
 - **Goal 9 prompt drafted** via /prompt-engineer: `prompts/10-goal-9-growth-loops.md` (share-for-feedback + voting, referral give-2/get-2, shop locator, polish pass + 3 riders). Audit-first note baked in: before/after slider already shipped in Goal 7 — excluded from scope.
 
@@ -45,6 +144,7 @@ real orchestrator) AND one real prod run — evidence in
 bake-off images + PostHog taxonomy).
 
 **DECISIONS (per the no-questions policy).**
+
 1. Pipeline runs on Vercel + fal's hosted queue — NO BullMQ, NO Render
    (keys exist only in Vercel env; FAL_KEY is write-only sensitive, so ALL
    real-call surfaces are server-side; Render alphawolf-ai stays health-only
@@ -59,7 +159,7 @@ bake-off images + PostHog taxonomy).
    THEIR vehicle (geometry 3/3 on every detailed render); flux-depth produced
    one catastrophic non-vehicle + one identity drift.
 5. Hobby-plan constraints learned via failed deploys: maxDuration ≤60
-   (#145) and DAILY-only crons (#155 — the */15 sweeper cron silently killed
+   (#145) and DAILY-only crons (#155 — the \*/15 sweeper cron silently killed
    every deploy after #150 until found via manual `vercel deploy`).
 6. AI_PROVIDER=fal on Production only; CI/dev/preview run the mock
    (fail-closed: fal-with-blank-key throws; mock-in-prod emits a tripwire).
@@ -73,6 +173,7 @@ bake-off images + PostHog taxonomy).
    (verdicts recorded in each PR body).
 
 **Flagged for Archer.**
+
 - Intermittent bodyless-404s on prod admin APIs right after deploys
   (deployment pinning suspected) — burned bake-off briefs 1–2; worth watching
   after future deploys.
