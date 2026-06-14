@@ -39,6 +39,20 @@ export const RETIRE_SUFFIXES = [
 // RFC-2606 reserved TLD — no real domain.
 export const PURGE_PROJECT_SUFFIXES = [...RETIRE_SUFFIXES, '@alphawolf.test'] as const;
 
+// The bare smoke-seed domain. Its ACCOUNTS are deliberately kept OUT of
+// RETIRE_SUFFIXES so the daily cron can never auto-delete a live prod-smoke login
+// (the CI secrets point at one). Stale STRAGGLERS on this domain (older seed runs
+// that are no longer the active login) are retired ONLY by an explicit,
+// keep-list-guarded MANUAL run of the retirement CLI (`--include-bare-smoke`),
+// never automatically. `.test` is an RFC-2606 reserved TLD — no real domain.
+export const BARE_SMOKE_SUFFIX = '@alphawolf.test';
+
+// Real-domain denylist: a belt-and-suspenders tripwire for the apply path. These
+// are REAL domains that must NEVER appear in any retirement cohort (the operator
+// login + Archer's contact). The suffix allowlists already exclude them; the apply
+// guard asserts it a second time, right before deletion.
+export const NEVER_RETIRE_SUFFIXES = ['@alphawolfdecals.com', '@1stimpression.co'] as const;
+
 export function matchesSuffix(email: string, suffixes: readonly string[]): boolean {
   const e = email.trim().toLowerCase();
   return suffixes.some((s) => e.endsWith(s));
@@ -52,6 +66,17 @@ export function isRetireCohortEmail(email: string): boolean {
 // Project-purge predicate: do this email's leaked projects get hard-purged?
 export function isPurgeCohortEmail(email: string): boolean {
   return matchesSuffix(email, PURGE_PROJECT_SUFFIXES);
+}
+
+// Stale bare-smoke stragglers: accounts on the @alphawolf.test seed domain that
+// are NOT the active keeper(s). Pure — the caller supplies the keep-list (the
+// live CI smoke login's user IDs, never deleted). Used ONLY by the explicit
+// `--include-bare-smoke` CLI path, never the daily cron.
+export function classifyBareSmokeStragglers(
+  users: TestUser[],
+  keepUserIds: ReadonlySet<string>,
+): TestUser[] {
+  return users.filter((u) => matchesSuffix(u.email, [BARE_SMOKE_SUFFIX]) && !keepUserIds.has(u.id));
 }
 
 export function redact(email: string): string {
@@ -302,6 +327,25 @@ export async function purgeTestProjects(
   return { projects, storage };
 }
 
+// ── Orphan-shop cleanup ──────────────────────────────────────────────────────
+
+// Delete shops left with ZERO memberships. A real shop is always created with an
+// admin membership (createShopWithAdminMembership) and keeps ≥1, so a memberless
+// shop is only ever a retired-test orphan: when a test shop_user is retired, its
+// membership cascades (memberships.userId ON DELETE CASCADE) but the shops row does
+// not (no owner FK on shops), leaving a dangling shop. Returns the count removed.
+export async function deleteOrphanShops(): Promise<number> {
+  return withSystem(async (db) => {
+    const orphans = await db.shop.findMany({
+      where: { memberships: { none: {} } },
+      select: { id: true },
+    });
+    if (orphans.length === 0) return 0;
+    await db.shop.deleteMany({ where: { id: { in: orphans.map((o) => o.id) } } });
+    return orphans.length;
+  });
+}
+
 // ── Cron entry point ─────────────────────────────────────────────────────────
 
 // One classification pass feeding BOTH sweeps. The cron calls this; callers that
@@ -314,6 +358,7 @@ export async function sweepTestData(
   accountsRetired: number;
   accountProjects: number;
   accountsFailed: number;
+  orphanShops: number;
   adminTripwire: number;
 }> {
   const users = await classifyAllUsers();
@@ -330,6 +375,8 @@ export async function sweepTestData(
     test,
     adminNonTest: adminNonTest.length,
   });
+  // Sweep any shop left memberless by retiring its test shop_user(s).
+  const orphanShops = await deleteOrphanShops();
 
   return {
     projectsPurged: purge.projects,
@@ -337,6 +384,7 @@ export async function sweepTestData(
     accountsRetired: retire.retired,
     accountProjects: retire.projects,
     accountsFailed: retire.failed,
+    orphanShops,
     adminTripwire: retire.adminNonTest,
   };
 }

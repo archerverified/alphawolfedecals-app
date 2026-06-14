@@ -58,6 +58,8 @@ export async function GET(request: Request): Promise<NextResponse> {
   //     self-clean. ownerShopId NULL spares the seeded routed-order fixture.
   //   * retires straggler synthetic ACCOUNTS (RETIRE_SUFFIXES only — never
   //     @alphawolf.test) that local runs leave behind.
+  //   * deletes shops left memberless by retiring a test shop_user (the shops row
+  //     has no owner FK, so it doesn't cascade — deleteOrphanShops sweeps it).
   // withSystem maintenance, cohort-scoped: a real account/its data never matches.
   // Isolated from the generation sweep above: a maintenance failure must NOT take
   // down the (already-completed) refund sweep or fail the cron's health.
