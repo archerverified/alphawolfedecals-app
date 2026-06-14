@@ -11,6 +11,7 @@ import {
   verifyCsrf,
   verifySignupOtp,
 } from '@alphawolf/auth/server';
+import { users } from '@alphawolf/db';
 import * as Sentry from '@sentry/nextjs';
 import { captureServerEvent } from '@/lib/notifications/posthog-server';
 
@@ -226,13 +227,21 @@ export async function verifyOtpAction(_prev: ActionState, form: FormData): Promi
 
   const result = await verifySignupOtp({ email, code, meta });
   if (result.ok) {
+    // Rider 6 (Goal 9): tag the person at activation so ALL of a synthetic test
+    // account's events (signup, generation, export, …) are filterable out of the
+    // launch dashboards. $set writes a person property; PostHog's test-account
+    // filter excludes person.is_test = true. Real signups get is_test=false.
+    const isTest = users.isSyntheticTestEmail(email);
     // B2C-001 funnel event. Server-side capture (the user has no client PostHog
-    // session yet at verify time); best-effort, never blocks the redirect.
+    // session yet at verify time); best-effort, never blocks the redirect. The
+    // signup grant always credits a fresh account, so this fires once per new
+    // account at activation — the natural place to tag the person.
     if (result.creditsGranted > 0) {
       await captureServerEvent('credits_granted', result.userId, {
         amount: result.creditsGranted,
         source: 'grant',
         reason: 'signup',
+        $set: { is_test: isTest },
       });
     }
     // Referral funnel (Goal 9). Fire give-2/get-2 for BOTH sides — the referrer

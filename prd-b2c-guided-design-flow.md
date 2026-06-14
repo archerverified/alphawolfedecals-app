@@ -3,6 +3,7 @@
 ## 1. Product overview
 
 ### 1.1 Document title and version
+
 - PRD: B2C Guided Design Flow — feature-scoped, extends PRD: Alpha Wolf Wrap Studio v1.1
 - Version: 1.2 (adds §10 AI model strategy — Archer decision 2026-06-11; v1.0 open questions resolved 2026-06-10 — see §9)
 - Last updated: 2026-06-11
@@ -17,30 +18,33 @@ This is the conversion engine for the B2C side. The existing MVP proves the canv
 
 ### 1.3 Competitive context (researched 2026-06-10)
 
-| Competitor | What they do well | What they lack |
-|---|---|---|
-| AutoStyle.AI | Photo-upload visualizer; REAL film-brand color libraries (3M, Avery Dennison, KPMF, TeckWrap); tint % preview; chrome delete; save & share; B2B kiosk rental | No structured brief, no production data in output, no shop handoff doc |
-| WrapStudio.AI | Select public vehicle model; 5 free generations then gate (credit conversion works on them) | Generic renders, no zone control, no spec output |
-| Avery Dennison visualizer | Authoritative film colors/finishes | Single-brand, no AI, no logos |
-| Leonardo.ai (pattern reference) | Gold-standard credit UX: daily free grant, visible credit meter, per-action costs shown before commit, hybrid subscription+top-up | Not automotive |
+| Competitor                      | What they do well                                                                                                                                            | What they lack                                                         |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
+| AutoStyle.AI                    | Photo-upload visualizer; REAL film-brand color libraries (3M, Avery Dennison, KPMF, TeckWrap); tint % preview; chrome delete; save & share; B2B kiosk rental | No structured brief, no production data in output, no shop handoff doc |
+| WrapStudio.AI                   | Select public vehicle model; 5 free generations then gate (credit conversion works on them)                                                                  | Generic renders, no zone control, no spec output                       |
+| Avery Dennison visualizer       | Authoritative film colors/finishes                                                                                                                           | Single-brand, no AI, no logos                                          |
+| Leonardo.ai (pattern reference) | Gold-standard credit UX: daily free grant, visible credit meter, per-action costs shown before commit, hybrid subscription+top-up                            | Not automotive                                                         |
 
-**Takeaways baked into this spec:** (1) real film-brand color libraries are table stakes AND our bridge to production — a HEX code is a mockup, a 3M 2080 SKU is an order; (2) show credit cost *before* every AI action (Leonardo pattern); (3) tint visualization is a proven add-on hook; (4) none of them produce a document a shop can quote from — that's our wedge.
+**Takeaways baked into this spec:** (1) real film-brand color libraries are table stakes AND our bridge to production — a HEX code is a mockup, a 3M 2080 SKU is an order; (2) show credit cost _before_ every AI action (Leonardo pattern); (3) tint visualization is a proven add-on hook; (4) none of them produce a document a shop can quote from — that's our wedge.
 
 ## 2. Goals
 
 ### 2.1 Business goals
+
 - Maximize brief-to-export completion — the export pack IS the product in this phase (target: 50% of generated-concept projects produce an export).
 - Make the export pack a viral artifact: every PDF carries Alpha Wolf branding into wrap shops we haven't signed (target: measurable shop signups citing "customer brought us your PDF" within 90 days). Future: formal shop affiliate program built on this loop (out of scope here, noted in §4).
-- Validate the credits *mechanic* (grants, costs, exhaustion behavior) with real usage data BEFORE wiring purchases — payments are deferred and, when they arrive, digital-goods-only (credits, vehicle slots, exports). Never materials, never price ranges, never quotes on behalf of shops.
+- Validate the credits _mechanic_ (grants, costs, exhaustion behavior) with real usage data BEFORE wiring purchases — payments are deferred and, when they arrive, digital-goods-only (credits, vehicle slots, exports). Never materials, never price ranges, never quotes on behalf of shops.
 - Increase design-completion rate vs blank-canvas editor (target: 60% of started briefs reach a generated concept; baseline: current editor abandonment).
 - Validate credits as the monetization primitive before v2 tiered SaaS.
 
 ### 2.2 User goals
+
 - Casey (fleet manager): go from zero to a believable, specific, costed-out wrap concept in under 15 minutes without design skills.
 - Customer with an existing shop relationship: walk into their shop with a document the shop takes seriously.
 - Customer without a shop: get routed to one (platform order flow) or find one (export + go).
 
 ### 2.3 Non-goals
+
 - Not building photo-upload visualization in this phase (template-based per PRD v1.1 §4.2; photo mode is a v2 spike — flagged in open questions).
 - Not building shop-side quoting/estimating off the export pack (v2).
 - Not building real-time AI preview-as-you-type — generation is an explicit, credit-metered action.
@@ -49,14 +53,18 @@ This is the conversion engine for the B2C side. The existing MVP proves the canv
 ## 3. The flow (maps to Archer's 5 steps)
 
 ### Step 1 — Sign up / register [SHIPPED]
+
 Existing auth (email + password, OTP verification) as-is. New: plan attribution at signup (`free` default) and credit-ledger row creation (see §5).
 
 ### Step 2 — Vehicle selection [PARTIALLY SHIPPED]
+
 Existing cascade selector + template catalog. New behavior:
+
 - Free plan: up to **2 saved vehicles** and **3 brief-to-generation runs per month** (numbers are placeholders — Archer to confirm; PRD v1.1 said 3 saved vehicles).
 - Vehicle-not-found → existing "Request this vehicle" flow (PRD v1.1 §4.2) — unchanged.
 
 ### Step 3 — The design brief wizard [NEW — the core build]
+
 A stepped intake form. Every input optional except vehicle (already chosen). Progress persists per-project; resumable. Steps:
 
 1. **Zones** — clickable vehicle diagram (renders the template's panel SVG: hood, roof, doors, quarter panels, trunk, windshield band, windows). Tap to include/exclude per zone. Defaults to "full wrap." This reuses the template DB's per-panel breakdown — the data already exists.
@@ -64,7 +72,7 @@ A stepped intake form. Every input optional except vehicle (already chosen). Pro
 3. **Logo upload** — accepts PNG/SVG/AI/EPS/PDF/JPG/HEIC (existing parse pipeline). **Quality gate on upload** (the "dog crap" filter):
    - No transparency detected on raster logo → inline warning + one-click background removal (rembg pipeline already specced in PRD v1.1 §4.3).
    - Resolution below 150 DPI at the largest selected zone's print size → "this will look blurry on a hood" warning with the math shown.
-   - Recommend on the upload control itself: *"PNG with transparent background or vector (SVG/AI) works best."*
+   - Recommend on the upload control itself: _"PNG with transparent background or vector (SVG/AI) works best."_
    - Per-logo zone assignment: drag the logo chip onto diagram zones (or multi-select list): doors, hood, trunk, roof, windshield banner, rear window.
 4. **Colors** — three input modes, all optional: (a) palette picker; (b) **auto-extract from uploaded logo** (one tap → brand-consistent scheme); (c) **real film-brand library** — searchable swatches mapped to actual 3M 2080 / Avery SW900 / KPMF / TeckWrap SKUs with finish (gloss/satin/matte/chrome/carbon). Film SKUs carry through to the export pack.
 5. **Style + ideas prompt** — free text ("clean contractor look, navy + white, subtle pinstripe") plus the existing style presets (Clean / Aggressive / Luxury / Construction / Racing / Minimalist).
@@ -73,9 +81,10 @@ A stepped intake form. Every input optional except vehicle (already chosen). Pro
 8. **Tint** — per-window tint % selector with live darkness preview swatch, plus **state-legality check**: user picks their U.S. state, each selected % shows ✅ legal / ⚠️ restricted (front-side limits etc.) / ❌ illegal from a maintained state-law table. Massive trust signal; no competitor does it inline.
 9. **Extras** (all free brief inputs, never charged — Archer decision 2026-06-10) — chrome delete package, roof-only color change, pinstripe/accent package, PPF (paint protection film) zones, wheel color preview (v2 flag), commercial DOT/MC number block (fleet requirement — checkbox + number field).
 10. **Notes for the AI** — catch-all free text the orchestrator ingests.
-11. **Review your brief** — single summary screen of every choice with edit-links, the credit cost of generation displayed (*"Generate 3 concepts — uses 1 credit"*), and the Generate button. Doubles as the brief's saved snapshot (regeneratable later).
+11. **Review your brief** — single summary screen of every choice with edit-links, the credit cost of generation displayed (_"Generate 3 concepts — uses 1 credit"_), and the Generate button. Doubles as the brief's saved snapshot (regeneratable later).
 
 ### Step 4 — AI generation + iteration [NEW — per PRD v1.1 §4.4 architecture]
+
 - Hybrid pipeline as specced: Claude orchestrates the brief into structured generation prompts; Flux/Higgsfield render per-view images for the selected zones; output respects the template's 4-view structure.
 - Output: **3 concept directions** per run (not 4 near-identical variants — distinct interpretations: literal / bolder / minimal).
 - Iteration: chip-based quick tweaks ("more aggressive", "less busy", "swap accent color") + free-text request. Each iteration shows its credit cost before commit.
@@ -83,6 +92,7 @@ A stepped intake form. Every input optional except vehicle (already chosen). Pro
 - All generations persist to the project gallery with the brief-version that produced them (regenerate/compare anytime).
 
 ### Step 5 — Selection + export pack [NEW — the money artifact]
+
 Customer picks the winning concept → **Export Wrap Spec Pack** (PDF, generated server-side via the existing pdf tooling). Contents:
 
 **Page 1 — Cover:** hero mockup of chosen concept (largest view), project name, customer name, date created, Alpha Wolf watermark/brand block, project QR code + short URL (links back to the live project — the viral loop).
@@ -110,36 +120,36 @@ Delivery: download + email-to-self + "send to my shop" (email with PDF attached)
 
 Ledger ships purchase-ready (`source: grant|purchase|referral|admin`). **Checkout DEFERRED (Archer, 2026-06-11 — supersedes the 06-10 same-day decision):** no Stripe yet. Phase 2 AI ships grant-only — exhaustion shows a credit-pack **waitlist** sheet (purchase-intent metric) instead of checkout. Everything is built purchase-ready (ledger sources, pack definitions as config, the exhaustion sheet swaps waitlist→checkout in one component) so Stripe slots in later as a standalone mini-goal with zero migration.
 
-| Item | Launch value (tunable via config, not code) |
-|---|---|
-| Free signup grant | 5 credits |
-| Concept generation (3 directions) | 1 credit |
-| Iteration / tweak request | 1 credit |
-| Re-render at export resolution | included with selection |
-| Export pack | free (the export IS the funnel — never gate the artifact that markets us to shops) |
-| Monthly free drip | 2 credits/month (re-engagement hook) |
-| Credit packs (Phase 2) | 10 / 25 / 60 credits, tiered pricing TBD by Archer (anchor the middle pack) |
-| Vehicle slots | 2 free; additional slots purchasable (character-slot pattern) — same Stripe rail as credit packs, Phase 2 or later |
+| Item                              | Launch value (tunable via config, not code)                                                                        |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Free signup grant                 | 5 credits                                                                                                          |
+| Concept generation (3 directions) | 1 credit                                                                                                           |
+| Iteration / tweak request         | 1 credit                                                                                                           |
+| Re-render at export resolution    | included with selection                                                                                            |
+| Export pack                       | free (the export IS the funnel — never gate the artifact that markets us to shops)                                 |
+| Monthly free drip                 | 2 credits/month (re-engagement hook)                                                                               |
+| Credit packs (Phase 2)            | 10 / 25 / 60 credits, tiered pricing TBD by Archer (anchor the middle pack)                                        |
+| Vehicle slots                     | 2 free; additional slots purchasable (character-slot pattern) — same Stripe rail as credit packs, Phase 2 or later |
 
 **Hard UX rules (from research):** credit balance always visible in the flow header; every AI action shows its cost on the button itself; exhausting credits shows the credit-pack purchase sheet inline with the in-progress design visible behind it — never dead-end to a separate pricing page.
 
 ## 6. User stories (compact; IDs namespaced B2C- to avoid collision with PRD v1.1 GH- series)
 
-| ID | Story | Acceptance criteria (abridged) |
-|---|---|---|
-| B2C-001 | Credit ledger + plan attribution | Ledger table (append-only) with source enum; balance derivable; free grant on signup; RLS owner-only |
-| B2C-002 | Brief wizard shell + persistence | Stepped form, resumable, autosaves per step, brief snapshot versioned per generation run |
-| B2C-003 | Zone selector on template SVG | Panels from template DB render clickable; include/exclude state persists; full-wrap default |
-| B2C-004 | Logo quality gate | Transparency + DPI checks fire with specific warnings; rembg one-click path; PNG/SVG recommendation visible pre-upload |
-| B2C-005 | Color modes incl. film-SKU library | Picker + logo-extract + brand library searchable; SKU + finish persist to brief and export |
-| B2C-006 | Tint selector + state-law table | Per-window %; state picker; legality verdict per selection; table maintainable as data not code |
-| B2C-007 | Brief → generation pipeline | Brief compiles to orchestrator prompt; 3 distinct concepts; per-view renders; watermarked previews; credit decremented atomically with run creation |
-| B2C-008 | Iteration with cost-visible UX | Chips + free text; cost on button; balance header; exhaustion → inline credit-pack purchase sheet |
-| B2C-013 | Stripe credit-pack checkout (Phase 2) | Buy pack → ledger credit with `purchase` source; webhook-verified; no card data in our DB; purchase events in PostHog |
-| B2C-009 | Export pack PDF | All pages/fields per §3 step 5; HEX+RGB+SKU table; QR resolves to project; provenance metadata; renders under 30s |
-| B2C-010 | Export delivery + shop handoff | Download, email-to-self, send-to-shop email, route-to-platform-order (reuses Goal 3a submit) |
-| B2C-011 | Free-plan gates | Vehicle cap + monthly run cap enforced server-side; clear upgrade messaging, never silent failure |
-| B2C-012 | Vehicle photo reference upload | Multi-photo upload with per-photo notes; photos surface to AI orchestrator context and as thumbnails on export pack page 2; existing upload pipeline + PII face-warning check (PRD v1.1 §4.3) applies |
+| ID      | Story                                 | Acceptance criteria (abridged)                                                                                                                                                                        |
+| ------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| B2C-001 | Credit ledger + plan attribution      | Ledger table (append-only) with source enum; balance derivable; free grant on signup; RLS owner-only                                                                                                  |
+| B2C-002 | Brief wizard shell + persistence      | Stepped form, resumable, autosaves per step, brief snapshot versioned per generation run                                                                                                              |
+| B2C-003 | Zone selector on template SVG         | Panels from template DB render clickable; include/exclude state persists; full-wrap default                                                                                                           |
+| B2C-004 | Logo quality gate                     | Transparency + DPI checks fire with specific warnings; rembg one-click path; PNG/SVG recommendation visible pre-upload                                                                                |
+| B2C-005 | Color modes incl. film-SKU library    | Picker + logo-extract + brand library searchable; SKU + finish persist to brief and export                                                                                                            |
+| B2C-006 | Tint selector + state-law table       | Per-window %; state picker; legality verdict per selection; table maintainable as data not code                                                                                                       |
+| B2C-007 | Brief → generation pipeline           | Brief compiles to orchestrator prompt; 3 distinct concepts; per-view renders; watermarked previews; credit decremented atomically with run creation                                                   |
+| B2C-008 | Iteration with cost-visible UX        | Chips + free text; cost on button; balance header; exhaustion → inline credit-pack purchase sheet                                                                                                     |
+| B2C-013 | Stripe credit-pack checkout (Phase 2) | Buy pack → ledger credit with `purchase` source; webhook-verified; no card data in our DB; purchase events in PostHog                                                                                 |
+| B2C-009 | Export pack PDF                       | All pages/fields per §3 step 5; HEX+RGB+SKU table; QR resolves to project; provenance metadata; renders under 30s                                                                                     |
+| B2C-010 | Export delivery + shop handoff        | Download, email-to-self, send-to-shop email, route-to-platform-order (reuses Goal 3a submit)                                                                                                          |
+| B2C-011 | Free-plan gates                       | Vehicle cap + monthly run cap enforced server-side; clear upgrade messaging, never silent failure                                                                                                     |
+| B2C-012 | Vehicle photo reference upload        | Multi-photo upload with per-photo notes; photos surface to AI orchestrator context and as thumbnails on export pack page 2; existing upload pipeline + PII face-warning check (PRD v1.1 §4.3) applies |
 
 Every story inherits the standing constraints: `withUser` RLS for all customer queries, PostHog events per step (brief_step_completed, generation_run, credits_exhausted, export_created — funnel gold), Sentry on all new server actions.
 
@@ -176,23 +186,39 @@ Sequencing rationale: Phase 1 has zero new external dependencies and makes the i
 Pricing verified June 2026 (pricepertoken.com normalization, 1024×1024).
 
 **Architecture rules (these matter more than the model choice):**
+
 1. **The image model NEVER renders the customer's logo.** AI generates the wrap design; the app composites the actual uploaded logo file as a layer (canvas + export). Perfect brand fidelity, zero cost, stays editable.
 2. **Structure-conditioned generation:** every view is generated img2img against the template's view render (depth/edge control), so output respects real vehicle geometry and maps back onto panels.
 3. **Two-tier rendering:** cheap drafts for the 3 concept directions; full-quality render ONLY for the chosen concept. Iterations use an EDIT model (composition-preserving), re-rendering only affected views.
 
 **The stack (one provider adapter, fal.ai default — models swappable by config):**
 
-| Job | Model | Price | Role |
-|---|---|---|---|
-| Orchestrator (brief → prompts, iteration parsing, photo/mod understanding) | Claude Haiku 4.5 (vision) | ~$0.01–0.02/run | Escalate to Sonnet only if brief complexity demands it |
-| Concept drafts (3 concepts × 4 views) | Flux Depth Dev | $0.025/img → ~$0.30/run | Depth-conditioned on template view renders |
-| Iterations ("hood matte black") | FLUX.1 Kontext Dev (Pro for stubborn edits) | $0.025–0.04/img, usually 1–2 views | Edit model preserves composition — the margin engine |
-| Final render of chosen concept | FLUX.2 Pro | $0.031/img × 4 views | Export-quality pass |
-| Background removal (logo prep) | rembg, self-hosted on alphawolf-ai (Render) | $0 | Already specced in v1.1 §4.3 |
-| Optional export upscale | Recraft crisp-upscale | $0.02/img | Only if export resolution demands it |
+| Job                                                                        | Model                                       | Price                              | Role                                                   |
+| -------------------------------------------------------------------------- | ------------------------------------------- | ---------------------------------- | ------------------------------------------------------ |
+| Orchestrator (brief → prompts, iteration parsing, photo/mod understanding) | Claude Haiku 4.5 (vision)                   | ~$0.01–0.02/run                    | Escalate to Sonnet only if brief complexity demands it |
+| Concept drafts (3 concepts × 4 views)                                      | Flux Depth Dev                              | $0.025/img → ~$0.30/run            | Depth-conditioned on template view renders             |
+| Iterations ("hood matte black")                                            | FLUX.1 Kontext Dev (Pro for stubborn edits) | $0.025–0.04/img, usually 1–2 views | Edit model preserves composition — the margin engine   |
+| Final render of chosen concept                                             | FLUX.2 Pro                                  | $0.031/img × 4 views               | Export-quality pass                                    |
+| Background removal (logo prep)                                             | rembg, self-hosted on alphawolf-ai (Render) | $0                                 | Already specced in v1.1 §4.3                           |
+| Optional export upscale                                                    | Recraft crisp-upscale                       | $0.02/img                          | Only if export resolution demands it                   |
 
 **Economics:** full happy-path journey (3 drafts + ~3 edit rounds + final) ≈ **$0.50–0.65 hard cost**. Credit pricing at ~$1–2/credit-equivalent yields 60–90% gross margin. The 30/day customer rate limit (v1.1 §4.4) remains the abuse ceiling beneath credits.
 
 **Why Flux/fal over alternatives:** only family with both depth conditioning AND a purpose-built edit model (Kontext); open weights = self-host exit at volume (~70% cost cut); per-image pricing matches fixed-credit economics. Google nano-banana(-pro) ($0.02/$0.04) is the strongest alternative (superb edit consistency, weaker geometry control); GPT-Image-1.5 has the best instruction-following but token-based pricing fights credit economics. **Phase 2 week one: 20-brief bake-off** of Flux vs nano-banana vs GPT-Image through the adapter before final lock.
 
 **Higgsfield disposition:** removed from the pipeline (studio platform, reseller-only API, aggregates the same underlying models at a markup). Two retained uses: human studio tool for marketing/template hero shots; v2 candidate for shareable wrap-turntable videos.
+
+### 10.1 Bake-off outcome — SHIPPED default is nano-banana edit (Goal 7, 2026-06-12)
+
+**The §10 paper pick (Flux Depth Dev for concept drafts) was overturned by the bake-off. The shipped default is nano-banana (Gemini 2.5 Flash Image edit).** This subsection is the truth-up so the spec matches production (Goal 9 rider 7).
+
+- **What ran:** the 20-brief bake-off was amended to budget (Goal 7 decision #3): 4 briefs × 3 models × 1 view completed (a prod-auth flake cost briefs 1–2). Scorecard: `docs/product/bakeoff-2026-06.md`; spend ledger: `docs/product/goal-7-spend-ledger.md`.
+- **Winner + why (Goal 7 decision #4):** nano-banana **edits the template's own view render** rather than generating from a depth map — so the customer sees **their** vehicle (geometry 3/3 on every detailed render). Flux Depth Dev produced one catastrophic non-vehicle output and one identity drift. Edit-on-the-real-render beat depth-conditioned generation for fidelity, which is the whole product promise (§10 architecture rule 2).
+- **Shipped model map (production, per `AI_CONFIG`):**
+  | Job | §10 paper pick | SHIPPED |
+  |---|---|---|
+  | Concept drafts (3 directions) | Flux Depth Dev | **nano_banana_edit** |
+  | Iterations | FLUX.1 Kontext Dev | kontext_dev (as planned) |
+  | Final render | FLUX.2 Pro | flux2_pro_edit |
+- **Unchanged invariants:** one provider adapter (fal.ai), models swappable by config; the logo is NEVER AI-rendered (rule 1); structure-conditioned on the template view render (rule 2). Economics held — the real prod proof run cost **$0.70** for a full journey (within the §10 $0.50–0.65 estimate band).
+- **Open follow-up:** the full 20-brief bake-off when fal caps raise; richer Transit conditioning render before nano runs on outline-only vehicles (Goal 7 launch list).
