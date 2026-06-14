@@ -1,0 +1,10 @@
+{
+  "ok": true,
+  "concepts": [
+    { "conceptKey": "bold", "votes": 1 },
+    { "conceptKey": "clean", "votes": 1 },
+    { "conceptKey": "wild", "votes": 0 }
+  ],
+  "totalVotes": 2,
+  "voted": "bold"
+}

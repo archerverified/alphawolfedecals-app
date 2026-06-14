@@ -1,0 +1,14 @@
+Goal 9 — share page LIVE prod proof (2026-06-13)
+URL: https://alphawolfedecals-app-web.vercel.app/share/GOAL9PROOF99  (synthetic seed, deleted after — re-fetch now 404s, see bottom)
+
+During the proof (seed present): HTTP 200; rendered page contained ->
+  - Heading: 'Which wrap should win?'
+  - Concepts: 'Bold Geometric', 'Clean Minimal', 'Wild Camo'
+  - Vehicle label: '2024 Ford Transit 250'
+  - Tally: 'Crew favorite so far: ...'
+  - PII grep (owner/email/first_name/password): EMPTY — no leak.
+
+Live vote POST -> {"ok":true,"concepts":[{"conceptKey":"bold","votes":1},{"conceptKey":"clean","votes":1},{"conceptKey":"wild","votes":0}],"totalVotes":2,"voted":"bold"}
+Invalid concept POST -> 400 ; bad token POST -> 404 (validated).
+
+Post-cleanup re-fetch status (seed deleted): 404
