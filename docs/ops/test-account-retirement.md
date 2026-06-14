@@ -65,11 +65,24 @@ Prod E2E/proof runs retire every artifact they create (`db:cleanup-e2e` per run)
 This routine is the periodic sweep that catches stragglers. Deleting real user data
 requires this documented routine **plus** the §3 second security review.
 
-### Execution status (2026-06-13)
+### Execution status
 
 - ✅ **0 admin-flagged accounts remain** (verified via Supabase — the Cowork
   revocation of the 8 held; the guard prevents recurrence).
-- ⏳ Bulk retirement of the ~69 synthetic customers requires the prod env
-  (`DATABASE_URL` + `PII_ENCRYPTION_KEY`, to decrypt + classify). Run
-  `db:retire-test-accounts` (dry-run, review, then `--apply`) from an env that has
-  those secrets. The routine + guard are merged and security-reviewed.
+- ✅ **2026-06-14 (Goal 9.1 D2) — bulk retirement APPLIED.** Dry-run reviewed
+  (cohort 63 = 60 customer + 3 shop_user, every email in `RETIRE_SUFFIXES`,
+  `still is_admin: 0`, admin-tripwire empty), then `--apply --max=70` (blast-radius
+  rail) under an independent §3 security review. Result: **RETIRED 63/63, 0
+  failures**, 34 projects + 64 storage objects removed (cascade).
+  - **Before → after:** users 80 → 17, projects 148 → 114 (account cohort), orders
+    52 → 52 (cohort owned none), briefs 82 → 56, assets 136 → 104.
+  - **Reals intact:** the operator account (`@alphawolfdecals.com` — note the live
+    operator login is this domain, NOT `@1stimpression.co`) and its 3
+    `template_sources` survived; all 16 `@alphawolf.test` smoke logins survived
+    (purge-cohort, not retire-cohort). Cohort re-classified to 0 afterward.
+  - **Security-review fix folded in:** `retireOne` now deletes `template_sources`
+    (a RESTRICT FK) before `user.delete()`, the apply loop is per-account isolated,
+    and a `--max` ceiling guards the irreversible run.
+  - The persistent smoke account's leaked project backlog (separate from accounts)
+    is cleared by the D1 maintenance sweep (`maintenance.purgeTestProjects`), not
+    this routine — the smoke login must persist.

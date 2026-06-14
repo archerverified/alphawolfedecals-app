@@ -58,6 +58,12 @@ async function newUser(email: string, referredByCode?: string): Promise<string> 
     referredByCode,
   });
   await markUserActive(u.id);
+  // Mirror the REAL signup flow (packages/auth/src/signup.ts: markUserActive →
+  // grantSignupCredits): an activated account carries the signup grant. The repo
+  // path alone doesn't grant it, so without this every balance assertion below is
+  // short by SIGNUP — the reason this live proof never ran green before (Goal 9.1
+  // D4). Idempotent via credit_ledger_signup_grant_once.
+  await credits.grantSignupCredits(u.id);
   return u.id;
 }
 
