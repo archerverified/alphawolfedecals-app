@@ -16,8 +16,9 @@ export default function PrivacyPage() {
     <main className="mx-auto max-w-3xl px-6 py-16">
       <h1 className="text-3xl font-semibold tracking-tight">Privacy Policy</h1>
       <p className="mt-4 rounded-md border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-        <strong>Draft — not yet in force.</strong> This is a placeholder pending legal review and
-        must be replaced with reviewed copy before public launch.
+        <strong>[[PLACEHOLDER — pending Archer legal copy]]</strong> Draft — not yet in force. This
+        is a placeholder pending legal review and must be replaced with reviewed copy before public
+        launch.
       </p>
 
       <section className="mt-8 space-y-6 text-sm leading-6 text-neutral-700">
@@ -45,7 +46,7 @@ export default function PrivacyPage() {
         </div>
         <div>
           <h2 className="text-lg font-medium text-neutral-900">Contact</h2>
-          <p className="mt-2">Privacy questions: privacy@alphawolf.example. [Placeholder.]</p>
+          <p className="mt-2">Privacy questions: privacy@alphawolfdecals.com. [Placeholder.]</p>
         </div>
       </section>
     </main>
