@@ -480,6 +480,13 @@ export function GenerationStudio({
                       <Button asChild variant="outline">
                         <a href={`/projects/${projectId}/export`}>Download spec pack (PDF)</a>
                       </Button>
+                      <Link
+                        href="/find-a-shop"
+                        data-testid="find-a-shop-link"
+                        className="text-center text-xs text-zinc-500 underline underline-offset-2 hover:text-zinc-700"
+                      >
+                        No shop? Find one near you →
+                      </Link>
                     </div>
                   ) : (
                     <div className="mt-auto flex flex-col gap-2">

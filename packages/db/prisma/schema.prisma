@@ -138,6 +138,13 @@ model Shop {
   websiteEncrypted     Bytes?   @map("website_encrypted")
   addressEncrypted     Bytes?   @map("address_encrypted")
   receiveCode          String   @unique @map("receive_code") @db.VarChar(12)
+  // Shop-locator opt-in (Goal 9 / D3). public_listing is the CONSENT flag — a
+  // shop only appears in the customer-facing "find a shop" locator if it opts in
+  // (default false). public_city is a coarse, NON-PII location the shop chooses
+  // to publish (e.g. "Austin, TX") so the locator never decrypts/exposes the
+  // full address. company_name is shown only for opted-in shops.
+  publicListing        Boolean  @default(false) @map("public_listing")
+  publicCity           String?  @map("public_city")
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 

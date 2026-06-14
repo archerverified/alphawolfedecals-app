@@ -24,7 +24,7 @@ export * as storage from './storage/supabase.js';
 export * as svg from './svg/index.js';
 
 export type { AccountType, AccountStatus, DecryptedUser } from './repos/users.js';
-export type { MembershipRole, ShopSummary } from './repos/shops.js';
+export type { MembershipRole, ShopSummary, PublicShop } from './repos/shops.js';
 export type { OtpPurpose, OtpRow } from './repos/otp.js';
 export type { AuthEventType } from './repos/auth-events.js';
 export type { RateLimitDecision, RateLimitStatus } from './repos/rate-limit.js';
