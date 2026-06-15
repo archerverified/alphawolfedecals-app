@@ -96,3 +96,6 @@ docs/vault/.obsidian/snippets/
 docs/vault/.obsidian/types.json
 docs/vault/.trash/
 .vercel
+
+# Local MCP config — may hold secrets, never commit
+.mcp.json
