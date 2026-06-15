@@ -6,6 +6,76 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-15 — Goal 12 — Design Editor Overhaul — CLOSEOUT
+
+**Status:** ✅ Shipped on `goal/12-editor-overhaul` as small per-deliverable commits
+(D2 → D4 → D3 → review-fixes → docs → E2E), each typecheck/lint/test green, the
+editor verified LIVE with `/webapp-testing` (Playwright on a local ephemeral build,
+net-zero), axe WCAG-2.2-AA clean, and a fresh-context `/code-review` pass (verdict
+recorded below). **AI spend: $0.00 of the $10 ceiling.** Diagram:
+[`docs/vault/diagrams/goal-12-editor-overhaul.md`](docs/vault/diagrams/goal-12-editor-overhaul.md).
+Evidence: `docs/deployment/screenshots/2026-06-15-goal-12/` (8 before/after shots +
+coverage matrix). D1 report: `docs/product/goal-12-d1-art-sourcing-finding.md`.
+
+**The headline finding (D1).** The goal's premise — "templates are panel geometry,
+not artwork, so AI-generate the vehicle art" — is **wrong for the live catalogue**.
+Verified against the real Supabase bucket + DB: **3 of 4 published vehicles (BMW X3,
+Contender, Crown) already had recognizable, rights-clear, AW-owned `wrapped.svg`
+art**; the editor just never rendered it (it drew the `vehicle_panels` boxes). Only
+the **Ford Transit** has no art. So the BMW X3 now looks like a BMW X3 with **ZERO
+AI generation** — the fix was rendering, not sourcing. (Real fal was also blocked
+locally: no `FAL_KEY`, fail-closed, write-only on Vercel.)
+
+**What shipped.**
+
+- **D2 — editor render overhaul** (commit 2a4db70): render the AW-owned wrapped art
+  as a Konva backdrop, coordinate-aligned with the panels; replace the
+  horizontal-strip view offsets with **native absolute coordinates** + a camera that
+  frames the whole vehicle ("All views") or one face (art-cropped per view); remove
+  the `min(scale,1)` zoom cap that caused the thin strip + dead canvas; panel
+  geometry becomes **selectable wrap zones** (hover/click → name + real printable
+  area in m²/ft²). Falls back to outlined boxes when a template has no art (Transit).
+- **D4 — logo placement** (9f44d51): uploaded artwork snaps centered into the
+  selected zone scaled-to-fit (was dropping at canvas 0,0); stays draggable/scalable.
+- **D3 — AI assistant in-editor** (8845dee): "Design with AI" entry (top bar + empty
+  state) → dialog showing the credit cost, reusing the Goal 7 brief→3-concepts
+  pipeline (`GenerateButton`); logo composited, never AI-rendered (note shown).
+- **Review fixes** (13c0f9a): per the fresh-context review — swapped the heavyweight
+  `getGenerationContextAction` (signed N preview URLs per editor open) for the
+  lightweight `generation.getRunContext`; forced the AI dialog opaque; amended
+  ADR-0006's deviation log (zones now interactive/uncached + native coords + art
+  backdrop; no `canvas_state` migration needed).
+- **D5** (docs commit 10a2303): before/after evidence, coverage matrix, axe pass
+  (**0 violations / 22 passes**, editor + dialog), design grade **F → A−**.
+
+**DECISIONS (no-questions policy).**
+
+1. **D1 = evidenced report, not generation** (DoD #1 sanctions this). Recognizable
+   rights-clear art already existed for the proof vehicle; AI was not the gap and was
+   environmentally blocked. Honesty over completion — shipped no AI boxes.
+2. **Render the wrapped art as the editor backdrop** rather than the pre-rendered
+   `views/<id>/<view>.png` crops — the art + panels share one viewBox, so one image +
+   the panel zones register 1:1 (proven by an overlay), and it's crisp vector.
+3. **Native absolute coords** (per-view offset → 0) over the strip layout: simpler,
+   and existing customer element coords stay glued to their panels (no migration).
+4. **Reuse Goal 7 for D3**, don't rebuild — the editor only adds the entry point.
+5. **Transit art is Archer's call** — author owned art via the Studio (preferred,
+   the proven path) or a one-off prod AI run behind the quality gate.
+
+**Review (CLAUDE.md §3).** Fresh-context `/code-review` of the full diff (7 files,
++583/−67): **APPROVE WITH NITS** — coordinate-model rebase confirmed correct &
+migration-safe; **RLS/security surface unchanged** (pure frontend reading
+already-authorized data via existing repos; no `withSystem`/auth/DB-split change);
+one Major (editor-open over-fetch) + minors all addressed in 13c0f9a. No advisor
+second opinion needed (no RLS/auth/DB/deploy surface touched).
+
+**Flagged for Archer.** (1) Ford Transit still needs art. (2) The 2026-06-14
+"AI-generate vehicle art" sourcing decision is unnecessary for the current
+catalogue — owned-art authoring is cheaper/safer/already-working; keep AI for the
+customer-facing wrap-design feature (Goal 7), not base vehicle art. (3) ART_VIEWBOX
+is 1920×1080 (verified for all current AW templates) — a future non-1080 template
+would need a viewBox carried on the vehicle record.
+
 ## 2026-06-15 — Goal 11 — Pre-Launch Cleanup — CLOSEOUT
 
 **Status:** ✅ All 8 deliverables shipped via reviewed, CI-green PRs merged as they
