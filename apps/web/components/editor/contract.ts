@@ -15,12 +15,19 @@ export interface EditorPanel {
   outlinePath: string; // view-local SVG path `d` (body line)
   wrapSafePath: string; // view-local SVG path `d` (printable-area clip)
   finishHint: string;
+  /** Real printable surface area in mm² (0 = not yet calibrated). Surfaced as a
+      friendly area in the zone inspector (Goal 12 D2). */
+  printableAreaMm2: number;
 }
 
 export interface EditorVehicleData {
   id: string;
   label: string; // e.g. "2024 Ford Transit 250"
   panels: EditorPanel[];
+  /** Public URL of the recognizable vehicle artwork (wrapped.svg) rendered as
+      the editor backdrop (Goal 12 D2). null when the template has no art yet
+      (e.g. the Transit) — the editor then falls back to outlined zone boxes. */
+  artUrl: string | null;
 }
 
 export interface EditorProps {

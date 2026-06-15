@@ -3,7 +3,7 @@
 // editor (mounted via EditorMount → dynamic(ssr:false), so Konva never SSRs).
 
 import { notFound } from 'next/navigation';
-import { projects, vehicles } from '@alphawolf/db';
+import { projects, vehicles, storage } from '@alphawolf/db';
 import { requireUser } from '../../../../lib/admin/guard';
 import { EditorMount } from '../../../../components/editor/EditorMount';
 import type { EditorPanel } from '../../../../components/editor/contract';
@@ -38,17 +38,23 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       outlinePath: p.svgPath,
       wrapSafePath: zone.clip_path ?? '',
       finishHint: p.finishHint,
+      printableAreaMm2: p.printableAreaMm2,
     };
   });
 
   const label = [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(' ');
+
+  // The recognizable vehicle artwork (Goal 12 D2): the AW-owned wrapped art,
+  // coordinate-aligned with the panel geometry. null → the editor falls back to
+  // outlined zone boxes (templates without art yet, e.g. the Transit).
+  const artUrl = vehicle.svgStorageKey ? storage.templatePublicUrl(vehicle.svgStorageKey) : null;
 
   return (
     <EditorMount
       projectId={projectId}
       versionId={working.id}
       initialRev={working.rev}
-      vehicle={{ id: vehicle.id, label, panels }}
+      vehicle={{ id: vehicle.id, label, panels, artUrl }}
       initialDocument={(working.canvasState ?? {}) as Record<string, unknown>}
     />
   );
