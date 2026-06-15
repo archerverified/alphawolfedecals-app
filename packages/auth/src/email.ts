@@ -1,13 +1,18 @@
 // Resend transactional email sender.
 //
-// Phase 1 dev limitation: Resend's onboarding@resend.dev sender only delivers
-// to the Resend account owner's address (currently archer@1stimpression.co).
-// Tracked as a Phase 4 followup in /activities.md — verify alphawolfwrap.com,
-// switch RESEND_FROM_EMAIL, update SPF/DKIM/DMARC.
+// Live sending domain: 1stimpression.co (verified — SPF/DKIM/DMARC green),
+// from-address `wraps@1stimpression.co` via RESEND_FROM_EMAIL.
 //
 // In NODE_ENV !== 'production', the OTP code is also logged to the server
 // console + stashed in an in-memory ring so the dev-only "peek OTP" route
 // (apps/web/app/api/auth/dev-otp/route.ts) can read it during E2E tests.
+//
+// AUTH_EMAIL_TRANSPORT=console bypasses Resend for local dev (OTP prints to the
+// terminal + ring buffer). It is a local-dev-only knob — see
+// docs/deployment/env-matrix.md. A stray `console` left in the PROD env once
+// silently disabled every OTP send (rows persisted, no error, no Sentry —
+// Goal 11 D1). So `consoleTransportActive()` IGNORES it in real production
+// (VERCEL_ENV==='production') and forces live Resend instead.
 
 import { Resend, type CreateEmailOptions } from 'resend';
 
@@ -30,6 +35,31 @@ function getResend(): Resend {
 
 function getFromAddress(): string {
   return process.env.RESEND_FROM_EMAIL || 'onboarding@resend.dev';
+}
+
+// Whether the console (no-send) transport is in effect for THIS send.
+//
+// `AUTH_EMAIL_TRANSPORT=console` is a local-dev convenience. It must never take
+// effect in real production: the var was once left set in the prod env and
+// silently dropped every OTP send (Goal 11 D1). In real production
+// (VERCEL_ENV==='production', the same signal apps/web/lib/ai/mock.ts uses to
+// detect real prod vs preview) we IGNORE the console transport and force live
+// Resend — fail-safe to working delivery, never to silent silence — logging the
+// misconfig once so ops can clear the env var.
+let warnedConsoleTransportInProd = false;
+function consoleTransportActive(): boolean {
+  if (process.env.AUTH_EMAIL_TRANSPORT !== 'console') return false;
+  if (process.env.VERCEL_ENV === 'production') {
+    if (!warnedConsoleTransportInProd) {
+      warnedConsoleTransportInProd = true;
+      console.error(
+        '[auth] AUTH_EMAIL_TRANSPORT=console is set in production — IGNORING it and ' +
+          'sending live email. Remove this env var (see docs/deployment/env-matrix.md).',
+      );
+    }
+    return false;
+  }
+  return true;
 }
 
 // Resend's SDK returns { data, error } and does NOT throw on API errors.
@@ -124,7 +154,7 @@ export async function sendEmail(input: {
       : '';
     console.log(`[auth][dev] email to ${input.to}: ${input.subject}${att}`);
   }
-  if (process.env.AUTH_EMAIL_TRANSPORT === 'console') {
+  if (consoleTransportActive()) {
     return null;
   }
   return sendViaResend({
@@ -144,7 +174,7 @@ export async function sendOtpEmail(input: SendOtpInput): Promise<string | null> 
     console.log(`[auth][dev] OTP for ${input.to}: ${input.code}`);
   }
 
-  if (process.env.AUTH_EMAIL_TRANSPORT === 'console') {
+  if (consoleTransportActive()) {
     return null;
   }
 

@@ -110,3 +110,53 @@ describe('Resend {data, error} contract', () => {
     expect(resendSendMock).not.toHaveBeenCalled();
   });
 });
+
+// Goal 11 D1 backstop. AUTH_EMAIL_TRANSPORT=console is a local-dev convenience
+// (see docs/deployment/env-matrix.md) and must NEVER silently disable email in
+// real production. A stray `console` left in the prod env once dropped every OTP
+// send — rows persisted, no error, no Sentry. In real production
+// (VERCEL_ENV==='production', matching apps/web/lib/ai/mock.ts) the console
+// transport is IGNORED and live Resend is forced; preview/dev still honor it.
+describe('console transport is ignored in real production', () => {
+  let origNodeEnv: string | undefined;
+  beforeEach(() => {
+    origNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    process.env.RESEND_API_KEY = 're_test_key';
+    process.env.AUTH_EMAIL_TRANSPORT = 'console';
+    resendSendMock.mockReset();
+    resendSendMock.mockResolvedValue({ data: { id: 'email_prod1' }, error: null });
+  });
+
+  afterEach(() => {
+    process.env.NODE_ENV = origNodeEnv;
+    delete process.env.RESEND_API_KEY;
+    delete process.env.VERCEL_ENV;
+  });
+
+  it('sendOtpEmail forces live Resend when VERCEL_ENV=production despite console transport', async () => {
+    process.env.VERCEL_ENV = 'production';
+    await expect(
+      sendOtpEmail({ to: 'customer@example.com', code: '424242', accountType: 'customer' }),
+    ).resolves.toBe('email_prod1');
+    expect(resendSendMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('sendEmail forces live Resend when VERCEL_ENV=production despite console transport', async () => {
+    process.env.VERCEL_ENV = 'production';
+    await expect(
+      sendEmail({ to: 'customer@example.com', subject: 's', html: '<p>x</p>', text: 'x' }),
+    ).resolves.toBe('email_prod1');
+    expect(resendSendMock).toHaveBeenCalledTimes(1);
+  });
+
+  // Runs under NODE_ENV='production' (from beforeEach) yet still honors console —
+  // proving it's VERCEL_ENV, not NODE_ENV, that gates the force-live behavior.
+  it('still honors the console transport on preview (VERCEL_ENV=preview)', async () => {
+    process.env.VERCEL_ENV = 'preview';
+    await expect(
+      sendEmail({ to: 'customer@example.com', subject: 's', html: '<p>x</p>', text: 'x' }),
+    ).resolves.toBeNull();
+    expect(resendSendMock).not.toHaveBeenCalled();
+  });
+});
