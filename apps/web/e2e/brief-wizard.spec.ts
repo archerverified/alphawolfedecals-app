@@ -61,8 +61,9 @@ test.describe('Goal 5 brief wizard', () => {
     // round-trips (photo + logo, B2C-004) blow well past test.slow()'s 3×30s —
     // the 90s budget was expiring mid-journey at whichever step was active
     // (the failure point moved between runs). Production targets finish in a
-    // fraction of this.
-    test.setTimeout(300_000);
+    // fraction of this. 360s (was 300s) leaves room for the two 180s upload
+    // ceilings below when the Render worker is cold (Goal 11 D4).
+    test.setTimeout(360_000);
     const seededEmail = process.env.SMOKE_CUSTOMER_EMAIL;
     const seededPassword = process.env.SMOKE_CUSTOMER_PASSWORD;
     if (seededEmail && seededPassword) {
@@ -101,16 +102,19 @@ test.describe('Goal 5 brief wizard', () => {
     await page.getByTestId('brief-step-tab-photos').click();
     await page.getByTestId('photo-input').setInputFiles(OPAQUE_PNG);
     const photoNote = page.locator('[data-testid^="photo-note-"]').first();
-    // 120s = the upload hook's own poll ceiling; the post-deploy smoke is the
-    // free-tier Render worker's COLD-START hit (~up to 2.5 min observed).
-    await photoNote.waitFor({ state: 'visible', timeout: 120_000 });
+    // 180s (was 120s): the post-deploy smoke pays the free-tier Render worker's
+    // COLD-START hit (~up to 2.5 min observed) — 120s aborted mid-cold-start
+    // (Goal 11 D4). Still asserts the upload completes, just allows a cold worker.
+    await photoNote.waitFor({ state: 'visible', timeout: 180_000 });
     await photoNote.fill('dent on rear left quarter panel');
 
     // Logo (B2C-004): the opaque low-res PNG must trip BOTH gate warnings,
     // then get assigned to a zone.
     await page.getByTestId('brief-step-tab-logo').click();
     await page.getByTestId('logo-input').setInputFiles(OPAQUE_PNG);
-    await expect(page.getByTestId('logo-warning-opaque')).toBeVisible({ timeout: 120_000 });
+    // 180s for parity with the photo upload — the worker is usually warm by now,
+    // but a re-cold-start mustn't abort the second parse (Goal 11 D4).
+    await expect(page.getByTestId('logo-warning-opaque')).toBeVisible({ timeout: 180_000 });
     await expect(page.getByTestId('logo-rembg')).toBeVisible(); // one-click path offered
     await expect(page.getByTestId('logo-warning-dpi')).toBeVisible();
     await expect(page.getByTestId('logo-warning-dpi')).toContainText(/DPI/);

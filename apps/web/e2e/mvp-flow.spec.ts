@@ -87,9 +87,13 @@ test.describe('MVP smoke — customer design → submit loop', () => {
 
   test('design a wrap and submit it for production', async ({ page, request }) => {
     // The upload step below legitimately needs up to ~2.5 min when the
-    // free-tier Render parse worker cold-starts — raise the TEST timeout too,
-    // or Playwright's 30s default aborts long before the expect's window.
-    test.setTimeout(180_000);
+    // free-tier Render parse worker cold-starts. This spec runs FIRST in the
+    // smoke, so it pays that cold-start. The upload poll ceiling (below) must
+    // EXCEED ~2.5 min or it aborts mid-cold-start → spec fails → retries balloon
+    // the run past the 30-min job wall (Goal 11 D4). Give the upload 180s and the
+    // whole test 300s so a cold worker has room. Not weakening any assertion —
+    // still asserts Parse completes, just waits long enough for a cold start.
+    test.setTimeout(300_000);
     await authenticateCustomer(page, request);
 
     // Design on the panel-bearing Ford Transit (see TRANSIT_ID above). Start a
@@ -115,7 +119,8 @@ test.describe('MVP smoke — customer design → submit loop', () => {
     // passthrough skips the crop Dialog a raster upload opens (which would
     // block the tool-shape click below behind a modal).
     await page.getByTestId('upload-input').setInputFiles(TINY_SVG);
-    await expect(page.getByText('Parse complete.')).toBeVisible({ timeout: 120_000 });
+    // 180s, not 120s: a cold Render parse worker can take ~2.5 min (Goal 11 D4).
+    await expect(page.getByText('Parse complete.')).toBeVisible({ timeout: 180_000 });
 
     // Place a shape on the auto-targeted front panel, then recolor it via the
     // inspector — both work on a panel-bearing template.
