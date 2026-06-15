@@ -1,8 +1,18 @@
 // Auth.js v5 configuration for the @alphawolf/web app.
 //
-// Strategy: JWT session in an httpOnly + Secure + SameSite=strict cookie.
+// Strategy: JWT session in an httpOnly + Secure + SameSite=lax cookie.
 // 30-day refresh per PRD §4.1. Credentials provider delegates to login()
 // which enforces lockouts, audit logging, and Argon2id verification.
+//
+// SameSite=lax (NOT strict — Goal 11 D2): the session cookie was SameSite=strict,
+// which dropped the session on top-level navigations that follow a POST/redirect
+// — e.g. "Start design" → createProjectAction (POST) → redirect to the editor
+// (GET): the editor's GET arrived without the cookie, requireUser bounced to
+// /signin, and the operator re-authenticated repeatedly (proven in auth_events:
+// login → create-project → login again, seconds apart). `lax` is next-auth's
+// default and the correct setting for a session cookie; it still withholds the
+// cookie on cross-site POSTs (CSRF-safe), and the app additionally protects
+// Server Actions with its own double-submit token (see middleware CSRF + verifyCsrf).
 
 import type { NextAuthConfig } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
@@ -23,7 +33,8 @@ export const authConfig: NextAuthConfig = {
         process.env.NODE_ENV === 'production' ? '__Secure-alphawolf.session' : 'alphawolf.session',
       options: {
         httpOnly: true,
-        sameSite: 'strict',
+        // lax, not strict — see the SameSite note at the top of this file.
+        sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
       },
@@ -32,7 +43,9 @@ export const authConfig: NextAuthConfig = {
       name: process.env.NODE_ENV === 'production' ? '__Host-alphawolf.csrf' : 'alphawolf.csrf',
       options: {
         httpOnly: true,
-        sameSite: 'strict',
+        // lax matches next-auth's own default; strict broke the credentials
+        // callback redirect the same way it broke the session cookie (Goal 11 D2).
+        sameSite: 'lax',
         path: '/',
         secure: process.env.NODE_ENV === 'production',
       },
