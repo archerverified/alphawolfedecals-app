@@ -10,7 +10,8 @@
   },
   "pnpm": {
     "overrides": {
-      "postcss@<8.5.10": "8.5.14"
+      "postcss@<8.5.10": "8.5.14",
+      "ioredis": "5.11.1"
     }
   },
   "scripts": {
@@ -36,9 +37,9 @@
     "eslint": "^9.15.0",
     "husky": "^9.1.7",
     "lint-staged": "^15.2.10",
-    "prettier": "^3.3.3",
-    "turbo": "^2.3.0",
+    "prettier": "^3.8.4",
+    "turbo": "^2.9.18",
     "typescript": "^5.6.3",
-    "typescript-eslint": "^8.15.0"
+    "typescript-eslint": "^8.61.0"
   }
 }
