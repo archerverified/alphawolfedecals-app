@@ -30,6 +30,16 @@ export interface EditorVehicleData {
   artUrl: string | null;
 }
 
+/** AI design-assistant context surfaced inside the editor (Goal 12 D3). */
+export interface EditorAiContext {
+  /** Generation credit balance, shown before generating (cost transparency). */
+  creditBalance: number;
+  /** Whether a design brief exists — the brief→3-concepts run requires one. */
+  hasBrief: boolean;
+  /** Whether the project already has generation runs (→ "open AI studio"). */
+  hasRuns: boolean;
+}
+
 export interface EditorProps {
   projectId: string;
   versionId: string;
@@ -37,4 +47,6 @@ export interface EditorProps {
   vehicle: EditorVehicleData;
   /** Serialized @alphawolf/canvas document from project_versions.canvas_state. */
   initialDocument: Record<string, unknown>;
+  /** AI design-assistant context (Goal 12 D3). */
+  ai: EditorAiContext;
 }

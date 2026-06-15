@@ -64,6 +64,7 @@ import { useAutosave } from './useAutosave';
 import { usePanelClips } from './useKonvaClip';
 import { CanvasStage } from './CanvasStage';
 import { UploadPanel } from './UploadPanel';
+import { AiDesignButton } from './AiDesignButton';
 import { ColorField } from './ColorField';
 import { SubmitDialog } from './SubmitDialog';
 import { capture } from '@/lib/analytics';
@@ -149,7 +150,7 @@ function seedPerf(
 }
 
 export default function CanvasEditor(props: EditorProps) {
-  const { projectId, versionId, initialRev, vehicle, initialDocument } = props;
+  const { projectId, versionId, initialRev, vehicle, initialDocument, ai } = props;
 
   // Read ?perfSeed=N once (non-prod only).
   const perfSeed = useMemo(() => {
@@ -520,6 +521,8 @@ export default function CanvasEditor(props: EditorProps) {
                 Design brief
               </a>
             </Button>
+            {/* Goal 12 D3: surface the AI design assistant inside the editor. */}
+            <AiDesignButton projectId={projectId} ai={ai} />
           </div>
           <div className="flex items-center gap-2">
             <Tooltip>
@@ -796,7 +799,7 @@ export default function CanvasEditor(props: EditorProps) {
                             Add text, a shape, or upload artwork to place it on a panel.
                           </CardDescription>
                         </CardHeader>
-                        <CardContent className="flex justify-center gap-2">
+                        <CardContent className="flex flex-wrap justify-center gap-2">
                           <Button size="sm" variant="outline" onClick={addText} className="gap-1.5">
                             <Type className="size-4" /> Text
                           </Button>
@@ -808,6 +811,7 @@ export default function CanvasEditor(props: EditorProps) {
                           >
                             <Square className="size-4" /> Shape
                           </Button>
+                          <AiDesignButton projectId={projectId} ai={ai} variant="cta" />
                         </CardContent>
                       </Card>
                     </div>

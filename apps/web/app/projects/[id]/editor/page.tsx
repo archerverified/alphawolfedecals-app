@@ -3,8 +3,9 @@
 // editor (mounted via EditorMount → dynamic(ssr:false), so Konva never SSRs).
 
 import { notFound } from 'next/navigation';
-import { projects, vehicles, storage } from '@alphawolf/db';
+import { projects, vehicles, storage, briefs } from '@alphawolf/db';
 import { requireUser } from '../../../../lib/admin/guard';
+import { getGenerationContextAction } from '../../../../lib/actions/generation';
 import { EditorMount } from '../../../../components/editor/EditorMount';
 import type { EditorPanel } from '../../../../components/editor/contract';
 
@@ -49,6 +50,18 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
   // outlined zone boxes (templates without art yet, e.g. the Transit).
   const artUrl = vehicle.svgStorageKey ? storage.templatePublicUrl(vehicle.svgStorageKey) : null;
 
+  // AI design-assistant context (Goal 12 D3): credit balance + whether a brief /
+  // prior runs exist, so the in-editor entry shows cost and routes correctly.
+  const [genContext, brief] = await Promise.all([
+    getGenerationContextAction(projectId),
+    briefs.getBrief(user.id, projectId),
+  ]);
+  const ai = {
+    creditBalance: genContext.ok ? genContext.balance : 0,
+    hasBrief: Boolean(brief),
+    hasRuns: genContext.ok ? genContext.runs.length > 0 : false,
+  };
+
   return (
     <EditorMount
       projectId={projectId}
@@ -56,6 +69,7 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       initialRev={working.rev}
       vehicle={{ id: vehicle.id, label, panels, artUrl }}
       initialDocument={(working.canvasState ?? {}) as Record<string, unknown>}
+      ai={ai}
     />
   );
 }
