@@ -3,9 +3,8 @@
 // editor (mounted via EditorMount → dynamic(ssr:false), so Konva never SSRs).
 
 import { notFound } from 'next/navigation';
-import { projects, vehicles, storage, briefs } from '@alphawolf/db';
+import { projects, vehicles, storage, briefs, generation } from '@alphawolf/db';
 import { requireUser } from '../../../../lib/admin/guard';
-import { getGenerationContextAction } from '../../../../lib/actions/generation';
 import { EditorMount } from '../../../../components/editor/EditorMount';
 import type { EditorPanel } from '../../../../components/editor/contract';
 
@@ -51,15 +50,17 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
   const artUrl = vehicle.svgStorageKey ? storage.templatePublicUrl(vehicle.svgStorageKey) : null;
 
   // AI design-assistant context (Goal 12 D3): credit balance + whether a brief /
-  // prior runs exist, so the in-editor entry shows cost and routes correctly.
-  const [genContext, brief] = await Promise.all([
-    getGenerationContextAction(projectId),
+  // active run exists, so the in-editor entry shows cost and routes correctly.
+  // Uses the lightweight run context (no per-image signed-URL work) — the editor
+  // open path must stay snappy (review finding).
+  const [runCtx, brief] = await Promise.all([
+    generation.getRunContext(user.id, projectId),
     briefs.getBrief(user.id, projectId),
   ]);
   const ai = {
-    creditBalance: genContext.ok ? genContext.balance : 0,
+    creditBalance: runCtx.balance,
     hasBrief: Boolean(brief),
-    hasRuns: genContext.ok ? genContext.runs.length > 0 : false,
+    hasRuns: runCtx.activeRunId !== null,
   };
 
   return (

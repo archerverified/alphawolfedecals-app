@@ -32,29 +32,18 @@ export function AiDesignButton({ projectId, ai, variant = 'bar' }: Props) {
 
   return (
     <>
-      {variant === 'bar' ? (
-        <Button
-          size="sm"
-          className="gap-1.5"
-          data-testid="design-with-ai"
-          onClick={() => setOpen(true)}
-        >
-          <Sparkles className="size-4" aria-hidden /> Design with AI
-        </Button>
-      ) : (
-        <Button
-          size="sm"
-          variant="outline"
-          className="gap-1.5"
-          data-testid="design-with-ai"
-          onClick={() => setOpen(true)}
-        >
-          <Sparkles className="size-4" aria-hidden /> Design with AI
-        </Button>
-      )}
+      <Button
+        size="sm"
+        variant={variant === 'cta' ? 'outline' : 'default'}
+        className="gap-1.5"
+        data-testid="design-with-ai"
+        onClick={() => setOpen(true)}
+      >
+        <Sparkles className="size-4" aria-hidden /> Design with AI
+      </Button>
 
       <Dialog open={open} onOpenChange={setOpen}>
-        <DialogContent>
+        <DialogContent className="bg-white">
           <DialogHeader>
             <DialogTitle>Design with AI</DialogTitle>
             <DialogDescription>

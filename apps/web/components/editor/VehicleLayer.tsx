@@ -54,6 +54,7 @@ export function VehicleLayer({ views, hasArt, selectedZoneId, onZoneSelect }: Pr
             return (
               <Path
                 key={panel.id}
+                name={`wrap-zone wrap-zone-${panel.id}`}
                 data={panel.outlinePath}
                 stroke={stroke}
                 strokeWidth={strokeWidth}
