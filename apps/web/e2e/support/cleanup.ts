@@ -13,14 +13,21 @@
 
 import { expect, test, type Page } from '@playwright/test';
 
-// Teardown budget (Goal 11 D4). Playwright counts the test body AND the
+// Teardown budget + bounds (Goal 11 D4). Playwright counts the test body AND the
 // afterEach hook against ONE shared test timeout. On a cold production deploy the
-// long brief-wizard journey (two uploads) consumed most of the 300s budget,
-// starving this self-clean → "Test timeout of 300000ms exceeded while running
-// afterEach hook" — the only thing reddening the prod smoke. We extend the
-// deadline so teardown always has room; this weakens NO assertion (the test
-// body's own expects keep their own timeouts).
+// long brief-wizard journey (two uploads) consumed most of the 300s budget AND
+// the self-clean's `/projects` navigation could hang (no nav timeout) →
+// "Test timeout of 300000ms exceeded while running afterEach hook", then a 30-min
+// job timeout once the deadline was merely extended. Two-part fix:
+//   1. extend the deadline so teardown isn't starved by a slow body, AND
+//   2. give every teardown STEP its own short timeout so a cold/hanging
+//      `/projects` fails fast → the caller swallows it (best-effort) and the
+//      daily purge cron reclaims the project. The smoke stays GREEN instead of
+//      dying in teardown; no assertion is weakened (the test body's own expects
+//      keep their own timeouts).
 const TEARDOWN_BUDGET_MS = 120_000;
+const NAV_TIMEOUT_MS = 25_000;
+const STEP_TIMEOUT_MS = 10_000;
 
 // Soft-delete one project via the /projects card menu → confirm dialog. No-ops if
 // the card is already gone (never created, or a prior attempt removed it).
@@ -29,16 +36,24 @@ const TEARDOWN_BUDGET_MS = 120_000;
 // would fall off this list and self-clean would no-op on them — the cron backstop
 // (maintenance.purgeTestProjects) catches those, so this is fast-feedback only.
 export async function softDeleteProjectViaUi(page: Page, projectId: string): Promise<void> {
-  await page.goto('/projects');
+  // Bounded nav: domcontentloaded (not 'load' — don't wait on every cold-start
+  // resource) and a hard cap so this can never hang the afterEach.
+  await page.goto('/projects', { timeout: NAV_TIMEOUT_MS, waitUntil: 'domcontentloaded' });
   const card = page.getByTestId('project-card').filter({
     has: page.locator(`a[data-testid="project-open"][href="/projects/${projectId}/editor"]`),
   });
+  // The card is server-rendered; wait briefly for it before concluding it's gone
+  // (a slow cold render shouldn't be misread as "already deleted").
+  await card
+    .first()
+    .waitFor({ state: 'visible', timeout: STEP_TIMEOUT_MS })
+    .catch(() => undefined);
   if ((await card.count()) === 0) return;
-  await card.getByTestId('project-menu-trigger').click();
-  await page.getByTestId('project-delete-item').click();
-  await page.getByTestId('delete-confirm').click();
+  await card.getByTestId('project-menu-trigger').click({ timeout: STEP_TIMEOUT_MS });
+  await page.getByTestId('project-delete-item').click({ timeout: STEP_TIMEOUT_MS });
+  await page.getByTestId('delete-confirm').click({ timeout: STEP_TIMEOUT_MS });
   // Soft-deleted projects drop out of the active list — the card disappears.
-  await expect(card).toHaveCount(0, { timeout: 15_000 });
+  await expect(card).toHaveCount(0, { timeout: STEP_TIMEOUT_MS });
 }
 
 // Drain a tracked-id list, best-effort. Mutates `ids` (pops as it goes) so a
