@@ -11,7 +11,16 @@
 // server-side hard purge that also catches a crashed worker or a retried spec.
 // So every step here is best-effort: it must never fail the spec it cleans up.
 
-import { expect, type Page } from '@playwright/test';
+import { expect, test, type Page } from '@playwright/test';
+
+// Teardown budget (Goal 11 D4). Playwright counts the test body AND the
+// afterEach hook against ONE shared test timeout. On a cold production deploy the
+// long brief-wizard journey (two uploads) consumed most of the 300s budget,
+// starving this self-clean → "Test timeout of 300000ms exceeded while running
+// afterEach hook" — the only thing reddening the prod smoke. We extend the
+// deadline so teardown always has room; this weakens NO assertion (the test
+// body's own expects keep their own timeouts).
+const TEARDOWN_BUDGET_MS = 120_000;
 
 // Soft-delete one project via the /projects card menu → confirm dialog. No-ops if
 // the card is already gone (never created, or a prior attempt removed it).
@@ -35,6 +44,11 @@ export async function softDeleteProjectViaUi(page: Page, projectId: string): Pro
 // Drain a tracked-id list, best-effort. Mutates `ids` (pops as it goes) so a
 // re-entrant afterEach never double-deletes.
 export async function cleanupCreatedProjects(page: Page, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  // Give teardown its own budget ON TOP of whatever the (cold-prod-slow) test
+  // body already burned — additive so the shared deadline only ever grows, never
+  // shrinks below the elapsed time.
+  test.setTimeout(test.info().timeout + TEARDOWN_BUDGET_MS);
   while (ids.length > 0) {
     const id = ids.pop();
     if (!id) continue;
