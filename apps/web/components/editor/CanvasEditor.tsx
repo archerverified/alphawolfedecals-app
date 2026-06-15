@@ -317,13 +317,43 @@ export default function CanvasEditor(props: EditorProps) {
     addElement(el);
   }, [targetPanel, shapeKind, addElement, mintId, placementFor]);
 
+  // Goal 12 D4: uploaded artwork SNAPS to the selected zone — centered in the
+  // zone's wrap-safe area and scaled to fit (~85%) — instead of dropping at the
+  // fixed (0,0) canvas origin. It stays draggable/scalable via the transformer.
+  const fitImageToZone = useCallback(
+    (el: ImageElement): ImageElement => {
+      const clip = clips[el.panelId];
+      if (!clip || clip.rings.length === 0) return el;
+      const b = geometry.bbox(clip.rings);
+      const zoneW = b.maxX - b.minX;
+      const zoneH = b.maxY - b.minY;
+      const drawW = el.crop ? el.crop.width : el.naturalW;
+      const drawH = el.crop ? el.crop.height : el.naturalH;
+      if (drawW <= 0 || drawH <= 0 || zoneW <= 0 || zoneH <= 0) return el;
+      const scale = Math.min((zoneW * 0.85) / drawW, (zoneH * 0.85) / drawH);
+      const cx = (b.minX + b.maxX) / 2;
+      const cy = (b.minY + b.maxY) / 2;
+      // Fan out repeated placements so stacked logos don't hide each other.
+      const n = (doc.panels[el.panelId]?.elementIds.length ?? 0) % 6;
+      const off = n * Math.min(zoneW, zoneH) * 0.04;
+      return {
+        ...el,
+        x: cx - (drawW * scale) / 2 + off,
+        y: cy - (drawH * scale) / 2 + off,
+        scaleX: scale,
+        scaleY: scale,
+      };
+    },
+    [clips, doc.panels],
+  );
+
   const onPlaceImage = useCallback(
     (el: ImageElement) => {
-      addElement(el);
+      addElement(fitImageToZone(el));
       // Analytics: artwork placed onto a panel (best-effort, env-gated no-op).
       capture('asset_placed', { projectId, vehicleId: vehicle.id, assetId: el.assetId });
     },
-    [addElement, projectId, vehicle.id],
+    [addElement, fitImageToZone, projectId, vehicle.id],
   );
 
   const onSelect = useCallback(
