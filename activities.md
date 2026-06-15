@@ -6,6 +6,151 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-15 — Goal 11 — Pre-Launch Cleanup — CLOSEOUT
+
+**Status:** ✅ All 8 deliverables shipped via reviewed, CI-green PRs merged as they
+went — **#171 (D1), #172 (D2), #174 (D6)**, the **D4 smoke trilogy #173→#175→#185**,
+and an **urgent prod hotfix #186** (see PROD INCIDENT below); D3/D5/D7 needed no
+app code. #162 closed (superseded by #174). Spend **$0** (no AI, no Stripe).
+Diagram: [`docs/vault/diagrams/goal-11-prelaunch-cleanup.md`](docs/vault/diagrams/goal-11-prelaunch-cleanup.md).
+Coverage: [`docs/deployment/screenshots/2026-06-15-goal-11/coverage-notes.md`](docs/deployment/screenshots/2026-06-15-goal-11/coverage-notes.md).
+
+**Headline:** the two things blocking Archer from human-testing the live journey
+are fixed — OTP email can no longer be silently dropped (D1) and entering the
+editor no longer logs the user out (D2). Both root-caused with evidence, not
+guessed.
+
+**🔴 PROD INCIDENT found + fixed mid-goal (hotfix #186).** Chasing the red smoke
+(D4) surfaced that **`/vehicles` had been returning 500 for ~12h** (UptimeRobot
+monitor DOWN; Sentry **NODE-E** "Could not load the 'sharp' module using the
+linux-x64 runtime"). Root cause: **this goal's own D6 (#174)** bumped sharp
+0.34.5→0.35.1 in the 22-package group; sharp 0.35's native module won't load on
+Vercel's linux-x64 runtime, 500ing every sharp-touching route (`/vehicles`,
+`/signin`). It slipped past local CI + review because the load failure is
+linux-runtime-specific — sharp loads fine on the macOS dev box, so `turbo
+typecheck/test` was green. **Hotfix #186 pinned sharp back to 0.34.5** (exact, =
+Next 15's own pinned optional dep); prod redeployed and **`/vehicles` returns 200
+again** (confirmed by curl on commit bcbe5bc), NODE-E resolved. Lesson logged:
+native-binary bumps (sharp/`@img/*`) need a deploy-surface check, not just local
+CI. This was also a hidden contributor to the red smoke (its catalogue + signin
+steps hit the 500).
+
+**Per-deliverable:**
+
+- **D1 — Email-delivery backstop (#171):** root cause (confirmed by Cowork's live
+  Resend MCP + this session's code trace) was `AUTH_EMAIL_TRANSPORT=console` left
+  in the prod env → `sendOtpEmail`/`sendEmail` returned `null` silently (no send,
+  no error), OTP row persisted, `otpSent` stayed true. Archer already removed the
+  env var. This PR is the permanent CODE backstop: `consoleTransportActive()`
+  IGNORES the console transport in real production (`VERCEL_ENV==='production'`)
+  and forces live Resend + logs the misconfig; a startup Sentry alarm fires if
+  the var (or a missing `RESEND_FROM_EMAIL`) is ever present in prod. Regression
+  tests + env-matrix truth-up (`wraps@1stimpression.co` on the verified
+  `1stimpression.co` domain). 2nd security review: APPROVE.
+- **D2 — Editor-entry logout (#172):** PROVEN via `auth_events` — the operator's
+  browser logged in → created a project (entered the editor) → logged in AGAIN
+  seconds later, repeatedly (00:14:17→00:14:24 create→00:14:34 re-login, again at
+  00:20/00:26/00:32). Project rows exist, so the session was valid on the
+  `createProjectAction` POST but gone on the editor GET. Root cause (by
+  elimination — ruled out middleware-redirect + server-action-clearing): the
+  session cookie was `SameSite=strict`, which withholds the cookie on the
+  POST→redirect→GET. Fixed: session + csrfToken cookies → `lax` (next-auth's
+  default; no CSRF regression — lax still blocks cross-site POSTs + the app has
+  its own double-submit token). Regression test pins `lax` (fails on strict).
+  2nd security review: APPROVE.
+- **D3 — Forgot-password:** confirmed there is **no** forgot/reset-password link
+  anywhere in `apps/web` (grep + SignInForm read) — no dead-end exists, so the
+  launch-without-reset decision (Archer) needs no change. No PR.
+- **D4 — Prod smoke (#173 → #175 → #185):** root-caused from the real CI log —
+  `brief-wizard` (+ the same self-clean in `mvp-flow`/`aw-template`) failed "Test
+  timeout of 300000ms exceeded while running afterEach hook." Playwright shares ONE
+  timeout across the test body + afterEach. Three layered fixes: **#173** extended
+  the shared teardown budget (`test.setTimeout(info().timeout + 120_000)`,
+  additive); **#175** BOUNDED every self-clean step (`goto` 25s/clicks 10s/
+  `toHaveCount`, all best-effort) so a cold or hanging `/projects` can neither
+  starve nor hang the afterEach (the budget alone had let it hang to the 30-min
+  job wall); **#185** raised the upload "Parse complete" ceilings 120s→180s (+ test
+  budgets) above the documented ~2.5-min Render cold-start, so the first upload
+  succeeds instead of failing → retry-ballooning past 30 min. The DEEPER smoke
+  blocker turned out to be the sharp 500 (PROD INCIDENT above) — `/vehicles` +
+  `/signin` 500s reddened the catalogue + signin steps; fixed by #186. No
+  assertion weakened by any of the three smoke PRs.
+- **D5 — Sentry `/signin` NODE-B:** "An unexpected response was received from the
+  server" — client-side next-auth/Server-Action error, NOT the D1 OTP-email path.
+  5 events, 0 users, last seen 06-14 (Goal 9/10 deploy window); did NOT recur in
+  the heavy 06-15 testing. Resolved-with-reason in Sentry; contributing
+  strict-cookie cause fixed by D2; auto-reopens if it regresses.
+- **D6 — Dependabot #162 (#174):** the only breaker in the 22-pkg group was
+  bullmq 5.78 (pins ioredis 5.10.1) + ioredis 5.11.1 → two copies → TS2322 in
+  `services/parse` + `apps/api` queue code. Fixed at the root with a
+  `pnpm.overrides` ioredis dedupe (not per-site casts), so all bullmq sites
+  type-check with zero app-code change. Full `turbo lint typecheck test` green on
+  a clean reinstall (single ioredis). Superseded + closed #162; dependabot branch
+  deleted. 2nd review: APPROVE.
+- **D7 — `/health` monitoring:** `/health` confirmed live (`200 {status,commit}`).
+  DECISION: keep `/health` DB-free (liveness; respects `connection_limit=1` +
+  Edge/Prisma) and treat `/vehicles` (DB-backed, `200` confirmed) as the
+  DB-readiness probe the live UptimeRobot monitor watches. Documented the exact
+  monitor config in [`docs/deployment/health-monitoring.md`](docs/deployment/health-monitoring.md)
+  (UptimeRobot MCP is read-only — Archer adds it).
+- **D8 — Verification:** unit/integration green (`turbo lint typecheck test` =
+  33/33, web 180) on a clean reinstall after every dep change. PROD health
+  confirmed by curl on the final all-fixes deploy: `/health` 200, and
+  **`/vehicles` 200 again** (was 500 for ~12h until the sharp hotfix). The deployed
+  prod smoke (`mvp-flow`+`brief-wizard`+`aw-template`) is the authoritative E2E for
+  auth/signup/catalogue/editor because D2 (SameSite, HTTPS-only), D4 (cold-prod
+  timeout) and the sharp load error are all prod-only phenomena a local build
+  can't reproduce. Final smoke on the all-fixes deploy (`939833d`): run
+  #27563086822 → **GREEN, 5 passed (1.8m)** — the chronically-red prod smoke is now
+  reliably green. Coverage notes: `docs/deployment/screenshots/2026-06-15-goal-11/`.
+
+**KEY DECISIONS (autonomous, logged):**
+
+1. **D1 guards on `VERCEL_ENV==='production'`, not `NODE_ENV`** — Vercel sets
+   `NODE_ENV=production` on PREVIEWS too, so a `NODE_ENV` guard would break
+   preview/CI E2E that legitimately use the console transport. Matches the
+   existing `apps/web/lib/ai/mock.ts` real-prod tripwire. And it FORCES live send
+   (fail-safe) rather than hard-erroring, so a stray env var can never break
+   signups.
+2. **D2 root cause by elimination, then `strict`→`lax`** — the prompt's other two
+   hypotheses (middleware redirect, server-action clearing the session) were
+   disproven against the code; `lax` is next-auth's own default and the standard
+   for session cookies.
+3. **D6 fixed via dedupe override, not casts** — runtime is identical (bullmq
+   reuses the passed ioredis instance), but the override removes the dual-version
+   root cause and keeps the code clean.
+4. **Per-deliverable small PRs**, each with the §3 review verdict IN the PR body —
+   deliberately closing the Goal 9/10 gap where PRs merged without a recorded
+   verdict.
+5. **Sharp: pin 0.34.5, don't chase 0.35 (#186).** 0.35's linux-x64 load failure
+   is platform-specific (invisible to local macOS CI), so the guaranteed-safe move
+   is reverting to Next 15's own pinned 0.34.5 — the prompt's D6 "pin the breaker"
+   fallback for the one bump that can't be fixed at the type layer.
+
+**FLAGGED for Archer:**
+
+- **Resend MCP key invalid in this Claude Code session** (every read → `400 API
+key is invalid`), so I could not independently re-pull the live send log;
+  D1's external delivery (`awtraveling@gmail.com` → `delivered`) rests on Cowork's
+  06-15 confirmation. Re-confirm in the Resend dashboard or fix the MCP key.
+- The **middleware form-CSRF cookie** (`alphawolf.csrf-form`) is still
+  `SameSite=strict` — it self-heals via re-bootstrap (not the session bug), left
+  out of D2 scope; consider `lax` in a future cleanup.
+- **Other pre-existing Sentry issues** (not Goal-11 scope): NODE-5 "CSRF cookie
+  missing" on `/projects` (rename/delete actions — `/projects` isn't in the
+  middleware `needsCsrfBootstrap` list, a real gap), NODE-9 `/signin` RSC render,
+  NODE-8 `/dashboard` Prisma. Worth a look.
+- **Native-binary dep bumps need a deploy-surface check.** The sharp 0.35 break
+  (NODE-E, #186) passed local CI + review because the linux-x64 load failure only
+  manifests on Vercel's runtime. For future Dependabot groups, smoke `/vehicles` +
+  `/signin` on the preview/prod deploy before merging anything that bumps sharp,
+  `@img/*`, prisma engines, or other native modules — not just `turbo test`.
+- The **UptimeRobot `/vehicles` monitor** was DOWN ~12h on the sharp 500; it should
+  auto-recover now that `/vehicles` is 200. Consider adding the fast Edge `/health`
+  liveness monitor too (see `docs/deployment/health-monitoring.md`).
+- Launch is still gated on the **Goal-10 items outside this goal's scope**: final
+  legal copy + catalogue-template panels (Goal 12 editor/art).
+
 ## 2026-06-14 — Goal 10 — Launch Hardening — CLOSEOUT (LAUNCH: NO-GO, 3 blockers)
 
 **Status:** ✅ ALL 9 deliverables (D0–D8) shipped on `goal/10-launch-hardening`
