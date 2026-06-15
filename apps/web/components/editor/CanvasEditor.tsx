@@ -64,11 +64,28 @@ import { useAutosave } from './useAutosave';
 import { usePanelClips } from './useKonvaClip';
 import { CanvasStage } from './CanvasStage';
 import { UploadPanel } from './UploadPanel';
+import { AiDesignButton } from './AiDesignButton';
 import { ColorField } from './ColorField';
 import { SubmitDialog } from './SubmitDialog';
 import { capture } from '@/lib/analytics';
 
 const IS_PROD = process.env.NODE_ENV === 'production';
+
+// Friendly view names for the selector + zone inspector (Goal 12 D2).
+const VIEW_LABELS: Record<string, string> = {
+  front: 'Front',
+  driver: 'Driver side',
+  passenger: 'Passenger side',
+  back: 'Rear',
+  top: 'Top',
+};
+const viewLabel = (v: string) => VIEW_LABELS[v] ?? v.charAt(0).toUpperCase() + v.slice(1);
+
+/** Real printable area in friendly units, or null when uncalibrated (0 sentinel). */
+function formatArea(mm2: number): string | null {
+  if (!mm2 || mm2 <= 0) return null;
+  return `${(mm2 / 1_000_000).toFixed(2)} m² · ${(mm2 / 92_903.04).toFixed(1)} ft²`;
+}
 
 /** Ensure every vehicle panel has a PanelState so commands can target it. */
 function normalizeDocument(
@@ -133,7 +150,7 @@ function seedPerf(
 }
 
 export default function CanvasEditor(props: EditorProps) {
-  const { projectId, versionId, initialRev, vehicle, initialDocument } = props;
+  const { projectId, versionId, initialRev, vehicle, initialDocument, ai } = props;
 
   // Read ?perfSeed=N once (non-prod only).
   const perfSeed = useMemo(() => {
@@ -164,6 +181,19 @@ export default function CanvasEditor(props: EditorProps) {
   const [snap, setSnap] = useState<SnapSettings>({ enabled: true, thresholdPx: 8 });
   // Mirrors the Konva out-of-bounds cue into a DOM aria-live region (a11y).
   const [cueVisible, setCueVisible] = useState(false);
+  // Goal 12 D2: which view the camera frames, and the selected wrap zone.
+  const [activeView, setActiveView] = useState('all');
+  const [selectedZoneId, setSelectedZoneId] = useState<string | null>(null);
+
+  // Distinct views in canonical order, for the view selector.
+  const viewList = useMemo(() => {
+    const order = ['front', 'driver', 'back', 'passenger', 'top'];
+    const rank = (v: string) => {
+      const i = order.indexOf(v);
+      return i < 0 ? 100 : i;
+    };
+    return [...new Set(vehicle.panels.map((p) => p.view))].sort((a, b) => rank(a) - rank(b));
+  }, [vehicle.panels]);
 
   // Mount + viewport sizing.
   const [mounted, setMounted] = useState(false);
@@ -205,12 +235,30 @@ export default function CanvasEditor(props: EditorProps) {
   const selectedEl = selectedId ? doc.elements[selectedId] : undefined;
 
   // The target panel for new elements: the selected element's panel, else the
-  // first panel of the vehicle.
+  // explicitly selected wrap zone (Goal 12 D2), else the vehicle's first panel.
   const targetPanel = useMemo<{ id: PanelId; view: VehicleView } | null>(() => {
     if (selectedEl) return { id: selectedEl.panelId, view: selectedEl.view };
+    if (selectedZoneId) {
+      const z = vehicle.panels.find((p) => p.id === selectedZoneId);
+      if (z) return { id: z.id as PanelId, view: z.view as VehicleView };
+    }
     const first = vehicle.panels[0];
     return first ? { id: first.id as PanelId, view: first.view as VehicleView } : null;
-  }, [selectedEl, vehicle.panels]);
+  }, [selectedEl, selectedZoneId, vehicle.panels]);
+
+  // The currently inspected wrap zone (name + real dimensions).
+  const selectedZone = useMemo(
+    () => (selectedZoneId ? (vehicle.panels.find((p) => p.id === selectedZoneId) ?? null) : null),
+    [selectedZoneId, vehicle.panels],
+  );
+
+  const onZoneSelect = useCallback(
+    (panelId: string) => {
+      setSelectedZoneId(panelId);
+      select([]); // focus the zone, not a stale element selection
+    },
+    [select],
+  );
 
   const mintId = useCallback(() => `el-${doc.seq + 1}-${Date.now().toString(36)}`, [doc.seq]);
 
@@ -270,13 +318,43 @@ export default function CanvasEditor(props: EditorProps) {
     addElement(el);
   }, [targetPanel, shapeKind, addElement, mintId, placementFor]);
 
+  // Goal 12 D4: uploaded artwork SNAPS to the selected zone — centered in the
+  // zone's wrap-safe area and scaled to fit (~85%) — instead of dropping at the
+  // fixed (0,0) canvas origin. It stays draggable/scalable via the transformer.
+  const fitImageToZone = useCallback(
+    (el: ImageElement): ImageElement => {
+      const clip = clips[el.panelId];
+      if (!clip || clip.rings.length === 0) return el;
+      const b = geometry.bbox(clip.rings);
+      const zoneW = b.maxX - b.minX;
+      const zoneH = b.maxY - b.minY;
+      const drawW = el.crop ? el.crop.width : el.naturalW;
+      const drawH = el.crop ? el.crop.height : el.naturalH;
+      if (drawW <= 0 || drawH <= 0 || zoneW <= 0 || zoneH <= 0) return el;
+      const scale = Math.min((zoneW * 0.85) / drawW, (zoneH * 0.85) / drawH);
+      const cx = (b.minX + b.maxX) / 2;
+      const cy = (b.minY + b.maxY) / 2;
+      // Fan out repeated placements so stacked logos don't hide each other.
+      const n = (doc.panels[el.panelId]?.elementIds.length ?? 0) % 6;
+      const off = n * Math.min(zoneW, zoneH) * 0.04;
+      return {
+        ...el,
+        x: cx - (drawW * scale) / 2 + off,
+        y: cy - (drawH * scale) / 2 + off,
+        scaleX: scale,
+        scaleY: scale,
+      };
+    },
+    [clips, doc.panels],
+  );
+
   const onPlaceImage = useCallback(
     (el: ImageElement) => {
-      addElement(el);
+      addElement(fitImageToZone(el));
       // Analytics: artwork placed onto a panel (best-effort, env-gated no-op).
       capture('asset_placed', { projectId, vehicleId: vehicle.id, assetId: el.assetId });
     },
-    [addElement, projectId, vehicle.id],
+    [addElement, fitImageToZone, projectId, vehicle.id],
   );
 
   const onSelect = useCallback(
@@ -443,6 +521,8 @@ export default function CanvasEditor(props: EditorProps) {
                 Design brief
               </a>
             </Button>
+            {/* Goal 12 D3: surface the AI design assistant inside the editor. */}
+            <AiDesignButton projectId={projectId} ai={ai} />
           </div>
           <div className="flex items-center gap-2">
             <Tooltip>
@@ -644,6 +724,39 @@ export default function CanvasEditor(props: EditorProps) {
 
           {/* Canvas host */}
           <main ref={canvasHostRef} className="relative min-w-0 flex-1 bg-zinc-200">
+            {/* View selector (Goal 12 D2): frame the whole vehicle or one face. */}
+            <div
+              data-testid="view-selector"
+              className="absolute left-1/2 top-3 z-10 flex -translate-x-1/2 items-center gap-1 rounded-full border border-zinc-200 bg-white/95 px-1.5 py-1 shadow-sm backdrop-blur"
+            >
+              <button
+                type="button"
+                data-testid="view-all"
+                onClick={() => setActiveView('all')}
+                aria-pressed={activeView === 'all'}
+                className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                  activeView === 'all'
+                    ? 'bg-zinc-900 text-white'
+                    : 'text-zinc-600 hover:bg-zinc-100'
+                }`}
+              >
+                All views
+              </button>
+              {viewList.map((v) => (
+                <button
+                  key={v}
+                  type="button"
+                  data-testid={`view-${v}`}
+                  onClick={() => setActiveView(v)}
+                  aria-pressed={activeView === v}
+                  className={`rounded-full px-3 py-1 text-xs font-medium transition-colors ${
+                    activeView === v ? 'bg-zinc-900 text-white' : 'text-zinc-600 hover:bg-zinc-100'
+                  }`}
+                >
+                  {viewLabel(v)}
+                </button>
+              ))}
+            </div>
             <Tooltip>
               <TooltipTrigger asChild>
                 <div
@@ -664,6 +777,10 @@ export default function CanvasEditor(props: EditorProps) {
                       height={size.height}
                       onSelect={onSelect}
                       onCommit={onCommit}
+                      artUrl={vehicle.artUrl}
+                      activeView={activeView}
+                      selectedZoneId={selectedZoneId}
+                      onZoneSelect={onZoneSelect}
                       exposeStage={!IS_PROD}
                       onCueChange={setCueVisible}
                     />
@@ -674,7 +791,7 @@ export default function CanvasEditor(props: EditorProps) {
                   />
 
                   {elementCount === 0 ? (
-                    <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-6">
+                    <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center p-6">
                       <Card className="pointer-events-auto w-80 text-center">
                         <CardHeader>
                           <CardTitle>Start your wrap</CardTitle>
@@ -682,7 +799,7 @@ export default function CanvasEditor(props: EditorProps) {
                             Add text, a shape, or upload artwork to place it on a panel.
                           </CardDescription>
                         </CardHeader>
-                        <CardContent className="flex justify-center gap-2">
+                        <CardContent className="flex flex-wrap justify-center gap-2">
                           <Button size="sm" variant="outline" onClick={addText} className="gap-1.5">
                             <Type className="size-4" /> Text
                           </Button>
@@ -694,6 +811,7 @@ export default function CanvasEditor(props: EditorProps) {
                           >
                             <Square className="size-4" /> Shape
                           </Button>
+                          <AiDesignButton projectId={projectId} ai={ai} variant="cta" />
                         </CardContent>
                       </Card>
                     </div>
@@ -725,6 +843,50 @@ export default function CanvasEditor(props: EditorProps) {
                 mintId={mintId}
                 onPlaceImage={onPlaceImage}
               />
+            </section>
+
+            <Separator />
+
+            {/* Wrap zone inspector (Goal 12 D2): name + real printable area. */}
+            <section className="flex flex-col gap-2" data-testid="zone-inspector">
+              <h2 className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+                Wrap zone
+              </h2>
+              {selectedZone ? (
+                <div className="flex flex-col gap-2 text-sm text-zinc-700">
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">Zone</span>
+                    <span className="font-medium" data-testid="zone-name">
+                      {selectedZone.name}
+                    </span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span className="text-zinc-500">View</span>
+                    <span>{viewLabel(selectedZone.view)}</span>
+                  </div>
+                  {formatArea(selectedZone.printableAreaMm2) ? (
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500">Area</span>
+                      <span data-testid="zone-area">
+                        {formatArea(selectedZone.printableAreaMm2)}
+                      </span>
+                    </div>
+                  ) : null}
+                  {selectedZone.finishHint && selectedZone.finishHint !== 'none' ? (
+                    <div className="flex justify-between">
+                      <span className="text-zinc-500">Finish</span>
+                      <span className="capitalize">{selectedZone.finishHint}</span>
+                    </div>
+                  ) : null}
+                  <p className="text-xs text-zinc-500">
+                    Artwork you add lands on this zone, clipped to its printable area.
+                  </p>
+                </div>
+              ) : (
+                <p className="text-sm text-zinc-500">
+                  Click a panel on the vehicle to select a wrap zone.
+                </p>
+              )}
             </section>
 
             <Separator />

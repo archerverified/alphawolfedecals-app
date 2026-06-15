@@ -190,4 +190,14 @@ flowchart TD
   hands over the working row's `canvas_state` cleanly with no redo-tree baggage.
 - **Deviation log:** the implementation added an `addElements` (plural) command
   beyond the five originally listed, to give `removeElements` a clean atomic
-  inverse for multi-element undo. No other departures from the design.
+  inverse for multi-element undo.
+- **Amendment (Goal 12 D2, 2026-06-15):** §6 specified the vehicle layer as
+  `listening:false` + cached. Goal 12 turns the panel geometry into _selectable
+  wrap zones_ (hover/click → name + printable area), which requires that layer to
+  be in the hit graph and not cached — an intentional deviation. The cost is
+  negligible (tens of panel paths, not the 200-node artwork layer). Goal 12 also
+  adds a backdrop **art layer** (the AW-owned `svg_storage_key` artwork, rendered
+  coincident with the panel coordinate space) and replaces the horizontal-strip
+  view offsets with **native absolute coordinates** (per-view `offsetX/offsetY`
+  = 0) plus a camera that frames the whole vehicle or one view. Element/panel
+  coordinates are unchanged, so no `canvas_state` migration is required.

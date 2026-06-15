@@ -22,6 +22,7 @@ import type { ViewLayout, SnapSettings } from './types';
 import type { PanelClip } from './useKonvaClip';
 import type { LiveDrag } from './elements/shared';
 import { commitTransform } from './elements/shared';
+import { VehicleArtLayer } from './VehicleArtLayer';
 import { VehicleLayer } from './VehicleLayer';
 import { ArtworkLayer } from './ArtworkLayer';
 import { OverlayLayer } from './OverlayLayer';
@@ -42,6 +43,13 @@ interface Props {
   height: number;
   onSelect: (id: ElementId) => void;
   onCommit: (cmd: Command) => void;
+  /** Recognizable vehicle backdrop URL (Goal 12 D2); null → outlined zones. */
+  artUrl: string | null;
+  /** Which view the camera frames: a view name, or 'all' (the whole vehicle). */
+  activeView: string;
+  /** Selectable wrap zones (Goal 12 D2). */
+  selectedZoneId: string | null;
+  onZoneSelect: (panelId: string) => void;
   /** When set, expose the stage as window.__KONVA_STAGE__ (non-prod only). */
   exposeStage?: boolean;
   /** Bubbled up when the out-of-bounds cue toggles (for the aria-live region). */
@@ -49,12 +57,29 @@ interface Props {
 }
 
 const VIEW_ORDER = ['front', 'driver', 'back', 'passenger', 'top'];
-const VIEW_GUTTER = 600; // doc units between views
 
-/** Group panels into views and compute each view's content-bbox offset. */
+// AW templates author both the panel geometry and the wrapped art in this shared
+// viewBox (verified: X3/Contender/Crown all 1920×1080). The camera frames this
+// region for the "all" view so the whole recognizable vehicle fills the canvas.
+const ART_VIEWBOX = { w: 1920, h: 1080 };
+
+export interface BBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * Group panels into views (Goal 12 D2: NATIVE absolute coordinates — offset 0).
+ * The wrapped art and the panel geometry share one coordinate space, so we no
+ * longer re-base each view into a horizontal strip; the art shows the views in
+ * their authored layout and the panels/elements overlay it 1:1. Each view also
+ * carries its absolute panel bbox so the camera can frame a single view.
+ */
 function computeViewLayouts(panels: EditorPanel[]): {
-  views: ViewLayout[];
-  bounds: { w: number; h: number };
+  views: (ViewLayout & { region: BBox })[];
+  panelBounds: BBox;
 } {
   const byView = new Map<string, EditorPanel[]>();
   for (const p of panels) {
@@ -70,12 +95,13 @@ function computeViewLayouts(panels: EditorPanel[]): {
       (VIEW_ORDER.indexOf(b) + 100 * Number(VIEW_ORDER.indexOf(b) < 0)),
   );
 
-  const views: ViewLayout[] = [];
-  let cursorX = 0;
-  let maxH = 0;
+  const views: (ViewLayout & { region: BBox })[] = [];
+  let gMinX = Infinity;
+  let gMinY = Infinity;
+  let gMaxX = -Infinity;
+  let gMaxY = -Infinity;
   for (const view of ordered) {
     const vp = byView.get(view) ?? [];
-    // Content bbox = union of every panel outline bbox in this view.
     let minX = Infinity;
     let minY = Infinity;
     let maxX = -Infinity;
@@ -93,15 +119,41 @@ function computeViewLayouts(panels: EditorPanel[]): {
       maxX = 0;
       maxY = 0;
     }
-    const w = maxX - minX;
-    const h = maxY - minY;
-    // Offset so content starts at cursorX/0 (normalized top).
-    views.push({ view, offsetX: cursorX - minX, offsetY: -minY, panels: vp });
-    cursorX += w + VIEW_GUTTER;
-    if (h > maxH) maxH = h;
+    gMinX = Math.min(gMinX, minX);
+    gMinY = Math.min(gMinY, minY);
+    gMaxX = Math.max(gMaxX, maxX);
+    gMaxY = Math.max(gMaxY, maxY);
+    // Native coords: no per-view offset.
+    views.push({
+      view,
+      offsetX: 0,
+      offsetY: 0,
+      panels: vp,
+      region: { x: minX, y: minY, w: maxX - minX, h: maxY - minY },
+    });
   }
 
-  return { views, bounds: { w: Math.max(0, cursorX - VIEW_GUTTER), h: maxH } };
+  const panelBounds: BBox = Number.isFinite(gMinX)
+    ? { x: gMinX, y: gMinY, w: gMaxX - gMinX, h: gMaxY - gMinY }
+    : { x: 0, y: 0, w: ART_VIEWBOX.w, h: ART_VIEWBOX.h };
+  return { views, panelBounds };
+}
+
+/** Scale+translate so `target` (doc-space bbox) fits the viewport with padding.
+    Magnification is allowed (capped) — the old `min(…, 1)` cap is what shrank the
+    art into a strip with dead canvas around it (Goal 12 D2). */
+function frame(
+  target: BBox,
+  width: number,
+  height: number,
+): { scale: number; x: number; y: number } {
+  const pad = 48;
+  const sx = target.w > 0 ? (width - pad * 2) / target.w : 1;
+  const sy = target.h > 0 ? (height - pad * 2) / target.h : 1;
+  const scale = Math.max(0.02, Math.min(sx, sy, 6));
+  const x = (width - target.w * scale) / 2 - target.x * scale;
+  const y = (height - target.h * scale) / 2 - target.y * scale;
+  return { scale, x, y };
 }
 
 export function CanvasStage({
@@ -113,6 +165,10 @@ export function CanvasStage({
   height,
   onSelect,
   onCommit,
+  artUrl,
+  activeView,
+  selectedZoneId,
+  onZoneSelect,
   exposeStage,
   onCueChange,
 }: Props) {
@@ -123,18 +179,40 @@ export function CanvasStage({
   const [liveDrag, setLiveDrag] = useState<LiveDrag | null>(null);
   const [guides, setGuides] = useState<SnapGuide[]>([]);
 
-  const { views, bounds } = useMemo(() => computeViewLayouts(panels), [panels]);
+  const { views, panelBounds } = useMemo(() => computeViewLayouts(panels), [panels]);
 
-  // Fit the whole vehicle into the viewport (scale to contain) and center it.
+  // When a single view is framed, render only that view's zones/artwork so the
+  // other views' geometry doesn't float over the cropped backdrop (Goal 12 D2).
+  const renderViews = useMemo(
+    () => (activeView === 'all' ? views : views.filter((v) => v.view === activeView)),
+    [views, activeView],
+  );
+
+  // The region a single view occupies: its panel bbox padded so the surrounding
+  // art (roof/wheels) is in frame, clamped to the art viewBox. null for 'all'.
+  const activeRegion = useMemo<BBox | null>(() => {
+    if (activeView === 'all') return null;
+    const v = views.find((vv) => vv.view === activeView);
+    if (!v) return null;
+    const padX = v.region.w * 0.18;
+    const padY = v.region.h * 0.42;
+    const x = Math.max(0, v.region.x - padX);
+    const y = Math.max(0, v.region.y - padY);
+    return {
+      x,
+      y,
+      w: Math.min(ART_VIEWBOX.w, v.region.x + v.region.w + padX) - x,
+      h: Math.min(ART_VIEWBOX.h, v.region.y + v.region.h + padY) - y,
+    };
+  }, [views, activeView]);
+
+  // Camera: frame the active view's region, or the whole vehicle for 'all' (the
+  // art viewBox when art is present, else the panel bounds). Magnification is now
+  // allowed (the old min(…,1) cap shrank everything into a strip).
   const fit = useMemo(() => {
-    const pad = 80;
-    const sx = bounds.w > 0 ? (width - pad * 2) / bounds.w : 1;
-    const sy = bounds.h > 0 ? (height - pad * 2) / bounds.h : 1;
-    const scale = Math.max(0.02, Math.min(sx, sy, 1));
-    const offX = (width - bounds.w * scale) / 2;
-    const offY = (height - bounds.h * scale) / 2;
-    return { scale, x: offX, y: offY };
-  }, [bounds, width, height]);
+    const whole = artUrl ? { x: 0, y: 0, w: ART_VIEWBOX.w, h: ART_VIEWBOX.h } : panelBounds;
+    return frame(activeRegion ?? whole, width, height);
+  }, [activeRegion, panelBounds, artUrl, width, height]);
 
   const registerNode = useCallback((id: ElementId, node: Konva.Node | null) => {
     if (node) nodeRegistry.current.set(id, node);
@@ -273,12 +351,27 @@ export function CanvasStage({
       y={fit.y}
       onMouseDown={onStageMouseDown}
       onTransformEnd={onTransformEnd}
-      style={{ background: '#f4f4f5' }}
+      style={{ background: '#e4e4e7' }}
     >
-      <VehicleLayer views={views} />
+      <VehicleArtLayer
+        artUrl={artUrl}
+        width={ART_VIEWBOX.w}
+        height={ART_VIEWBOX.h}
+        crop={
+          activeRegion
+            ? { x: activeRegion.x, y: activeRegion.y, w: activeRegion.w, h: activeRegion.h }
+            : null
+        }
+      />
+      <VehicleLayer
+        views={renderViews}
+        hasArt={!!artUrl}
+        selectedZoneId={selectedZoneId}
+        onZoneSelect={onZoneSelect}
+      />
       <ArtworkLayer
         doc={doc}
-        views={views}
+        views={renderViews}
         clips={clips}
         selection={doc.selection}
         layerRef={artworkLayerRef}
@@ -289,7 +382,7 @@ export function CanvasStage({
       />
       <OverlayLayer
         doc={doc}
-        views={views}
+        views={renderViews}
         clips={clips}
         selection={doc.selection}
         liveDrag={liveDrag}
