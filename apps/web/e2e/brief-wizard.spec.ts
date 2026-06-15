@@ -61,9 +61,11 @@ test.describe('Goal 5 brief wizard', () => {
     // round-trips (photo + logo, B2C-004) blow well past test.slow()'s 3×30s —
     // the 90s budget was expiring mid-journey at whichever step was active
     // (the failure point moved between runs). Production targets finish in a
-    // fraction of this. 360s (was 300s) leaves room for the two 180s upload
-    // ceilings below when the Render worker is cold (Goal 11 D4).
-    test.setTimeout(360_000);
+    // fraction of this. 420s (was 300s) covers even the theoretical worst case of
+    // BOTH 180s upload ceilings below going cold plus the ~20 other interactions
+    // (realistically only the smoke's FIRST upload is cold; the worker warms after
+    // — Goal 11 D4).
+    test.setTimeout(420_000);
     const seededEmail = process.env.SMOKE_CUSTOMER_EMAIL;
     const seededPassword = process.env.SMOKE_CUSTOMER_PASSWORD;
     if (seededEmail && seededPassword) {
