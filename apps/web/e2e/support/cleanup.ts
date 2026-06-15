@@ -49,8 +49,21 @@ export async function softDeleteProjectViaUi(page: Page, projectId: string): Pro
     .waitFor({ state: 'visible', timeout: STEP_TIMEOUT_MS })
     .catch(() => undefined);
   if ((await card.count()) === 0) return;
-  await card.getByTestId('project-menu-trigger').click({ timeout: STEP_TIMEOUT_MS });
-  await page.getByTestId('project-delete-item').click({ timeout: STEP_TIMEOUT_MS });
+  // Open the Radix overflow menu, then click delete. The FIRST trigger click
+  // frequently no-ops (the menu doesn't mount), so the delete item never appears
+  // and teardown silently leaked the project (soft_deleted stayed false) — this
+  // was no-op'ing net-zero for every spec using this helper. Retry the open until
+  // the destructive item is actually visible (Goal 12; the prior single-click is
+  // the original 2026-06-14 leak source).
+  const trigger = card.getByTestId('project-menu-trigger');
+  const deleteItem = page.getByTestId('project-delete-item');
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await trigger.click({ timeout: STEP_TIMEOUT_MS });
+    if (await deleteItem.isVisible().catch(() => false)) break;
+    await deleteItem.waitFor({ state: 'visible', timeout: 1500 }).catch(() => undefined);
+    if (await deleteItem.isVisible().catch(() => false)) break;
+  }
+  await deleteItem.click({ timeout: STEP_TIMEOUT_MS });
   await page.getByTestId('delete-confirm').click({ timeout: STEP_TIMEOUT_MS });
   // Soft-deleted projects drop out of the active list — the card disappears.
   await expect(card).toHaveCount(0, { timeout: STEP_TIMEOUT_MS });
