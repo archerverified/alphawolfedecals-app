@@ -709,6 +709,91 @@ describe('cross-view coherence (Goal 17) — anchor-then-derive + approved-draft
       expect(byView[v]!.prompt).toContain('COHERENCE');
     }
   });
+
+  it('a transient signed-URL failure on a derived view never strands the job — a later slice retries to completion', async () => {
+    h.fakeVehicles.getPublishedDetail.mockResolvedValue(multiViewVehicle(MV));
+    h.compileBriefMock.mockResolvedValue({
+      directions: [directionFixture('literal', MV)],
+      promptVersion: 'v4',
+      usage: { inputTokens: 1000, outputTokens: 800, estimatedUsd: 0.005 },
+    });
+    // Fail the FIRST anchor-donor CONDITIONING sign (a non-preview key) once.
+    // signedAssetReadUrl is also used for preview URLs (buildSnapshot swallows
+    // those), so target the conditioning path specifically. Conditioning is
+    // resolved BEFORE claimJob, so the job stays 'pending' (never stuck
+    // 'submitting') and a later slice retries cleanly — the run still completes.
+    let injected = false;
+    h.fakeStorage.signedAssetReadUrl.mockImplementation(async (key: string) => {
+      if (!injected && !key.includes('-preview') && key.includes('-driver')) {
+        injected = true;
+        throw new Error('transient storage error');
+      }
+      return `https://signed.test/${key}`;
+    });
+    const runId = seedRun({ model: 'nano_banana_edit' });
+
+    const snapshot = await advanceUntilTerminal(runId, 24);
+    expect(snapshot.status).toBe('complete');
+    expect(h.state.jobs.every((j) => j.status === 'complete')).toBe(true);
+    expect(injected).toBe(true); // the failure path was actually exercised
+    // Restore the default impl (mockImplementation persists past clearAllMocks).
+    h.fakeStorage.signedAssetReadUrl.mockImplementation(
+      async (key: string) => `https://signed.test/${key}`,
+    );
+  });
+
+  it('final: a missing lineage donor falls back to structure-only AND emits final_donor_missing', async () => {
+    const parentId = seedRun({
+      id: 'parent-1',
+      status: 'complete',
+      kind: 'initial',
+      directions: {
+        promptVersion: 'v4',
+        orchestratorCostUsd: 0.005,
+        directions: [directionFixture('literal', MV)],
+      },
+      completedAt: new Date(),
+    });
+    // Only front + driver have approved draft renders; 'back' has none → its final
+    // view must degrade to structure-only, but that degradation must be OBSERVABLE.
+    ['front', 'driver'].forEach((v, i) =>
+      h.state.images.push({
+        id: `pimg-${i}`,
+        runId: parentId,
+        jobId: `pj-${i}`,
+        conceptKey: 'literal',
+        view: v,
+        storagePath: `generations/proj-1/parent-1/literal-${v}.png`,
+        previewPath: null,
+        width: 1024,
+        height: 768,
+        provider: 'mock',
+        model: 'nano_banana_edit',
+        costUsd: 0,
+        provenance: {},
+        createdAt: new Date(),
+      }),
+    );
+    h.fakeVehicles.getPublishedDetail.mockResolvedValue(multiViewVehicle(MV));
+    const submitSpy = vi.spyOn(mockProvider, 'submit');
+    const runId = seedRun({
+      id: 'final-1',
+      kind: 'final',
+      parentRunId: parentId,
+      conceptKey: 'literal',
+      model: 'flux2_pro_edit',
+    });
+
+    const snapshot = await advanceUntilTerminal(runId, 20);
+    expect(snapshot.status).toBe('complete');
+    const byView = submitsByView(submitSpy);
+    // 'back' has no donor → structure-only fallback.
+    expect(byView.back!.imageUrls).toEqual(['https://templates.test/views/veh-1/back.png']);
+    // front/driver have donors → two-image conditioning.
+    expect(byView.front!.imageUrls).toHaveLength(2);
+    // The degraded export view is observable.
+    expect(events()).toContain('final_donor_missing');
+  });
 });
 
 describe('view resolution helpers', () => {

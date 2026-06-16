@@ -584,20 +584,19 @@ async function renderSlice(userId: string, run: GenerationRunRow): Promise<void>
       processed += 1;
       try {
         if (job.status === 'pending' && !job.providerRequestId) {
-          // PER-JOB SUBMIT CLAIM (review fix F2): CAS pending→submitting
-          // BEFORE the provider call. Exactly one concurrent slice wins;
-          // losers skip — two racing polls can never double-submit a job.
-          const claimed = await generation.claimJob(userId, job.id);
-          if (!claimed) continue; // another slice holds (or held) the claim
-
           // Conditioning: imageUrls[0] is ALWAYS this view's own structure render
           // (geometry). Derived draft / final views add a second reference image
           // (the anchor / approved-draft render) so the design stays coherent.
+          // Resolved BEFORE the claim (review fix): signing the donor URL is
+          // side-effect-free, so a transient signer error leaves the job 'pending'
+          // (retried next slice) instead of stranding it 'submitting' until the
+          // run deadline. A lost claim simply discards the resolved URL.
           const structureUrl = storage.templatePublicUrl(
             `views/${project.vehicleId}/${job.view}.png`,
           );
           let imageUrls = [structureUrl];
           let prompt = job.prompt;
+          let finalDonorMissing = false;
           if (run.kind === 'initial' && job.view !== anchorView) {
             // Ungated above ⇒ this concept's anchor render exists.
             const anchor = anchorImageByConcept.get(job.conceptKey)!;
@@ -614,8 +613,26 @@ async function renderSlice(userId: string, run: GenerationRunRow): Promise<void>
                 await storage.signedAssetReadUrl(donor, COHERENCE_URL_TTL_S),
               ];
               prompt = `${job.prompt}\n\n${coherenceDirective('final')}`;
+            } else {
+              // No approved-draft donor: graceful structure-only fallback — but a
+              // final view re-rolling independently is the Goal-16 divergence risk,
+              // so flag it (emitted by the claim winner below) for observability.
+              finalDonorMissing = true;
             }
-            // else: no approved render to anchor on — graceful structure-only fallback.
+          }
+
+          // PER-JOB SUBMIT CLAIM (review fix F2): CAS pending→submitting before the
+          // provider call. Exactly one concurrent slice wins; losers skip — two
+          // racing polls can never double-submit a job.
+          const claimed = await generation.claimJob(userId, job.id);
+          if (!claimed) continue; // another slice holds (or held) the claim
+          if (finalDonorMissing) {
+            await captureServerEvent('final_donor_missing', userId, {
+              runId: run.id,
+              projectId: run.projectId,
+              conceptKey: job.conceptKey,
+              view: job.view,
+            });
           }
           let submission;
           try {

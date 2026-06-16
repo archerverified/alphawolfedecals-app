@@ -100,7 +100,10 @@ normalization can't fix style divergence). Consensus refinements ADOPTED into th
    concepts' in-flight spend.
 3. **Gated jobs don't consume the slice budget** — only increment `processed` on a real submit/harvest.
 4. **Anchor/donor URL = `signedAssetReadUrl(storagePath)`** (the non-watermarked ORIGINAL, not `previewPath`);
-   fal fetches the Supabase signed host (a new outbound surface); 24h TTL ≫ 15-min RUN_TTL.
+   fal fetches the Supabase signed host (a new outbound surface); TTL = `COHERENCE_URL_TTL_S` = 1h
+   (3600s) — still ≫ the 15-min RUN_TTL, kept tight to minimize the window the unwatermarked original
+   is reachable. The signing call is resolved BEFORE `claimJob` (post-review fix) so a transient signer
+   error leaves the job `pending`/retryable instead of stranded `submitting` until the deadline.
 5. **Cost-estimate undercount** (all four). `estimateRunCostUsd` (`actions/generation.ts:110`) hardcodes
    `inputImages=1`; `flux2_pro_metered` bills input MP, so a 2-input final view is ~$0.03 (not $0.015) — the
    daily $5 cap is a non-negotiable real-dollar control. Bump the pre-estimate to `inputImages=2` for `final`;
