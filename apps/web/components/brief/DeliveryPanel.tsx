@@ -116,7 +116,7 @@ export function DeliveryPanel({ projectId, flushNow }: Props) {
           Send
         </Button>
       </div>
-      <p className="mt-2 text-[11px] text-zinc-400">
+      <p className="mt-2 text-[11px] text-zinc-500">
         "Submit to a shop on Alpha Wolf" opens your design in the editor — the Submit button there
         sends it into a shop's order queue.
       </p>

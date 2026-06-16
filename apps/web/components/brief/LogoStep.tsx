@@ -231,7 +231,7 @@ export function LogoStep({ projectId, data, patch, panels, vehicleDims }: Props)
               />
             ) : (
               <div className="flex size-20 shrink-0 items-center justify-center rounded bg-zinc-100">
-                <Loader2 className="size-4 animate-spin text-zinc-400" aria-hidden />
+                <Loader2 className="size-4 animate-spin text-zinc-500" aria-hidden />
               </div>
             )}
             <div className="min-w-0 flex-1">
@@ -253,7 +253,7 @@ export function LogoStep({ projectId, data, patch, panels, vehicleDims }: Props)
               aria-label="Remove this logo"
               data-testid="logo-remove"
               disabled={busy}
-              className="shrink-0 rounded-full p-1 text-zinc-400 hover:text-zinc-700 disabled:pointer-events-none disabled:opacity-50"
+              className="shrink-0 rounded-full p-1 text-zinc-500 hover:text-zinc-700 disabled:pointer-events-none disabled:opacity-50"
             >
               <X className="size-4" aria-hidden />
             </button>

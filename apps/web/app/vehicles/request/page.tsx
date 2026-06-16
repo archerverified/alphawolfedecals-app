@@ -8,7 +8,7 @@ import { getOrCreateFormCsrfToken } from '../../../lib/csrf';
 import { RequestForm } from '../../../components/vehicles/RequestForm';
 
 export const metadata = {
-  title: 'Request a vehicle — Alpha Wolf Wrap Studio',
+  title: 'Request a vehicle',
 };
 
 type Search = { year?: string; make?: string; model?: string; trim?: string };

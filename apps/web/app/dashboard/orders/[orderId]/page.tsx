@@ -20,7 +20,7 @@ export const dynamic = 'force-dynamic';
 
 export async function generateMetadata({ params }: { params: Promise<{ orderId: string }> }) {
   const { orderId } = await params;
-  return { title: `Order #${orderId.slice(0, 8)} — Alpha Wolf Wrap Studio` };
+  return { title: `Order #${orderId.slice(0, 8)}` };
 }
 
 function Field({ label, value }: { label: string; value: string }) {

@@ -445,7 +445,7 @@ export function ReviewStep({
           </div>
         ))}
       </dl>
-      <p className="mt-4 text-xs text-zinc-400">
+      <p className="mt-4 text-xs text-zinc-500">
         Saving freezes this brief as a numbered version. You can keep editing afterwards — and
         export your spec pack any time.
       </p>

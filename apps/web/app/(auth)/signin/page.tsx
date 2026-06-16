@@ -1,7 +1,7 @@
 import { SignInForm } from '../../../components/auth/SignInForm';
 
 export const metadata = {
-  title: 'Sign in — Alpha Wolf Wrap Studio',
+  title: 'Sign in',
 };
 
 type Search = { next?: string };

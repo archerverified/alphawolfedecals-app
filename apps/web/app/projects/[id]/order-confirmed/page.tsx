@@ -21,7 +21,7 @@ import { requireUser } from '../../../../lib/admin/guard';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Order submitted — Alpha Wolf Wrap Studio',
+  title: 'Order submitted',
 };
 
 export default async function OrderConfirmedPage({

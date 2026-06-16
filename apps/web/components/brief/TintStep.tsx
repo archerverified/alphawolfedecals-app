@@ -89,12 +89,12 @@ export function TintStep({ projectId, data, patch }: Props) {
                     type="button"
                     onClick={() => setVlt(w.key, null)}
                     aria-label={`Clear ${w.label}`}
-                    className="text-xs text-zinc-400 underline hover:text-zinc-600"
+                    className="text-xs text-zinc-500 underline hover:text-zinc-600"
                   >
                     clear
                   </button>
                 ) : (
-                  <span className="text-xs text-zinc-400">no tint</span>
+                  <span className="text-xs text-zinc-500">no tint</span>
                 )}
               </div>
               <div className="flex flex-wrap gap-2">
@@ -156,7 +156,7 @@ export function TintStep({ projectId, data, patch }: Props) {
         })}
       </ul>
 
-      <p className="mt-4 text-xs text-zinc-400">
+      <p className="mt-4 text-xs text-zinc-500">
         Passenger-car rules (table v{TINT_LAW_VERSION}). Vans and SUVs often allow darker glass
         behind the driver. Laws change — your installer confirms what&apos;s legal before any film
         goes on. {/* LEGAL-PASS FLAG: final disclaimer wording needs Archer's review (PRD §8). */}

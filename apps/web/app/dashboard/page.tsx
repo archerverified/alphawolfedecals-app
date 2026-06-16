@@ -19,7 +19,7 @@ import { formatOrderDate } from '@/lib/shop/format';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Production queue — Alpha Wolf Wrap Studio',
+  title: 'Production queue',
 };
 
 export default async function DashboardPage() {

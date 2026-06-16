@@ -94,7 +94,7 @@ export function ShareVoting({ token, concepts: initial }: Props) {
                     className="h-full w-full object-contain"
                   />
                 ) : (
-                  <div className="flex h-full items-center justify-center text-xs text-zinc-400">
+                  <div className="flex h-full items-center justify-center text-xs text-zinc-500">
                     Preview coming soon
                   </div>
                 )}
@@ -129,7 +129,7 @@ export function ShareVoting({ token, concepts: initial }: Props) {
         })}
       </ul>
 
-      <p className="mt-6 text-center text-xs text-zinc-400">
+      <p className="mt-6 text-center text-xs text-zinc-500">
         One vote per visitor — you can change your mind anytime.
       </p>
     </div>

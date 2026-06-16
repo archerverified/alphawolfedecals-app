@@ -4,7 +4,7 @@ import { SignupForm } from '../../../components/auth/SignupForm';
 import { getOrCreateFormCsrfToken } from '../../../lib/csrf';
 
 export const metadata = {
-  title: 'Sign up — Alpha Wolf Wrap Studio',
+  title: 'Sign up',
 };
 
 export default async function CustomerSignupPage({

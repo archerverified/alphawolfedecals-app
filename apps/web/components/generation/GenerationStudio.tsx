@@ -394,7 +394,7 @@ export function GenerationStudio({
                     className="w-full rounded-md"
                   />
                 ) : (
-                  <div className="flex h-28 animate-pulse items-center justify-center rounded-md bg-zinc-100 text-xs text-zinc-400">
+                  <div className="flex h-28 animate-pulse items-center justify-center rounded-md bg-zinc-100 text-xs text-zinc-500">
                     Painting…
                   </div>
                 )}
@@ -406,7 +406,7 @@ export function GenerationStudio({
 
       {concepts.length === 0 && !runBusy ? (
         <section className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-zinc-300 bg-white px-6 py-16 text-center">
-          <Wand2 className="size-8 text-zinc-400" aria-hidden />
+          <Wand2 className="size-8 text-zinc-500" aria-hidden />
           <div>
             <h2 className="text-lg font-medium">No designs yet</h2>
             <p className="mx-auto mt-1 max-w-md text-sm text-zinc-500">
@@ -510,7 +510,7 @@ export function GenerationStudio({
                         alt={`${card.title} — ${shownView ? viewLabel(shownView) : 'preview'}`}
                       />
                       {finalUrl ? (
-                        <p className="text-[11px] text-zinc-400">
+                        <p className="text-[11px] text-zinc-500">
                           Full-quality final — no watermark.
                         </p>
                       ) : null}
@@ -518,7 +518,7 @@ export function GenerationStudio({
                   ) : (
                     <div
                       className={
-                        'flex h-32 items-center justify-center rounded-md bg-zinc-100 text-xs text-zinc-400' +
+                        'flex h-32 items-center justify-center rounded-md bg-zinc-100 text-xs text-zinc-500' +
                         (busyHere ? ' animate-pulse' : '')
                       }
                     >

@@ -2,7 +2,7 @@ import { VerifyForm } from '../../../components/auth/VerifyForm';
 import { getOrCreateFormCsrfToken } from '../../../lib/csrf';
 
 export const metadata = {
-  title: 'Verify your email — Alpha Wolf Wrap Studio',
+  title: 'Verify your email',
 };
 
 // sent=0 — signup created the account but the verification email failed to

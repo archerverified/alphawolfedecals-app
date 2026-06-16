@@ -11,7 +11,7 @@ import type { EditorPanel } from '../../../../components/editor/contract';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Editor — Alpha Wolf Wrap Studio',
+  title: 'Editor',
 };
 
 type WrapSafeZone = { clip_path?: string };
@@ -20,10 +20,15 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
   const { id: projectId } = await params;
   const user = await requireUser(`/projects/${projectId}/editor`);
 
-  const project = await projects.getProject(user.id, projectId);
+  // getProject + getWorkingVersion are independent (both keyed only on the
+  // RLS-scoped user.id + projectId) — fetch them in parallel (Goal 17 D4 perf:
+  // collapse the editor-open await waterfall). getPublishedDetail genuinely
+  // depends on project.vehicleId, so it stays sequential.
+  const [project, working] = await Promise.all([
+    projects.getProject(user.id, projectId),
+    projects.getWorkingVersion(user.id, projectId),
+  ]);
   if (!project || project.status === 'deleted') notFound();
-
-  const working = await projects.getWorkingVersion(user.id, projectId);
   if (!working) notFound();
 
   const vehicle = await vehicles.getPublishedDetail(project.vehicleId);
