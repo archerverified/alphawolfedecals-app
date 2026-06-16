@@ -52,6 +52,16 @@ Fresh-context security re-run (the first agent timed out). All verified live + i
 - **Deterministic in-goal fixes (D8):** `des-contrast-zinc400-on-white` [Med] (text-zinc-400 captions 2.56:1 fail AA → darken), `des-no-favicon` [Low], `des-title-template-double` [Low], `des-offbrand-sky-admin-badge` [Low], `des-429-unstyled-page` [Low].
 - **`des-a11y-authed-pending` [Med/PENDING-LOCAL]:** axe sweep of authed pages — run on the local harness (D5).
 
+## D6 — Real-fal E2E proof (DONE — verified independently)
+
+Full customer journey driven on the local harness, MOCK first (green, first-try) then once on **REAL fal** ($0.7134; `nano_banana_edit`→`kontext_dev`→`flux2_pro_edit`, provider='fal' confirmed in `generation_runs`). Spec: `apps/web/e2e/goal-16-full-journey.spec.ts` (28KB, ported from goal-13 POM). Evidence: `docs/deployment/screenshots/2026-06-16-goal-16/` — **26-shot ordered gallery** (landing → every brief step → 3 concepts → iterate → final → editor → export) + **`goal-16-export-pack.pdf`** (395 KB, %PDF-1.7, 4 pages, real gloss-black/cyan AI hero). Logo composited on driver door + passenger door + hood (DB-verified). Locked brief stored verbatim (gloss-black→cyan gradient, gloss).
+
+- **Carryover A (door white-box): FIXED — verified.** No reserved white logo box on any real-fal view (I viewed driver+passenger myself: the rear-door region renders in the base wrap color, continuous). The v3 base-color clear-space fix held. (One run, not statistical — but the defect does not reproduce.)
+- **Carryover B (multi-view consistency): OPEN — verified, not resolved.** I viewed the 4 real-fal views: driver = glossy black + cyan wireframe outlines; passenger = solid cyan body. **The two sides disagree on the base color (black vs cyan)** and neither is the brief's gradient. The v3 render-style directive did not enforce coherence. Root cause is **architectural** — each view is an independent img2img call with no cross-view coherence; a prompt tweak cannot fix it (systematic-debugging: don't thrash more fal on prompt edits when the architecture is the issue). **Repro:** the committed `goal-16-export-pack.pdf` page-2 grid + the brief above. **Recommended fix (follow-up goal):** a cross-view coherence pass — single multi-view/multi-panel generation, or generate one canonical side then derive the others, or a deterministic post-gen palette+style normalization.
+- **Honest flag:** the MOCK provider ALSO writes generated objects to LIVE `project-assets` (only fal $ is saved, not storage side-effects) — relevant to the smoke-leak class; truly-net-zero local runs must hard-purge storage (`scripts/purge-project-storage.mjs`), not just soft-delete the row.
+
+**Net-zero (verified independently):** prod `project-assets` = **4** (both my run's project-ids purged; the 4 are the pre-existing legit objects); `vehicle-templates` = 58 untouched; local throwaway project cascade-deleted; harness restored to mock. **Spend: fal $0.7134 + Anthropic ~$0.05–0.10 ≈ $0.77–0.81 of the $6 + $1 ceiling.**
+
 ## Remaining human gates (OUT of scope per Archer) — for the GO/NO-GO
 
 Final legal copy · dependency-triage (separate goal) · domain migration (separate goal) · the `APP_ALLOW_INDEXING` flip.
