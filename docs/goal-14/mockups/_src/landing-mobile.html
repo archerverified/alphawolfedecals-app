@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Alpha Wolf Wrap Studio — Landing (mobile)</title>
+<link rel="stylesheet" href="./colors_and_type.css" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; width: 100%; overflow-x: hidden; }
+  body {
+    font-family: var(--font-sans); background: var(--aws-bg-page);
+    color: var(--aws-fg-strong); -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01","cv11";
+  }
+  img, svg { max-width: 100%; }
+  a { text-decoration: none; color: inherit; }
+  .icon { width: 16px; height: 16px; stroke: currentColor; stroke-width: 2;
+    fill: none; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: 46px; border-radius: 6px; border: 1px solid transparent;
+    font-size: 14px; font-weight: 500; line-height: 1; white-space: nowrap;
+    transition: background-color 150ms; cursor: pointer; width: 100%;
+  }
+  .btn--primary { background: #18181B; color: #fff; box-shadow: var(--shadow-sm); }
+  .btn--ghost-dark { background: transparent; color:#fff; border-color: var(--aws-zinc-700); }
+
+  /* HERO BAND */
+  .band { position: relative; overflow: hidden; background: var(--aws-zinc-900); }
+  .band::before { content:""; position:absolute; top:0; left:0; right:0; height:2px; background: var(--awd-blue); }
+  .band__inner { padding: 22px 22px 32px; }
+  .band__nav { display:flex; align-items:center; justify-content:space-between; padding-bottom: 30px; }
+  .band__brandtag { font-size: 10px; font-weight:500; text-transform:uppercase; letter-spacing:.10em; color: var(--aws-zinc-400); }
+  .band__menu { width: 22px; height: 22px; stroke: var(--aws-zinc-300); stroke-width: 2; fill:none; stroke-linecap:round; }
+
+  .hero__eyebrow { margin: 0 0 16px; font-size: 10px; font-weight:500; text-transform:uppercase; letter-spacing:.10em; color: var(--aws-zinc-500); }
+  .hero__logo { display:block; width: 100%; max-width: 300px; height:auto; margin: 0 0 22px; }
+  .hero__h1 { margin:0; font-size: 29px; line-height: 1.08; letter-spacing:-0.02em; font-weight:600; color:#fff; }
+  .hero__h1 .accent { color: var(--awd-blue); }
+  .hero__sub { margin: 16px 0 0; font-size: 15px; line-height: 1.55; color: var(--aws-zinc-400); }
+  .hero__cta { display:flex; flex-direction: column; gap: 10px; margin-top: 24px; }
+  .hero__note { margin: 18px 0 0; font-size: 11px; color: var(--aws-zinc-500); font-family: var(--font-mono); display:flex; align-items:center; gap: 8px; }
+  .hero__note .dot { width:5px; height:5px; border-radius:9999px; background: var(--awd-blue); }
+
+  .visual { margin-top: 26px; border: 1px solid var(--aws-zinc-800); border-radius: 12px; padding: 18px; }
+  .visual__head { display:flex; align-items:center; justify-content:space-between; margin-bottom: 6px; }
+  .visual__tag { font-size: 10px; font-weight:500; text-transform:uppercase; letter-spacing:.10em; color: var(--aws-zinc-500); }
+  .visual__dims { font-family: var(--font-mono); font-size: 10px; color: var(--aws-zinc-500); }
+  .visual__art { width:100%; height: 120px; display:block; }
+  .visual__foot { display:flex; gap: 8px; margin-top: 8px; border-top: 1px solid var(--aws-zinc-800); padding-top: 10px; flex-wrap: wrap; }
+  .visual__chip { font-family: var(--font-mono); font-size: 9px; color: var(--aws-zinc-400); border: 1px solid var(--aws-zinc-800); border-radius: 9999px; padding: 3px 9px; }
+  .visual__chip--on { color:#fff; border-color: var(--awd-blue); }
+
+  /* VALUE STRIP */
+  .strip { background: var(--aws-zinc-50); padding: 36px 22px 48px; }
+  .strip__eyebrow { margin:0 0 8px; font-size: 10px; font-weight:500; text-transform:uppercase; letter-spacing:.10em; color: var(--aws-fg-subtle); }
+  .strip__lead { margin: 0 0 22px; font-size: 20px; font-weight:600; letter-spacing:-0.01em; color: var(--aws-fg-strong); }
+  .rows { display:flex; flex-direction: column; gap: 14px; }
+  .vrow { background:#fff; border:1px solid var(--aws-border); border-radius: 12px; box-shadow: var(--shadow-sm); padding: 20px; display:flex; flex-direction: column; gap: 10px; }
+  .vrow__num { font-family: var(--font-mono); font-size: 11px; color: var(--aws-fg-faint); display:flex; align-items:center; gap: 10px; }
+  .vrow__num .bar { width: 16px; height: 1px; background: var(--awd-blue); }
+  .vrow__title { margin:0; font-size: 15px; font-weight:600; color: var(--aws-fg-strong); }
+  .vrow__desc { margin:0; font-size: 13px; line-height: 1.55; color: var(--aws-fg-muted); }
+</style>
+</head>
+<body>
+
+  <section class="band">
+    <div class="band__inner">
+      <nav class="band__nav">
+        <span class="band__brandtag">Alpha Wolf Wrap Studio</span>
+        <svg class="band__menu" viewBox="0 0 24 24"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="20" y2="17"/></svg>
+      </nav>
+
+      <p class="hero__eyebrow">Salem, Oregon · vehicle wraps</p>
+      <img class="hero__logo" src="./assets/logo.png" alt="Alpha Wolf Decals" />
+      <h1 class="hero__h1">Wrap your truck. <span class="accent">Quote-ready</span> in minutes.</h1>
+      <p class="hero__sub">Start on the exact outline of your vehicle, get AI wrap concepts rendered on it, and hand your shop a print-ready pack.</p>
+      <div class="hero__cta">
+        <a class="btn btn--primary" href="#">Start your wrap
+          <svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+        <a class="btn btn--ghost-dark" href="#">Browse vehicles</a>
+      </div>
+      <p class="hero__note"><span class="dot"></span>Top 50 most-wrapped vehicles</p>
+
+      <figure class="visual" style="margin-top:26px;">
+        <div class="visual__head">
+          <span class="visual__tag">Accurate outline</span>
+          <span class="visual__dims">236.7″ L · 81.3″ W</span>
+        </div>
+        <svg class="visual__art" viewBox="0 0 320 110" preserveAspectRatio="xMidYMid meet" aria-label="Transit outline">
+          <line x1="14" y1="92" x2="306" y2="92" stroke="#00AEEF" stroke-width="1" opacity="0.5" />
+          <g fill="none" stroke="#FFFFFF" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">
+            <path d="M 22 84 L 22 36 Q 22 28 30 28 L 250 28 Q 272 28 288 44 L 298 70 Q 300 84 292 84" />
+            <line x1="22" y1="84" x2="292" y2="84" />
+            <circle cx="64" cy="84" r="11" fill="#18181B" /><circle cx="244" cy="84" r="11" fill="#18181B" />
+            <circle cx="64" cy="84" r="4" fill="#FFFFFF" /><circle cx="244" cy="84" r="4" fill="#FFFFFF" />
+          </g>
+          <g fill="none" stroke="#A1A1AA" stroke-width="1.2" stroke-linejoin="round">
+            <rect x="30" y="33" width="46" height="20" rx="2" /><line x1="108" y1="28" x2="108" y2="84" />
+          </g>
+        </svg>
+        <div class="visual__foot">
+          <span class="visual__chip visual__chip--on">Driver</span>
+          <span class="visual__chip">Passenger</span>
+          <span class="visual__chip">Rear</span>
+          <span class="visual__chip">Roof</span>
+        </div>
+      </figure>
+    </div>
+  </section>
+
+  <section class="strip">
+    <p class="strip__eyebrow">What you get</p>
+    <h2 class="strip__lead">Three honest steps, no design software.</h2>
+    <div class="rows">
+      <div class="vrow">
+        <div class="vrow__num"><span class="bar"></span>01</div>
+        <h3 class="vrow__title">An accurate vehicle outline</h3>
+        <p class="vrow__desc">Pick your exact year, make, model, and trim. Your design starts on a wrap-safe outline with real panel breaks.</p>
+      </div>
+      <div class="vrow">
+        <div class="vrow__num"><span class="bar"></span>02</div>
+        <h3 class="vrow__title">AI concepts on your vehicle</h3>
+        <p class="vrow__desc">Describe the look and get photoreal concepts rendered on your actual vehicle — not a generic mockup.</p>
+      </div>
+      <div class="vrow">
+        <div class="vrow__num"><span class="bar"></span>03</div>
+        <h3 class="vrow__title">A print-ready pack</h3>
+        <p class="vrow__desc">Your shop receives panels labelled, laid out, and seamed to body breaks — with bleed and linear feet.</p>
+      </div>
+    </div>
+  </section>
+
+</body>
+</html>
