@@ -47,6 +47,41 @@ import { WaitlistSheet } from './WaitlistSheet';
 
 type GenerationContext = Extract<GenerationContextResult, { ok: true }>;
 
+/**
+ * Concept preview with a branded skeleton until the design image actually
+ * decodes (Goal 15 D5 / D13-4 — the money shot must never flash blank). Keyed
+ * by afterUrl at the call site, so switching views or landing a final re-arms
+ * the skeleton until the new image paints.
+ */
+function ConceptMedia({
+  beforeUrl,
+  afterUrl,
+  alt,
+}: {
+  beforeUrl: string | null;
+  afterUrl: string;
+  alt: string;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <div className="relative min-h-32 overflow-hidden rounded-md">
+      {!loaded ? (
+        <div
+          data-testid="concept-skeleton"
+          className="absolute inset-0 z-10 animate-pulse bg-gradient-to-br from-zinc-100 via-white to-cyan-50"
+          aria-hidden
+        />
+      ) : null}
+      <BeforeAfterSlider
+        beforeUrl={beforeUrl}
+        afterUrl={afterUrl}
+        alt={alt}
+        onAfterLoad={() => setLoaded(true)}
+      />
+    </div>
+  );
+}
+
 const POLL_MS = 2500;
 
 interface Props {
@@ -425,9 +460,16 @@ export function GenerationStudio({
 
           <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             {concepts.map((card) => {
-              const finalUrl = view ? (card.finalViews?.[view] ?? null) : null;
-              const previewUrl = view ? (card.views[view] ?? null) : null;
+              // D5: show the selected view if it has rendered, else the FIRST
+              // rendered view (canonical order), so a settled card is never
+              // blank during the per-view paint gap (D13-4 — the money shot).
+              const shownView =
+                (view && (card.finalViews?.[view] ?? card.views[view]) ? view : undefined) ??
+                views.find((v) => card.finalViews?.[v] ?? card.views[v]);
+              const finalUrl = shownView ? (card.finalViews?.[shownView] ?? null) : null;
+              const previewUrl = shownView ? (card.views[shownView] ?? null) : null;
               const mediaUrl = finalUrl ?? previewUrl;
+              const beforeUrl = shownView ? (stockViews[shownView] ?? null) : null;
               const busyHere = runBusy && pendingConceptKey === card.key;
               return (
                 <article
@@ -452,10 +494,11 @@ export function GenerationStudio({
 
                   {mediaUrl ? (
                     <>
-                      <BeforeAfterSlider
-                        beforeUrl={view ? (stockViews[view] ?? null) : null}
+                      <ConceptMedia
+                        key={mediaUrl}
+                        beforeUrl={beforeUrl}
                         afterUrl={mediaUrl}
-                        alt={`${card.title} — ${view ? viewLabel(view) : 'preview'}`}
+                        alt={`${card.title} — ${shownView ? viewLabel(shownView) : 'preview'}`}
                       />
                       {finalUrl ? (
                         <p className="text-[11px] text-zinc-400">
