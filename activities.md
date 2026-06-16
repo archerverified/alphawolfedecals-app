@@ -6,6 +6,16 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-16 — Cowork verification of Goal 16 + carryover-B → Goal 17
+
+Cowork verified Goal 16 (PR #193, merged) against ground truth (DB, storage, export PDF, CI).
+- **VERIFIED GOOD:** PR #193 CI green (5/5) + §3 review + security re-run PASS. Net-zero + the recurring test-data leak FINALLY cleaned — prod dropped to the legit keepers: projects 19→3, users 15→4, project-assets 55→4, vehicle-templates 58 untouched; zero prod writes from the run. Carryover A (door white-box) FIXED (confirmed in the export). Security 13/13 (0 High). Spend ~$0.78.
+- **EXPORT (Cowork viewed the PDF):** branded black+cyan X3; logo assigned to both doors + hood; brand cyan #00AEEF; the gradient intent is correctly captured in the orchestrator prompt. **BUT carryover B is real + customer-visible:** the 4 real-fal views disagree on base colour (front/rear cyan-dominant, driver side black-with-cyan-outlines) — not one cohesive gradient. Root cause: architectural (independent per-view generation). → fixed in Goal 17.
+- 🔴 **SECURITY — secret exposure (recorded for permanence):** the Goal 16 run echoed live secret VALUES (FAL, Anthropic, **Supabase service-role**, **PII_ENCRYPTION_KEY**, AUTH) into the local CC transcript. Only ever in gitignored `.env.local`; gitleaks clean; no repo/external exposure. ACTION: rotate FAL / Anthropic / Supabase-service-role / AUTH; **do NOT casually rotate PII_ENCRYPTION_KEY** (§2 rule — needs a re-encryption migration; local-only exposure = low risk). Archer to rotate AFTER Goal 17. Goal 17 carries a HARD STOP: never echo/print secret values or `.env.local` into the transcript again.
+- **Verdict:** CONDITIONAL GO is honest. App/engine launch-ready; the open risk is the AI wrap cross-view coherence (carryover B). **Goal 17** = the coherence fix + the Goal-16 punch-list (Sentry NODE-9 /signin, zinc-400 caption contrast, doubled <title>, conditioning live re-render, Low perf) + re-verify.
+- **Human gates remaining for go-live:** final legal copy; dependency-triage goal; domain migration goal; flip `APP_ALLOW_INDEXING`.
+- **Cleanup pending (Archer):** drop `../alphawolf-goal-16` worktree + `alphawolf_g16` local DB; refresh graphify (`graphify update .`).
+
 ## 2026-06-16 — Goal 16 — Launch-Readiness Audit — CLOSEOUT
 
 **Status:** ✅ All four audit axes run + reported; everything fixable fixed in-goal, the rest
