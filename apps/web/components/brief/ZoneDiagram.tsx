@@ -98,8 +98,14 @@ export function ZoneDiagram({ panels, includedPanelIds, onToggle }: ZoneDiagramP
 
   const isIncluded = (id: string) => includedPanelIds === null || includedPanelIds.includes(id);
 
-  // ~260 units of label headroom below the tallest view.
-  const viewBox = `0 0 ${layout.width} ${layout.height + 320}`;
+  // Label headroom below the tallest view, plus horizontal padding so the
+  // centre-anchored edge labels (front / rear) don't clip at the SVG bounds
+  // (Goal 14 — they overran the viewBox at fontSize 180). Pad adapts to the
+  // longest view name so it holds for any template's view set.
+  const labelFontSize = 130;
+  const longestView = layout.viewLabels.reduce((m, l) => Math.max(m, l.view.length), 0);
+  const labelPad = Math.ceil(longestView * labelFontSize * 0.3) + 48;
+  const viewBox = `${-labelPad} 0 ${layout.width + labelPad * 2} ${layout.height + 320}`;
 
   return (
     <svg
@@ -148,7 +154,7 @@ export function ZoneDiagram({ panels, includedPanelIds, onToggle }: ZoneDiagramP
           x={l.x}
           y={l.y}
           textAnchor="middle"
-          fontSize={180}
+          fontSize={labelFontSize}
           fill="#a1a1aa"
           className="select-none capitalize"
         >
