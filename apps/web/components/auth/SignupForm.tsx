@@ -1,6 +1,7 @@
 'use client';
 
 import { useActionState, useState } from 'react';
+import { Gift } from 'lucide-react';
 import { CSRF_FIELD_NAME, passwordStrength } from '@alphawolf/auth';
 import { signupCustomerAction, signupShopAction } from '../../lib/actions/signup';
 
@@ -48,9 +49,9 @@ export function SignupForm({ variant, csrfToken, referralCode }: Props) {
       {variant === 'customer' && referralCode ? (
         <>
           <input type="hidden" name="referralCode" value={referralCode} />
-          <p className="rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-sm text-sky-900">
-            <span aria-hidden>🎁</span> You were invited — you’ll both get bonus design credits when
-            you verify.
+          <p className="bg-brand-soft border-brand/20 flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-zinc-800">
+            <Gift className="size-4 shrink-0 text-zinc-500" aria-hidden />
+            You were invited — you’ll both get bonus design credits when you verify.
           </p>
         </>
       ) : null}
