@@ -6,6 +6,105 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-16 — Goal 17 — Cross-View Coherence (carryover B) + Goal-16 punch-list — CLOSEOUT
+
+**Status:** ✅ The #1 launch-quality risk from Goal 16 (the export's four views disagreeing on base
+colour) is KILLED. Fresh-context `design-review` graded cross-view coherence **F → A** ("decisively
+improved"). Base: `goal/16-launch-readiness` @ `43ef618` (Archer chose to build Goal 17 on the unmerged
+Goal-16 branch — `origin/main` was still Goal 15). Branch `goal/17-cross-view-coherence`, **8 commits, PR
+for Archer** (worktree retained until merge). Environment: local build + real fal + LOCAL throwaway
+Postgres (`alphawolf_g16`, never prod) + live storage (hard-purged after every run). **Spend: fal $2.20 of
+the $7 ceiling** (3 real-fal briefs) + Anthropic ~$0.05. Net-zero verified. Diagram:
+[`docs/vault/diagrams/goal-17-cross-view-coherence.md`](docs/vault/diagrams/goal-17-cross-view-coherence.md).
+Design + 4-lens validation: `docs/deployment/audits/2026-06-17-goal-17/design.md`. Proof:
+`docs/deployment/screenshots/2026-06-17-goal-17/`.
+
+**THE HEADLINE — root cause + the fix (systematic-debugging RIGID).** Confirmed at the code level that
+`renderSlice` (`apps/web/lib/ai/run-pipeline.ts`) submitted **every view as an independent img2img call**
+— a per-view seed, only its own structure conditioning, NO shared visual anchor — so base colour + style
+diverged. Goal-16's v3 _text_ coherence directives provably failed on real fal; the lever is the
+**conditioning layer, not the prompt**. Fix = **canonical-anchor cross-view conditioning**: per concept the
+draft renders one anchor view (driver side) first, then every other view is conditioned on
+`[own-structure, anchor-render]` + a coherence directive + a shared per-concept seed; and the FINAL stage
+conditions each view on the **customer-APPROVED draft render** (resolved across the final→iteration→draft
+lineage), closing the draft→final drift gap (the export reproduces what was approved, never re-rolls).
+Per-view structure stays `imageUrls[0]` so per-view geometry → editor handoff + logo compositing are
+untouched; the logo is still composited, never AI-rendered. Orchestrator **v3→v4** (one restated design
+signature + a directional front→rear gradient contract) as supporting reinforcement.
+
+**D3 proof (real fal, battle-tested — 3 briefs, not one-shot):** locked X3 gloss-black→cyan gradient +
+eval B (solid deep-red + white racing stripes) + eval C (grey→purple gradient). In EVERY brief the four
+views read as ONE cohesive design with both sides agreeing — the Goal-16 failure (driver gloss-black +
+cyan-wireframe vs passenger solid-cyan) is gone. Eval B is fully mirror-consistent. Export PDFs +
+galleries committed; Goal-16's disagreeing export preserved (restored from git) as the before/after.
+
+**D4 punch-list:** Sentry **NODE-9** triaged + RESOLVED (benign transient `/signin` RSC, 0 users impacted,
+superseded release). **Doubled `<title>`** fixed across 20 pages (pages baked the brand while the layout
+template re-appended it) + a guard test. **zinc-400 caption contrast** (axe AA, 2.56:1) darkened to
+zinc-500 (~5:1) on customer-facing light surfaces (brief wizard, generation studio, share, error/404) —
+the dark-hero captions (pass on zinc-900), the WCAG-exempt disabled input, and operator admin/studio left
+intentionally. **Editor await-waterfall** parallelized. **Conditioning grey-fill** verified correct; its
+live `--upload` re-render writes the read-only `vehicle-templates` bucket → gated deploy op (deferred,
+net-zero). Catalogue force-dynamic→ISR + card `<img>`→next/image **deferred** (touch deploy/build config:
+static-gen DB access, `next.config` images — Low; flagged for a deploy-validated perf pass, ADR-0013).
+
+**THE LOGO (D3/D5 — fresh review caught it, root-caused + fixed).** The design review found the export
+showed an empty logo ZONE with no logo content. Root cause: the parse **SVG sanitizer**
+(`services/parse/converters.ts`) stripped `href`/`src` with ANY `data:` scheme — erasing the embedded
+raster of a logo that is a PNG wrapped in an SVG (the common Figma/Illustrator export), so the sanitized
+`parsed.svg` (which `loadLogoBytes` prefers) composited BLANK. Fix: scheme-aware cleaner — keep
+`data:image/{png,jpeg,gif,webp}` (rasterized server-side only, never innerHTML), keep stripping
+javascript:/vbscript:/data:text/html/data:image/svg+xml. Proven by deterministic tests (sanitizer keeps
+the raster + `composeView` paints it visibly) and a committed visual artifact
+(`logo-composite-proof.jpg` — the "Alpha Wolf Decals" wordmark on a cyan door). The white+black-outline
+logo reads on light AND dark wrap regions, so contrast was never the issue. NOTE: the committed real-fal
+export PDFs predate this fix (parsed by the still-running Goal-16 worktree's old worker), so they show the
+empty zone — a fresh export post-fix shows the logo (proven by the chain).
+
+**DECISIONS (no-questions policy; one Archer confirmation on the base branch).**
+
+1. Base Goal 17 on `goal/16-launch-readiness` (Archer-confirmed) — `origin/main` was Goal 15; branching
+   from main would have silently dropped all Goal-16 work (harness, orchestrator v3, punch-list).
+2. Canonical-anchor cross-view conditioning over single-pass-multiview (breaks per-view outline
+   registration → editor handoff) and post-gen palette-normalization (can't fix style divergence).
+   Validated by a 4-lens adversarial workflow (zero fatal flaws) whose refinements were all adopted
+   (data-driven gating, jobs-only cascade-fail, sign-before-claim, 2-input cost estimate, draft→final
+   conditioning).
+3. FINAL conditions on the approved-draft render (not the template) — the devil's-advocate lens showed the
+   template path let the export re-roll a brief-wrong colour (the exact Goal-16 failure).
+4. Coherence proven on REAL fal only — the deterministic mock ignores `imageUrls`, so it can't prove the
+   fix (it would green a coherent OR incoherent build identically).
+5. Gradient DIRECTION (which end is darkest) is model-variable — correct in grey→purple, reversed in
+   black→cyan — a documented refinement, NOT the coherence deliverable (which is the views AGREEING).
+6. Logo sanitizer change is security-relevant → flagged for the §3 second review (precise data: allowlist,
+   server-side rasterize-only).
+
+**Reviews (CLAUDE.md §3).** Fresh-context review of the D2 diff: **ship-with-nits, NO blockers** (CAS/state-
+machine, security/money, Goal-15 regression all verified); its two should-fix items (sign-before-claim,
+donor-missing telemetry) fixed under TDD. Design-review: coherence F→A. The sanitizer + generation changes
+are flagged for the §3 second security review on the PR. (The 3-lens review workflow hit repeated 529
+API-overload; the single-lens fresh review succeeded once the API recovered.)
+
+**Verification.** Full repo suite green — web 207, db 131, auth 71, canvas 80, parse 23(+3), api 2; typecheck
+
+- lint clean. The full customer journey (`goal-16-full-journey.spec.ts`, now brief-parametrizable) ran green
+  **4×** (mock + 3 real-fal briefs); shop-side `mvp-flow` green. ~16 new tests, all TDD red→green.
+
+**Net-zero (verified).** prod DB never written (local `alphawolf_g16` throwaway only); every run's live
+`project-assets` storage hard-purged (`purge-project-storage.mjs`) — 4 runs × ~40 objects, **0 net add**.
+Sentry 0 new from this goal (local + telemetry-blanked; no prod deploy) + NODE-9 resolved. **Flag for
+Cowork:** live `project-assets` currently holds 10 objects / 5 prefixes — NONE are Goal-17 run IDs (all
+purged); these are small pre-existing projects (legit baseline + prior-goal residue) to reconcile against
+the Goal-16 "~4" baseline (daily test-purge cron / non-`@alphawolf.test` residue).
+
+**FINAL VERDICT: 🟢 GO** (minus the human gates). The #1 launch-quality risk (cross-view incoherence) is
+fixed and proven F→A across 3 briefs; the logo-invisibility root cause is fixed; the punch-list is cleared.
+**Remaining human gates (unchanged, OUT per Archer):** final legal copy · dependency-triage (separate
+goal) · domain migration (separate goal) · `APP_ALLOW_INDEXING` flip. **Carryovers:** gradient-direction
+pinning (model-variable); re-render a fresh post-fix export to show the logo on a real vehicle (the goal-16
+worktree's parse worker must be swapped to the goal-17 fix first); the gated conditioning `--upload`
+re-render; the 2 deferred Low perf items. **ACTION FOR ARCHER: rotate the exposed keys now** (FAL /
+Anthropic / Supabase-service-role / PII_ENCRYPTION_KEY / AUTH) — they were live throughout this run.
 ## 2026-06-16 — Cowork verification of Goal 16 + carryover-B → Goal 17
 
 Cowork verified Goal 16 (PR #193, merged) against ground truth (DB, storage, export PDF, CI).
