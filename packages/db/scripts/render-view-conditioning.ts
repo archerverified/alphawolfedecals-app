@@ -51,8 +51,16 @@ function parseViewTranslates(svgText: string): Record<string, { x: number; y: nu
   return out;
 }
 
+// Goal 16 (Carryover A defense-in-depth): the body fill is a NEUTRAL PRIMER GREY,
+// not white. Two reasons: (1) a panel the image model leaves unpainted then reads
+// as neutral primer instead of a stark white box (the Goal-15 door artifact);
+// (2) a white conditioning body biases the model toward a white output base
+// (the Goal-15 D1 white-base root cause) — grey is a neutral structure cue.
+// Live effect requires re-running `db:render-views --upload` (writes the
+// vehicle-templates bucket) at deploy; the orchestrator-prompt fix (v3) is the
+// primary, runtime-verified lever.
 const OUTLINE_BACKDROP_STYLE =
-  '<style>path{fill:#ffffff;stroke:#15181d;stroke-width:3}' +
+  '<style>path{fill:#c4c8cd;stroke:#15181d;stroke-width:3}' +
   '.wrap-safe{fill:none;stroke:none}' +
   '.no-wrap{fill:#f3f4f6;stroke:#9aa3b5;stroke-width:1.5}</style>';
 

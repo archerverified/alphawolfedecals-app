@@ -13,7 +13,7 @@ export const metadata = { title: 'Template Studio — Admin' };
 
 const REQUEST_STATUS_STYLE: Record<string, string> = {
   pending: 'bg-amber-50 text-amber-700 ring-amber-600/20',
-  in_progress: 'bg-sky-50 text-sky-700 ring-sky-600/20',
+  in_progress: 'bg-cyan-50 text-cyan-800 ring-cyan-700/30',
   shipped: 'bg-emerald-50 text-emerald-700 ring-emerald-600/20',
   rejected: 'bg-zinc-100 text-zinc-500 ring-zinc-500/20',
 };

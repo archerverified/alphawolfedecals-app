@@ -104,11 +104,17 @@ export default async function VehicleDetailPage({
         {isAwTemplate ? (
           <div
             data-testid="wrapped-svg"
-            className="mt-6 flex items-center justify-center overflow-hidden rounded-md border border-zinc-200 bg-white p-4"
+            // min-h reserves the hero's space so the SVG load doesn't shift layout
+            // (Goal 16 D4: was CLS 0.14–0.17 — the container collapsed to padding
+            // height then jumped to 70vh on load).
+            className="mt-6 flex min-h-[55vh] items-center justify-center overflow-hidden rounded-md border border-zinc-200 bg-white p-4"
           >
+            {/* Cross-origin SVG sheet; next/image doesn't optimize SVG. fetchPriority/decoding improve LCP (Goal 16 D4). */}
             <img
               src={renderUrl}
               alt={`${title} — Alpha Wolf wrap template`}
+              fetchPriority="high"
+              decoding="async"
               className="max-h-[70vh] w-full object-contain"
             />
           </div>

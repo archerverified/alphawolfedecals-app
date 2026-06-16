@@ -5,7 +5,36 @@
 `docs/claude-code-prompts/post-launch-hardening.md` (post-deploy hardening) — this
 is the launch DECISION layer on top of them. Each row is an explicit gate.
 
-## CURRENT CALL: ⛔ NO-GO — 3 blockers (2 need Archer, 1 is deferred Goal-8 work)
+## CURRENT CALL (Goal 16, 2026-06-16): 🟢 CONDITIONAL GO
+
+Re-audited against prod `1bb9d00` (Goal 15) across all four axes. The Goal-10 blockers
+are resolved by Goals 11–15 (auth/email recovery → G11; catalogue-template editor + art → G12;
+brief/logo/export correctness → G15). **No High-severity code blocker remains.** The remaining
+gates are: 2 in-goal items (real-fal export verification + Sentry NODE-9 triage) and the 4
+human gates (legal copy, dependency-triage goal, domain migration, `APP_ALLOW_INDEXING` flip).
+
+| Axis                 | Goal-16 result                                                                                                                                             | Gate                                                                                                                             |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| Security             | ✅ PASS (13/13, 0 High FAIL) — headers/CSP, DB-split, RLS deny-all + SECURITY-DEFINER money rails, dev/cron/admin guards, rate-limit fail-closed, gitleaks | clear                                                                                                                            |
+| Production-readiness | 🟡 READY-with-1-triage                                                                                                                                     | Sentry NODE-9 (`/signin` SSR, 6 events) — triage                                                                                 |
+| Performance          | 🟢 B (public CWV good)                                                                                                                                     | `perf-detail-lcp-cls-poor` [Med] non-blocking                                                                                    |
+| Design / UX / a11y   | 🟢 Design A− / AI-Slop A− held; axe AA on public                                                                                                           | Carryover A (door white-box) **FIXED, verified on real fal**; Carryover B (multi-view consistency) **VERIFIED OPEN** — see below |
+
+**D6 real-fal proof (verified):** full customer journey ran on REAL fal ($0.7134) — 26-shot gallery + 4-page export PDF (`screenshots/2026-06-16-goal-16/`), logo composited on driver + passenger doors + hood, real `nano_banana_edit`→`kontext_dev`→`flux2_pro_edit`. **Carryover A: FIXED** — no door white-box on the real output (the base-color clear-space fix held). **Carryover B: OPEN (verified, not papered over)** — the 4 views diverge: the driver side rendered glossy-black-with-cyan-wireframe, the passenger side rendered solid-cyan — the two sides disagree on the _base color_, and neither is the brief's black→cyan gradient. Root cause is **architectural** (each view is an independent img2img generation with no cross-view coherence), so a prompt tweak can't resolve it — it needs a coherence pass (single multi-view generation, or a canonical-side-then-derive approach, or post-gen palette/style normalization). This is the **#1 quality risk** for the core export value; Archer's call whether it blocks launch or ships as a known AI-variance limitation that customers iterate against.
+
+**Net-zero verified:** prod DB untouched (local throwaway only); `project-assets` storage swept 55 → 4
+(13 orphans + 19 smoke projects purged via the guarded path); `vehicle-templates` 58 untouched; Supabase
+advisors at the known baseline (0 net-new); Sentry 0 new from this goal (local telemetry blanked).
+
+**Remaining human gates (perform before go-live):** (1) final legal copy; (2) dependency-triage (separate
+goal); (3) domain migration off `*.vercel.app` (separate goal); (4) `APP_ALLOW_INDEXING` flip at launch.
+
+Full evidence: `docs/deployment/audits/2026-06-16-goal-16/findings.md`. Gallery + export proof:
+`docs/deployment/screenshots/2026-06-16-goal-16/`.
+
+---
+
+## CURRENT CALL (Goal 10 snapshot, SUPERSEDED by Goal 16): ⛔ NO-GO — 3 blockers (2 need Archer, 1 is deferred Goal-8 work)
 
 The security + ops axes are GREEN. Launch is blocked by legal copy, password
 recovery, and the catalogue-template editor gap. None are security holes; all are

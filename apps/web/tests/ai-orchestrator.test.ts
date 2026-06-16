@@ -109,7 +109,7 @@ describe('compileBrief', () => {
     expect(result.directions.map((d) => d.key)).toEqual(['literal', 'bolder', 'minimal']);
     expect(Object.keys(result.directions[0]!.viewPrompts).sort()).toEqual([...views].sort());
     expect(result.promptVersion).toBe(ORCHESTRATOR_PROMPT_VERSION);
-    expect(result.promptVersion).toBe('v2');
+    expect(result.promptVersion).toBe('v3');
     expect(createMock).toHaveBeenCalledTimes(1);
   });
 
@@ -273,7 +273,7 @@ describe('compileIteration', () => {
     expect(result.affectedViews).toEqual(['front', 'top']);
     expect(result.editPrompt).toContain('matte black');
     expect(result.title).toBe('Matte black hood');
-    expect(result.promptVersion).toBe('v2');
+    expect(result.promptVersion).toBe('v3');
 
     // Request carried the current prompts + instruction; no-text rule in system.
     const params = createMock.mock.calls[0]![0];
@@ -301,7 +301,7 @@ describe('prompt provenance', () => {
       .update(ITERATION_SYSTEM_PROMPT)
       .digest('hex');
     expect(`${ORCHESTRATOR_PROMPT_VERSION}:${hash}`).toBe(
-      'v2:118a83d23412f8641891f58f39b6c3db91e7fd38d2b1b8b1fb5c05cf4b16085c',
+      'v3:ff7cac142ce68f4a17eeafe51dddba454686913ca6301b6a2d645e4d266de3c8',
     );
   });
 });
