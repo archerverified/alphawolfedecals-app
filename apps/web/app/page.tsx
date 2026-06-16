@@ -98,14 +98,14 @@ export default function HomePage() {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
               <Link
                 href="/signup"
-                className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-white px-5 text-sm font-medium text-zinc-900 shadow-sm transition-colors hover:bg-zinc-100"
+                className="inline-flex h-11 items-center justify-center gap-2 rounded-md bg-white px-5 text-sm font-medium text-zinc-900 shadow-sm transition-colors hover:bg-zinc-100 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 focus-visible:outline-none"
               >
                 Start your wrap
                 <span aria-hidden>→</span>
               </Link>
               <Link
                 href="/vehicles/select"
-                className="inline-flex h-11 items-center justify-center rounded-md border border-white/20 px-5 text-sm font-medium text-white transition-colors hover:bg-white/10"
+                className="inline-flex h-11 items-center justify-center rounded-md border border-white/20 px-5 text-sm font-medium text-white transition-colors hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/70 focus-visible:ring-offset-2 focus-visible:ring-offset-zinc-900 focus-visible:outline-none"
               >
                 Browse vehicles
               </Link>

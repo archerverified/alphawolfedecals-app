@@ -135,7 +135,7 @@ export function ZoneDiagram({ panels, includedPanelIds, onToggle }: ZoneDiagramP
             }}
             // Keyboard users need a visible focus ring (WCAG 2.4.7); the
             // <title> doubles as hover tooltip and accessible name.
-            className="cursor-pointer transition-[fill-opacity] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-sky-500"
+            className="cursor-pointer transition-[fill-opacity] focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-zinc-900"
             fill={on ? '#18181b' : '#e4e4e7'}
             fillOpacity={on ? 0.85 : 0.6}
             stroke={on ? '#18181b' : '#a1a1aa'}
