@@ -6,7 +6,74 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
-## 2026-06-15 — Goal 12 — Design Editor Overhaul — CLOSEOUT
+## 2026-06-15 — Goal 13 — Full E2E Acceptance Test — CLOSEOUT
+
+**Status:** ✅ Full B2C customer journey driven end-to-end against a real build, on
+the **BMW X3**, all the way to a **real AI export PDF**. Durable spec
+`apps/web/e2e/goal-13-full-journey.spec.ts` (POM) — green, reproduced 3× on the
+mock provider (free, deterministic) + 1× on **real fal** (the full journey). 26-shot
+ordered gallery + the real export committed under
+`docs/deployment/screenshots/2026-06-15-goal-13/`. Diagram:
+[`docs/vault/diagrams/goal-13-e2e-acceptance.md`](docs/vault/diagrams/goal-13-e2e-acceptance.md).
+Environment: **local build + real fal**, against a **throwaway local Postgres** (DB
+never touched prod); X3 art read read-only from the live public bucket.
+
+**Headline proof (DoD #2).** Export PDF = **524,980 bytes**, `%PDF-1.7`, with real AI
+provenance baked in (`Black Forest Labs API - Flux.2`, C2PA
+`digitalSourceType=trainedAlgorithmicMedia`, `ai_generated`) →
+`goal-13-export-pack.pdf`. The cover is genuinely AI-generated; the logo is
+composited (never AI-rendered).
+
+**Spend ledger (real, within BUDGET $4 fal + $1 Anthropic).** fal: initial $0.4765 +
+iteration $0.1017 + final $0.1200 = **$0.6982** (20 fal images, `generation_runs.cost_usd`).
+Anthropic (Haiku orchestrator, even on mock) ≈ sub-cent/run, est. ≤$0.05. Mock runs = $0.
+
+**DECISIONS (per no-questions policy + one Archer call this session).**
+
+1. **Real fal is deployed-env-only.** `FAL_KEY` is write-only-sensitive on Vercel
+   (`vercel env pull` returns blank), so it cannot run locally from prod env. Archer
+   put real `FAL_KEY`+`AI_PROVIDER=fal` into `.env.local` mid-run to enable a LOCAL
+   real-fal run instead of a prod run.
+2. **Archer chose Option 1** when surfaced: BMW X3, **local throwaway Postgres for all
+   DB rows**, real fal; X3 art+conditioning read read-only from the live public
+   `vehicle-templates` bucket; logo+generated images write to live `project-assets`,
+   then purged. (Live storage write approved because the DB is local → those objects
+   are reference-less orphans, verifiably purged.)
+3. **No local-throwaway-DB harness exists** — stood one up by hand: create DB →
+   `prisma migrate deploy` → `auth_rls.sql` (+`CREATE SCHEMA extensions` first) →
+   `ALTER ROLE app_user LOGIN` → copied the `vehicles`/`vehicle_panels` catalogue from
+   live (read-only). Durable spec runs on the **mock** by default (CI-safe, green-skips
+   on remote `DEPLOY_URL` — never joins the prod smoke).
+
+**Net-zero (verified).** Live `project-assets`: my run created **206** objects (logo +
+mock+fal generations), all scoped to my 9 throwaway-DB project IDs; **purged all 206
+via the Storage API → `mine_remaining = 0`**. `vehicle-templates` **58, untouched**
+(read-only). Local throwaway DB dropped. NOTE for Archer: `project-assets` ended at
+**33**, not the 21 pre-run baseline — the extra **12 are NOT mine** (project IDs absent
+from my throwaway DB; concurrent/other e2e activity during my window). Left untouched
+per the "delete only what you created" rule — reconcile if undesired. Supabase advisors
+at baseline (1 WARN pg_trgm-in-public + 3 INFO deny-all RLS; no live schema change).
+Sentry 0 new (local telemetry blanked).
+
+**Coverage / quality.** Coverage matrix (every route → status) + axe **WCAG 2.2 AA clean
+on all 8 key pages (0 violations)** + design-review (**Design B−, AI-Slop C+**) committed.
+Journey covers all 11 brief-wizard steps, generate→iterate→select→final, editor (real X3
+art + selectable zones + in-editor AI), and the export assertion.
+
+**Defects (each FIXED in-goal or LOGGED with a repro — see `findings-and-defects.md`).**
+
+- D13-1 (FIXED): the optional photos step hung on the async BullMQ/Upstash parse worker
+  (Redis eviction policy `optimistic-volatile`, not `noeviction` → dropped/lagged parse
+  jobs); first real-fal run timed out there before generation. Spec photo step now
+  best-effort. Infra follow-up: pin the parse Redis to `noeviction`.
+- D13-2 (LOGGED): editor "Save" occluded by the success toast on fresh handoff.
+- D13-4 (LOGGED): generation-studio concept cards can present without the wrap preview
+  (headline feature lands flat) — add a branded skeleton + bind first complete render.
+- D13-5/6/7 (LOGGED, design): brand-less landing/auth (cyan #35B6E8 absent); signup
+  password-meter color/label mismatch; catalogue dup line + weak vehicle-detail CTA.
+- Process note (mine): `nohup … &` inside a backgrounded shell double-backgrounds →
+  the completion signal fires for the launcher, not the wrapped process; twice misread a
+  still-running fal generation as a failure. Corrected.
 
 **Status:** ✅ Shipped on `goal/12-editor-overhaul` as small per-deliverable commits
 (D2 → D4 → D3 → review-fixes → docs → E2E), each typecheck/lint/test green, the
