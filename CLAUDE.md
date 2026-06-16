@@ -13,6 +13,7 @@ Before any substantive response, check whether a skill applies and read its curr
 1. Read the top entries of `activities.md` — this is project memory. Read before starting; append your results after finishing.
 2. **AUDIT FIRST.** Check what's already shipped (search by SHA, not goal label) before suggesting or building anything. PR #38 was a 130-file MVP base that pre-delivered an entire goal's scope once.
 3. If a step's source is missing or ambiguous, STOP and ask — do not guess or fabricate.
+4. **Audit-first uses the graphify knowledge graph** (§8): query the subsystems you're about to touch *before* changing code — it catches connections grep misses.
 
 ## 2. SECURITY BOUNDARIES (non-negotiable)
 
@@ -44,6 +45,7 @@ CodeRabbit is RETIRED. Greptile is obsolete. Never invoke either. Every PR, befo
 2. Mermaid diagram in `docs/vault/diagrams/<goal>.md`.
 3. PostHog + Sentry screenshots if metrics changed → `docs/deployment/screenshots/<date>/`.
 4. Worktree cleanup: `git worktree remove ../alphawolf-goal-<N> && git branch -d goal/<N>-<slug>`.
+5. **Refresh the graphify graph** so project memory doesn't go stale: `graphify update .` (§8).
 
 ## 6. DEBUGGING GOTCHAS (learned the hard way — don't re-derive)
 
@@ -56,6 +58,17 @@ CodeRabbit is RETIRED. Greptile is obsolete. Never invoke either. Every PR, befo
 ## 7. VERIFY BEFORE DELIVERING
 
 A task is done only when: the claimed files/deploys/PRs actually exist and were verified this session; nothing in a read-only area was modified; no file was deleted; every assumption was either stated explicitly or confirmed with Archer. If a check fails, fix it before responding — don't ship and caveat.
+
+## 8. KNOWLEDGE GRAPH — graphify (project memory at code + doc scale)
+
+A graphify knowledge graph of the codebase + docs lives at `graphify-out/graph.json` (gitignored). Use it instead of blind grepping.
+
+- **Audit-first (§1):** before touching a subsystem, query it — `graphify query "how does X work?"` or the MCP tools (`query_graph`, `get_neighbors`, `shortest_path`, `god_nodes`, PR-impact). It surfaces dependencies a grep would miss.
+- **Risk targeting:** highly-connected "god nodes" are blast-radius-heavy — `withUser`/`withSystem` (the §2 DB-split boundary) and `captureServerEvent` (the analytics seam touching ~11 subsystems). Changes there get the §3 second review. Run the **PR-impact tools before merge** to catch cross-subsystem ripples — the class of miss that caused the sharp-0.35 prod outage.
+- **Closeout (§5):** after merging code, run `graphify update .` or the graph goes stale and answers wrong.
+- **Availability in worktrees:** goal work runs in a worktree (§4), and the graph file is gitignored so it is absent there. The graphify MCP must be registered at **user scope** (it serves the graph's absolute path) to be available in goal sessions:
+  `claude mcp add --scope user graphify -- /Users/ashton/.local/bin/graphify-mcp /Users/ashton/Documents/AlphaWolfDecals-App/graphify-out/graph.json`
+  If the tools aren't present, fall back to the `graphify` CLI or normal file reads — never block on it.
 
 ---
 
