@@ -326,7 +326,7 @@ export function GenerationStudio({
       {runBusy ? (
         <section
           data-testid="run-progress"
-          className="mb-6 flex items-center gap-3 rounded-lg border border-zinc-200 bg-white p-4"
+          className="mb-6 flex items-center gap-3 rounded-xl border border-zinc-200 bg-white p-4"
           aria-live="polite"
         >
           <Loader2 className="size-5 shrink-0 animate-spin text-zinc-500" aria-hidden />
@@ -348,7 +348,7 @@ export function GenerationStudio({
             const imgs = (snapshot.images ?? []).filter((i) => i.conceptKey === d.key);
             const first = imgs[0];
             return (
-              <div key={d.key} className="rounded-lg border border-zinc-200 bg-white p-3">
+              <div key={d.key} className="rounded-xl border border-zinc-200 bg-white p-3">
                 <p className="text-sm font-medium">{d.title}</p>
                 <p className="mb-2 text-xs text-zinc-500">{d.summary}</p>
                 {first ? (
@@ -358,7 +358,7 @@ export function GenerationStudio({
                     className="w-full rounded-md"
                   />
                 ) : (
-                  <div className="flex h-28 items-center justify-center rounded-md bg-zinc-100 text-xs text-zinc-400">
+                  <div className="flex h-28 animate-pulse items-center justify-center rounded-md bg-zinc-100 text-xs text-zinc-400">
                     Painting…
                   </div>
                 )}
@@ -369,7 +369,7 @@ export function GenerationStudio({
       ) : null}
 
       {concepts.length === 0 && !runBusy ? (
-        <section className="flex flex-col items-center gap-4 rounded-lg border border-dashed border-zinc-300 bg-white px-6 py-16 text-center">
+        <section className="flex flex-col items-center gap-4 rounded-xl border border-dashed border-zinc-300 bg-white px-6 py-16 text-center">
           <Wand2 className="size-8 text-zinc-400" aria-hidden />
           <div>
             <h2 className="text-lg font-medium">No designs yet</h2>
@@ -415,6 +415,10 @@ export function GenerationStudio({
             ) : null}
           </div>
 
+          <p className="mb-4 text-xs text-zinc-500">
+            Drag any preview to compare with the blank vehicle. Previews stay watermarked until you
+            pick a final.
+          </p>
           <div className="mb-4">
             <ShareForFeedback projectId={projectId} />
           </div>
@@ -429,7 +433,7 @@ export function GenerationStudio({
                 <article
                   key={card.key}
                   data-testid={`concept-card-${card.key}`}
-                  className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-white p-4"
+                  className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -453,14 +457,19 @@ export function GenerationStudio({
                         afterUrl={mediaUrl}
                         alt={`${card.title} — ${view ? viewLabel(view) : 'preview'}`}
                       />
-                      <p className="text-[11px] text-zinc-400">
-                        {finalUrl
-                          ? 'Full-quality final — no watermark.'
-                          : 'Drag to compare with the blank vehicle. Previews are watermarked until you pick a final.'}
-                      </p>
+                      {finalUrl ? (
+                        <p className="text-[11px] text-zinc-400">
+                          Full-quality final — no watermark.
+                        </p>
+                      ) : null}
                     </>
                   ) : (
-                    <div className="flex h-32 items-center justify-center rounded-md bg-zinc-100 text-xs text-zinc-400">
+                    <div
+                      className={
+                        'flex h-32 items-center justify-center rounded-md bg-zinc-100 text-xs text-zinc-400' +
+                        (busyHere ? ' animate-pulse' : '')
+                      }
+                    >
                       {busyHere ? 'Painting this view…' : "This view hasn't been rendered yet."}
                     </div>
                   )}

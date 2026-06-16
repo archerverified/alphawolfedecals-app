@@ -226,10 +226,13 @@ export function VehicleBrowser({ initialYears }: { initialYears: number[] }) {
           placeholder="Any trim"
         />
       </div>
+      <p className="-mt-6 text-xs text-zinc-500">
+        Make, model and trim unlock as you pick each one.
+      </p>
 
       {/* Body-type facets, revealed after Model */}
       {sel.model && (showCabBed || showRoof) ? (
-        <fieldset className="flex flex-col gap-3 rounded-lg border border-zinc-200 bg-zinc-50 p-4">
+        <fieldset className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-zinc-50 p-4">
           <legend className="px-1 text-xs font-medium uppercase tracking-wide text-zinc-500">
             Configuration
           </legend>
@@ -304,15 +307,6 @@ export function VehicleBrowser({ initialYears }: { initialYears: number[] }) {
           </div>
         ) : null}
       </div>
-
-      <p className="text-center text-sm text-zinc-500">
-        <Link
-          href={requestHref}
-          className="font-medium text-zinc-900 underline-offset-2 hover:underline"
-        >
-          Don’t see your vehicle? Request it →
-        </Link>
-      </p>
     </div>
   );
 }

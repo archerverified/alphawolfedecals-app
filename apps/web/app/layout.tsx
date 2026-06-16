@@ -43,8 +43,10 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         {/* PostHog bootstrap (env-gated, no-op without NEXT_PUBLIC_POSTHOG_KEY). */}
         <AnalyticsProvider />
         {children}
-        {/* Sonner toast host (upload success/failure, parse-complete — GH-005). */}
-        <Toaster richColors closeButton position="top-right" />
+        {/* Sonner toast host (upload success/failure, parse-complete — GH-005).
+            bottom-right so a success toast never occludes the editor top-bar
+            Save / Submit-for-production controls (Goal 14 · D13-2). */}
+        <Toaster richColors closeButton position="bottom-right" />
         {/* Vercel Speed Insights (RUM) and Analytics — no-ops outside Vercel hosting. */}
         <SpeedInsights />
         <Analytics />

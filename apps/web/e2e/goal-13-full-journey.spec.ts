@@ -238,7 +238,7 @@ class BriefWizardDriver {
 
   /**
    * Step 3 — logo: upload the VECTOR svg → passes the quality gate (green
-   * "Vector file" success, NOT the opaque/DPI warnings, which are raster-only),
+   * "Scales sharp" success, NOT the opaque/DPI warnings, which are raster-only),
    * then assign it to a zone.
    */
   async logo(): Promise<void> {
@@ -248,10 +248,10 @@ class BriefWizardDriver {
     // upload-completed signal for a vector (no warning to assert against).
     const firstLogoZone = this.page.locator('[data-testid^="logo-zone-"]').first();
     await firstLogoZone.waitFor({ state: 'visible', timeout: 120_000 });
-    // The vector is praised, never gated (LogoStep.isVector path). Match the
-    // exact green success copy — /vector file/i alone also hits the step hint
-    // ("…or a vector file (SVG/AI/EPS)…").
-    await expect(this.page.getByText(/vector file — prints sharp/i)).toBeVisible({
+    // The vector is praised, never gated (LogoStep.isVector path). Distinct
+    // success copy (Goal 14 D13-3) — no longer collides with the step hint's
+    // "…or a vector file (SVG/AI/EPS)…".
+    await expect(this.page.getByText(/scales sharp to any size/i)).toBeVisible({
       timeout: 30_000,
     });
     await expect(this.page.getByTestId('logo-warning-opaque')).toHaveCount(0);

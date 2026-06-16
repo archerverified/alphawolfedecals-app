@@ -4,6 +4,7 @@
 // now links straight into it.
 
 import Link from 'next/link';
+import { Eyebrow } from '@alphawolf/ui/components/ui/eyebrow';
 
 export const metadata = {
   title: 'Welcome — Alpha Wolf Wrap Studio',
@@ -11,20 +12,27 @@ export const metadata = {
 
 export default function CustomerWelcomePage() {
   return (
-    <main className="min-h-screen bg-zinc-50 px-4 py-12">
-      <div className="mx-auto max-w-2xl">
-        <h1 className="text-2xl font-semibold text-zinc-900">You're in.</h1>
-        <p className="mt-2 text-zinc-600">Pick the vehicle you want to wrap to get started.</p>
-        <div
-          data-testid="customer-welcome"
-          className="mt-8 rounded-xl border border-zinc-200 bg-white p-8 text-center"
-        >
-          <p className="text-sm text-zinc-600">
-            Your design starts on an accurate vehicle outline.
+    <main className="flex min-h-screen flex-col bg-zinc-50 px-4 py-16">
+      <div className="mx-auto w-full max-w-2xl" data-testid="customer-welcome">
+        <Eyebrow>You’re verified</Eyebrow>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900">
+          Choose your vehicle to start.
+        </h1>
+        <p className="mt-2 max-w-md text-sm leading-relaxed text-zinc-600">
+          Your design begins on an accurate, wrap-safe outline of your exact vehicle. Pick the year,
+          make, model and trim — we take it from there.
+        </p>
+        <div className="mt-8 rounded-xl border border-zinc-200 bg-white p-8 shadow-sm">
+          <div className="flex items-center gap-2">
+            <span className="bg-brand h-px w-6" aria-hidden />
+            <span className="font-mono text-xs text-zinc-500">Step 1 of your wrap</span>
+          </div>
+          <p className="mt-3 text-sm text-zinc-600">
+            The top 50 most-wrapped vehicles in North America are ready to design on now.
           </p>
           <Link
             href="/vehicles/select"
-            className="mt-4 inline-flex items-center justify-center rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white transition hover:bg-zinc-800"
+            className="mt-5 inline-flex h-10 items-center justify-center rounded-md bg-zinc-900 px-5 text-sm font-medium text-white shadow-sm transition-colors hover:bg-zinc-800"
           >
             Choose your vehicle
           </Link>
