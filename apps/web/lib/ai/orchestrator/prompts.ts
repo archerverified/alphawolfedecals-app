@@ -14,7 +14,7 @@ import { VIEW_ORDER } from '@alphawolf/db';
 import type { BriefData } from '@/lib/brief/schema';
 import { MATERIAL_TIERS } from '@/lib/brief/schema';
 
-export const ORCHESTRATOR_PROMPT_VERSION = 'v1';
+export const ORCHESTRATOR_PROMPT_VERSION = 'v2';
 
 // ---------------------------------------------------------------------------
 // Inputs (shared with index.ts — defined here because they are exactly what
@@ -69,6 +69,16 @@ All three directions use the brief's colors and style inputs. They must be visib
 
 For each direction, write one image prompt PER REQUESTED VIEW, plus a customer-facing title (max 40 characters, plain language, no jargon) and summary (max 140 characters, plain language — write like you're talking to a small-business owner, not a designer).
 
+# Read the brief's INTENT first (MOST IMPORTANT — do this before writing any prompt)
+
+Decide two things from the brief and apply them to EVERY view of EVERY direction:
+
+1. THE BASE COLOR — the single color that covers most of the wrapped bodywork. Choose it in this priority: (a) the customer's OWN WORDS win — if they say "gloss black base", "red wrap", "matte grey", etc., that color is the base; (b) else a color marked with the "primary" role; (c) else the FIRST color listed. The base color fully covers every wrapped panel on every view. NEVER keep the vehicle's original factory paint as the base, and NEVER default to white just because the studio render shows a white vehicle — the customer is REPLACING that paint. A "black base" brief that comes back white or mostly-white is WRONG.
+
+2. THE ACCENTS — the remaining colors, laid OVER the base as stripes, shapes, panels, and details.
+
+Every concept must read at a glance as a vehicle FULLY WRAPPED in the base color with the accents applied over it.
+
 # How the image model works (write every prompt for this)
 
 Each prompt is used for STRUCTURE-CONDITIONED img2img against a clean studio render of that exact view of the vehicle. Every single view prompt MUST:
@@ -82,8 +92,8 @@ Each prompt is used for STRUCTURE-CONDITIONED img2img against a clean studio ren
 
 1. NO TEXT OF ANY KIND in the generated image. Every prompt must explicitly forbid text, letters, words, numbers, logos, emblems, badges, brandmarks, and typography of any kind. Misspelled AI text ruins a concept.
 2. THE CUSTOMER'S LOGO IS NEVER RENDERED BY THE IMAGE MODEL. Never describe the logo, its contents, its colors as a logo, or its file. The real logo file is composited as a separate layer later. Where the brief assigns logo placement zones, every prompt covering those zones must instead reserve CLEAR SPACE there: a clean, calm, low-detail area of a single background color with no busy pattern, sized generously on that panel, so the logo can be placed on it afterward.
-3. RESPECT EXCLUSIONS. Zones the customer excluded from the wrap keep factory paint — say so explicitly in the prompts ("the [zone] keeps its original factory paint, untouched").
-4. Use ONLY the colors provided in the brief (plus neutral white/black/gray for balance). Do not invent new brand colors.
+3. RESPECT EXCLUSIONS — but WRAP what is included. On a partial wrap, the WRAPPED panels still get the full design: the base color and accents cover them. ONLY the panels the customer excluded keep factory paint — say that explicitly for those panels ("the [excluded zone] keeps its original factory paint, untouched"). Never leave a wrapped panel in factory paint.
+4. Use ONLY the colors provided in the brief. Black, white, and grey may be used as supporting or balancing tones, but NEVER as the dominant base color unless the customer explicitly chose that color as their base. Do not invent new brand colors.
 
 # Per-view guidance
 
@@ -190,10 +200,26 @@ export function buildCompileUserMessage(input: CompileBriefInput): string {
     lines.push('');
     lines.push('# Colors (use exactly these)');
     for (const c of picks) lines.push(`- ${describeColor(c)}`);
+    // Base-color contract (Goal 15 D1): the orchestrator must establish ONE
+    // dominant base color for the bodywork and never silently default to the
+    // factory-white vehicle. Prefer an explicit 'primary' role; else the first
+    // pick. The customer's own words (Style, below) can still override which
+    // color is the base — the system prompt resolves that conflict.
+    const basePick = picks.find((c) => c.role === 'primary') ?? picks[0];
+    if (basePick) {
+      lines.push('');
+      lines.push(
+        `BASE COLOR: ${basePick.hex} covers most of the wrapped bodywork on every view — unless ` +
+          "the customer's own words below name a different base/dominant color, in which case that " +
+          'wins. The remaining colors are accents (stripes, shapes, details) laid over the base. Do ' +
+          'NOT leave wrapped panels in factory paint and do NOT default to white.',
+      );
+    }
   }
   if (brief.colors?.extractedFromLogo?.length) {
     lines.push(
-      `Brand palette extracted from the customer's logo file: ${brief.colors.extractedFromLogo.join(', ')}`,
+      "Brand palette extracted from the customer's logo file (these are LOGO colors for reference " +
+        `only — do NOT treat them as the wrap's base color): ${brief.colors.extractedFromLogo.join(', ')}`,
     );
   }
 
