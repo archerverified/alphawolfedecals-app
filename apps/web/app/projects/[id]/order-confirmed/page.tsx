@@ -15,6 +15,7 @@ import {
   CardTitle,
   CardDescription,
 } from '@alphawolf/ui/components/ui/card';
+import { Eyebrow } from '@alphawolf/ui/components/ui/eyebrow';
 import { requireUser } from '../../../../lib/admin/guard';
 
 export const dynamic = 'force-dynamic';
@@ -47,23 +48,24 @@ export default async function OrderConfirmedPage({
     <main className="mx-auto flex min-h-screen max-w-xl flex-col items-center justify-center px-4 py-12">
       <Card className="w-full" data-testid="order-confirmed">
         <CardHeader className="items-center text-center">
-          <CheckCircle2 className="size-12 text-emerald-600" aria-hidden />
-          <CardTitle className="mt-2 text-2xl">Submitted for production</CardTitle>
+          <CheckCircle2 className="size-10 text-emerald-600" aria-hidden />
+          <Eyebrow className="mt-3">Submitted</Eyebrow>
+          <CardTitle className="mt-1 text-2xl">Your design is in the queue</CardTitle>
           <CardDescription>
-            Your design is in the queue. The production team will review it and reach out to{' '}
-            {order.contactEmail} to confirm the details.
+            The production team will review it and reach out to {order.contactEmail} to confirm the
+            details.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          <dl className="grid grid-cols-2 gap-2 rounded-md border border-zinc-200 p-4 text-sm">
+          <dl className="grid grid-cols-2 gap-y-2 rounded-md border border-zinc-200 bg-zinc-50 px-4 py-3 text-sm">
             <dt className="text-zinc-500">Order</dt>
-            <dd className="text-right font-mono">#{shortId}</dd>
+            <dd className="text-right font-mono text-zinc-900">#{shortId}</dd>
             <dt className="text-zinc-500">Status</dt>
-            <dd className="text-right capitalize">{order.status}</dd>
+            <dd className="text-right capitalize text-zinc-900">{order.status}</dd>
             <dt className="text-zinc-500">Contact</dt>
-            <dd className="truncate text-right">{order.contactName}</dd>
+            <dd className="truncate text-right text-zinc-900">{order.contactName}</dd>
           </dl>
-          <p className="text-sm text-zinc-500">
+          <p className="text-sm text-zinc-600">
             You can keep editing — submitting locked in this version, and your next changes start a
             fresh draft.
           </p>

@@ -4,6 +4,7 @@
 // grants 2 credits to each side.
 
 import { CREDIT_CONFIG, referrals } from '@alphawolf/db';
+import { Eyebrow } from '@alphawolf/ui/components/ui/eyebrow';
 
 import { requireUser } from '../../lib/admin/guard';
 import { captureServerEvent } from '../../lib/notifications/posthog-server';
@@ -33,8 +34,9 @@ export default async function ReferPage() {
   if (!stats.code) {
     return (
       <main className="mx-auto max-w-2xl px-6 py-12">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">Refer a friend</h1>
-        <p className="mt-3 text-sm text-zinc-500">
+        <Eyebrow>Referrals</Eyebrow>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900">Refer a friend</h1>
+        <p className="mt-3 text-sm text-zinc-600">
           We couldn’t create your referral link right now. Please try again in a moment.
         </p>
       </main>
@@ -47,10 +49,11 @@ export default async function ReferPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">
+        <Eyebrow>Referrals</Eyebrow>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900">
           Give {grant}, get {grant}
         </h1>
-        <p className="mt-2 text-sm text-zinc-500">
+        <p className="mt-2 text-sm text-zinc-600">
           Share your link. When a friend signs up and verifies their email, you each get {grant}{' '}
           design credits. No limit on how many friends — invite your whole crew.
         </p>

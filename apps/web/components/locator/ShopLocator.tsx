@@ -40,23 +40,31 @@ export function ShopLocator({ platformShops, directory }: Props) {
 
   return (
     <div className="flex flex-col gap-6">
-      <label className="flex flex-col gap-1">
+      <label className="flex flex-col gap-1.5">
         <span className="text-xs font-medium text-zinc-500">Your city or ZIP</span>
         <input
           value={query}
           onChange={(e) => setQuery(e.currentTarget.value)}
           placeholder="e.g. Austin, TX or 78701"
           data-testid="locator-query"
-          className="rounded-md border border-zinc-300 px-3 py-2 text-sm outline-none focus:border-zinc-900 focus:ring-1 focus:ring-zinc-900"
+          className="h-9 rounded-md border border-zinc-300 bg-white px-3 text-sm shadow-xs outline-none transition-colors focus-visible:border-zinc-400 focus-visible:ring-[3px] focus-visible:ring-zinc-200/65"
         />
       </label>
 
       {!hasListings ? (
-        <p className="rounded-lg border border-dashed border-zinc-300 bg-zinc-50 px-4 py-4 text-sm text-zinc-500">
-          We’re still building our partner network in your area. Enter your location below to find a
-          trusted wrap shop near you on the map — bring your downloaded spec pack and they’ll take
-          it from there.
-        </p>
+        <div className="rounded-xl border border-dashed border-zinc-300 bg-white px-6 py-8 text-center">
+          <span
+            className="mx-auto mb-2 inline-flex size-12 items-center justify-center rounded-full border border-brand/20 bg-brand-soft"
+            aria-hidden
+          >
+            <Store className="size-5 text-zinc-700" />
+          </span>
+          <p className="text-sm font-medium text-zinc-900">No partners in your area yet</p>
+          <p className="mx-auto mt-1 max-w-md text-sm text-zinc-600">
+            We’re still building our partner network nearby. Search the map below to find a trusted
+            wrap shop — bring your downloaded spec pack and they’ll take it from there.
+          </p>
+        </div>
       ) : null}
 
       {platformShops.length > 0 ? (
@@ -136,7 +144,7 @@ export function ShopLocator({ platformShops, directory }: Props) {
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={() => handoff('directory', { name: s.name })}
-                  className="shrink-0 text-sm font-medium text-sky-700 underline-offset-2 hover:underline"
+                  className="shrink-0 text-sm font-medium text-zinc-700 underline-offset-2 hover:text-zinc-900 hover:underline"
                 >
                   Visit <span className="sr-only">(opens in a new tab)</span>→
                 </a>

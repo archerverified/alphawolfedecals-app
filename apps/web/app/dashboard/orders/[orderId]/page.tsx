@@ -60,7 +60,7 @@ export default async function OrderDetailPage({
           <OrderStatusBadge status={order.status} />
         </div>
 
-        <section className="rounded-lg border border-zinc-200 bg-white p-5">
+        <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-sm font-semibold text-zinc-900">Customer</h2>
           <dl className="mt-3 grid grid-cols-1 gap-x-8 gap-y-3 text-sm sm:grid-cols-2">
             <Field label="Name" value={order.contactName} />
@@ -79,9 +79,9 @@ export default async function OrderDetailPage({
           ) : null}
         </section>
 
-        <section className="rounded-lg border border-zinc-200 bg-white p-5">
+        <section className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
           <h2 className="text-sm font-semibold text-zinc-900">Update status</h2>
-          <p className="mt-1 text-sm text-zinc-500">Move this order through production.</p>
+          <p className="mt-1 text-sm text-zinc-600">Move this order through production.</p>
           <div className="mt-4">
             <OrderActions orderId={order.id} status={order.status} />
           </div>

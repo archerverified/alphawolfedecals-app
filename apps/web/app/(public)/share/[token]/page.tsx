@@ -1,6 +1,6 @@
 // Public share-for-feedback page (Goal 9 / growth loops). Unauthenticated,
 // scoped by projects.transfer_token. Shows the project's 3 AI concept directions
-// and lets a visitor 👍 one ("my crew picked #2"). The export pack's QR + short
+// and lets a visitor upvote one ("my crew picked #2"). The export pack's QR + short
 // URL feed visitors here; the loop turns one customer into many.
 //
 // SECURITY: the data loader (share.loadPublicShare) runs on the system
@@ -13,9 +13,11 @@
 
 import { randomUUID } from 'node:crypto';
 import type { Metadata } from 'next';
+import Image from 'next/image';
 import { notFound } from 'next/navigation';
 import { cookies } from 'next/headers';
 import { share, storage } from '@alphawolf/db';
+import { Eyebrow } from '@alphawolf/ui/components/ui/eyebrow';
 
 import { captureServerEvent } from '../../../../lib/notifications/posthog-server';
 import { ShareVoting, type ShareConceptView } from '../../../../components/share/ShareVoting';
@@ -77,15 +79,21 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
 
   return (
     <main className="mx-auto max-w-4xl px-6 py-12">
-      <header className="text-center">
-        <p className="text-xs font-medium uppercase tracking-wide text-sky-600">
-          Alpha Wolf Wrap Studio
-        </p>
-        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900 sm:text-3xl">
+      <header className="flex flex-col items-center text-center">
+        <Image
+          src="/brand/alpha-wolf-logo.png"
+          alt="Alpha Wolf"
+          width={132}
+          height={41}
+          priority
+          className="mb-5 h-9 w-auto"
+        />
+        <Eyebrow>Alpha Wolf Wrap Studio</Eyebrow>
+        <h1 className="mt-2 text-2xl font-semibold tracking-tight text-zinc-900">
           Which wrap should win?
         </h1>
-        <p className="mx-auto mt-2 max-w-xl text-sm text-zinc-500">
-          Three AI concept directions for the {label}. Tap the one you’d roll — your vote helps pick
+        <p className="mx-auto mt-2 max-w-xl text-sm text-zinc-600">
+          Three concept directions for the {label}. Tap the one you’d roll — your vote helps pick
           the final design.
         </p>
       </header>
@@ -95,9 +103,12 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
           <ShareVoting token={token} concepts={concepts} />
         </div>
       ) : (
-        <p className="mt-12 rounded-lg border border-dashed border-zinc-300 bg-white px-6 py-12 text-center text-sm text-zinc-500">
-          The concepts aren’t ready yet. Check back once the design has been generated.
-        </p>
+        <div className="mt-12 rounded-xl border border-dashed border-zinc-300 bg-white px-6 py-12 text-center">
+          <p className="text-sm font-medium text-zinc-900">Concepts aren’t ready yet</p>
+          <p className="mx-auto mt-1 max-w-sm text-sm text-zinc-600">
+            Check back once the design has been generated — your vote will help pick the winner.
+          </p>
+        </div>
       )}
 
       <footer className="mt-12 text-center text-xs text-zinc-400">
