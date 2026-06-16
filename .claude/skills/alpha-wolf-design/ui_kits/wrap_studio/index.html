@@ -1,0 +1,90 @@
+<!doctype html>
+<!-- @dsCard group="UI Kit — Wrap Studio" name="UI Kit · Alpha Wolf Wrap Studio" subtitle="Wrap Studio app — home, signup, vehicle browser, projects, editor shell." viewport="1280x900" -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UI Kit · Alpha Wolf Wrap Studio</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<style>
+  html, body { margin: 0; padding: 0; background: #FAFAFA; color: #18181B; font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+  body, #root, .app { min-height: 100vh; display: flex; flex-direction: column; }
+  a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px rgba(228,228,231,0.65);
+  }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="./components.jsx" data-presets="env,react"></script>
+<script type="text/babel" src="./vehicle.jsx" data-presets="env,react"></script>
+<script type="text/babel" src="./editor.jsx" data-presets="env,react"></script>
+<script type="text/babel" src="./pages.jsx" data-presets="env,react"></script>
+
+<script type="text/babel" data-presets="env,react">
+const { useState } = React;
+
+function App() {
+  const [path, setPath] = useState('/');
+  const [activeVehicle, setActiveVehicle] = useState(null);
+
+  function navigate(p) {
+    setPath(p);
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  function onUseVehicle(v) {
+    setActiveVehicle(v);
+    navigate('/projects');
+  }
+
+  function onOpenProject(p) {
+    navigate('/projects/' + p.id + '/editor');
+  }
+
+  const isAppShell = ['/projects', '/admin'].includes(path) || path.startsWith('/projects/');
+
+  let Page;
+  if (path === '/')                            Page = <HomePage onNavigate={navigate} />;
+  else if (path === '/signup')                 Page = <AuthPage mode="signup" onNavigate={navigate} />;
+  else if (path === '/signup-shop')            Page = <AuthPage mode="signup" onNavigate={navigate} />;
+  else if (path === '/signin')                 Page = <AuthPage mode="signin" onNavigate={navigate} />;
+  else if (path === '/welcome')                Page = <WelcomePage onNavigate={navigate} />;
+  else if (path === '/vehicles/select')        Page = <VehicleSelectPage onSelect={onUseVehicle} onNavigate={navigate} />;
+  else if (path === '/projects')               Page = <ProjectsPage onOpen={onOpenProject} onNavigate={navigate} />;
+  else if (path.startsWith('/projects/') && path.endsWith('/editor')) {
+    Page = <WrapEditor vehicleLabel={activeVehicle ? (activeVehicle.year + ' ' + activeVehicle.make + ' ' + activeVehicle.model + (activeVehicle.trim ? ' · ' + activeVehicle.trim : '')) : undefined} onBack={() => navigate('/projects')} />;
+  }
+  else                                         Page = <ProjectsPage onOpen={onOpenProject} onNavigate={navigate} />;
+
+  const isEditor = path.startsWith('/projects/') && path.endsWith('/editor');
+
+  return (
+    <div className="app" data-screen-label={
+      path === '/' ? '01 Home' :
+      path === '/signup' ? '02 Signup' :
+      path === '/signin' ? '02 Signin' :
+      path === '/welcome' ? '03 Welcome' :
+      path === '/vehicles/select' ? '04 Vehicle select' :
+      path === '/projects' ? '05 Projects' :
+      isEditor ? '06 Editor' : 'page'
+    } style={{ flex: 1, minHeight: '100vh' }}>
+      {isAppShell && !isEditor && <AppHeader currentPath={path} onNavigate={navigate} />}
+      <div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+        {Page}
+      </div>
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>

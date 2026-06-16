@@ -1,0 +1,37 @@
+<!doctype html>
+<!-- @dsCard group="Components" name="Components · Buttons (app)" subtitle="Zinc-900 primary, outline, secondary, ghost, destructive — sentence case." viewport="700x230" -->
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<link rel="stylesheet" href="_shell.css">
+<style>
+  .b { display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-sans);font-weight:500;font-size:13px;height:36px;padding:0 16px;border-radius:6px;transition:background-color .15s;cursor:pointer;border:0;line-height:1;box-shadow:0 1px 2px 0 rgba(0,0,0,.05);}
+  .b-primary  { background:#18181B;color:#FFFFFF; }
+  .b-primary:hover  { background:#27272A; }
+  .b-outline { background:#FFFFFF;color:#18181B;border:1px solid #D4D4D8; }
+  .b-outline:hover { background:#FAFAFA; }
+  .b-secondary{ background:#F4F4F5;color:#18181B; }
+  .b-secondary:hover{ background:#E4E4E7; }
+  .b-ghost   { background:transparent;color:#27272A;box-shadow:none; }
+  .b-ghost:hover   { background:#F4F4F5; }
+  .b-destructive { background:#DC2626;color:#FFFFFF; }
+  .b-destructive:hover { background:#B91C1C; }
+  .b-sm { height:32px;padding:0 12px;font-size:12px; }
+</style>
+</head><body>
+<div class="card light">
+  <div class="eyebrow-zinc">Buttons · Wrap Studio app</div>
+  <div class="row wrap" style="gap:10px;">
+    <button class="b b-primary">Start a project</button>
+    <button class="b b-outline">Use this template</button>
+    <button class="b b-secondary">Cancel</button>
+    <button class="b b-ghost">Snap</button>
+    <button class="b b-destructive">Delete</button>
+  </div>
+  <div class="row wrap" style="gap:10px;">
+    <button class="b b-primary b-sm">New project</button>
+    <button class="b b-outline b-sm">Open</button>
+    <button class="b b-ghost b-sm">Sign out</button>
+  </div>
+  <div class="caption-light">Sentence case. Height 36 px default / 32 px small. Primary = <code class="mono">zinc-900</code> filled, darkens to 800 on hover. Sharper, denser, much quieter than the marketing buttons — by design.</div>
+</div>
+</body></html>

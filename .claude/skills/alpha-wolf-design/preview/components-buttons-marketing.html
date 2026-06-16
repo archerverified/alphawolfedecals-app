@@ -1,0 +1,34 @@
+<!doctype html>
+<!-- @dsCard group="Components" name="Components · Buttons (marketing)" subtitle="Primary cyan-fill + 4 supporting variants — uppercase, 44 px." viewport="700x260" -->
+<html><head><meta charset="utf-8">
+<link rel="stylesheet" href="../colors_and_type.css">
+<link rel="stylesheet" href="_shell.css">
+<style>
+  .b { display:inline-flex;align-items:center;justify-content:center;gap:8px;font-family:var(--font-sans);font-weight:600;font-size:13px;text-transform:uppercase;letter-spacing:0.08em;height:44px;padding:0 20px;border-radius:6px;transition:background-color .2s;cursor:pointer;border:0;line-height:1;}
+  .b-primary  { background:#00AEEF;color:#000000; }
+  .b-primary:hover  { background:rgba(0,174,239,0.9); }
+  .b-secondary{ background:#000000;color:#FFFFFF;border:1px solid #2A2A2A; }
+  .b-secondary:hover{ background:#1A1A1A; }
+  .b-outline { background:transparent;color:#00AEEF;border:1px solid #00AEEF; }
+  .b-outline:hover { background:rgba(0,174,239,0.10); }
+  .b-ghost   { background:transparent;color:#FFFFFF; }
+  .b-ghost:hover   { background:#1A1A1A; }
+  .b-link    { background:transparent;color:#00AEEF;text-transform:none;letter-spacing:normal;padding:0;height:auto;text-decoration-thickness:1px;text-underline-offset:4px;}
+  .b-link:hover { text-decoration: underline; }
+</style>
+</head><body>
+<div class="card dark">
+  <div class="eyebrow-blue">Buttons · marketing</div>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+    <button class="b b-primary">Get a Quote</button>
+    <button class="b b-secondary">Book Now</button>
+    <button class="b b-outline">See gallery</button>
+    <button class="b b-ghost">Browse services</button>
+  </div>
+  <div class="row" style="gap:18px;align-items:center;">
+    <button class="b b-link">View all services →</button>
+    <span class="caption-dark">link variant · no uppercase · cyan underline on hover</span>
+  </div>
+  <div class="caption-dark">All buttons height 44 px (WCAG 2.1 SC 2.5.5). Primary = cyan fill on near-black text. UPPERCASE @ <code class="mono">0.08em</code> tracking, font-weight 600. Hover darkens the fill; never lifts or scales.</div>
+</div>
+</body></html>

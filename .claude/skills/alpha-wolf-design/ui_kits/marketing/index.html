@@ -1,0 +1,67 @@
+<!doctype html>
+<!-- @dsCard group="UI Kit — Marketing" name="UI Kit · alphawolfdecals.com" subtitle="Marketing site recreation — hero, services, trust band, testimonials, financing, final CTA." viewport="1280x900" -->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>UI Kit · alphawolfdecals.com</title>
+<link rel="stylesheet" href="../../colors_and_type.css">
+<style>
+  html, body { margin: 0; padding: 0; background: #0A0A0A; color: #FFFFFF; font-family: var(--font-sans); -webkit-font-smoothing: antialiased; }
+  body { min-height: 100vh; display: flex; flex-direction: column; }
+  #root { flex: 1; display: flex; flex-direction: column; }
+  a:focus-visible, button:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 2px #00AEEF, 0 0 0 6px #0A0A0A;
+  }
+  @keyframes awd-underline-draw { to { transform: scaleX(1); } }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="./components.jsx" data-presets="env,react"></script>
+<script type="text/babel" src="./service-art.jsx" data-presets="env,react"></script>
+<script type="text/babel" src="./sections.jsx" data-presets="env,react"></script>
+<script type="text/babel" src="./pages.jsx" data-presets="env,react"></script>
+
+<script type="text/babel" data-presets="env,react">
+const { useState } = React;
+
+function App() {
+  const [path, setPath] = useState('/');
+
+  function navigate(p) {
+    setPath(p);
+    if (typeof window !== 'undefined' && window.scrollTo) window.scrollTo({ top: 0, behavior: 'instant' });
+  }
+
+  let Page;
+  if (path === '/')             Page = <HomePage onNavigate={navigate} />;
+  else if (path === '/about')   Page = <AboutPage onNavigate={navigate} />;
+  else if (path.startsWith('/services/')) {
+    const slug = path.replace('/services/', '');
+    Page = <ServiceDetailPage slug={slug} onNavigate={navigate} />;
+  }
+  else                          Page = <StubPage path={path} />;
+
+  return (
+    <>
+      <SiteHeader currentPath={path} onNavigate={navigate} />
+      <main data-screen-label={path === '/' ? '01 Home' : path === '/about' ? '02 About' : path.startsWith('/services/') ? '03 Service detail' : '04 Stub'} style={{ flex: 1 }}>
+        {Page}
+      </main>
+      <SiteFooter onNavigate={navigate} />
+    </>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(<App />);
+</script>
+</body>
+</html>

@@ -1,0 +1,303 @@
+/* =================================================================
+ * Alpha Wolf Decals — Design Tokens
+ * -----------------------------------------------------------------
+ * Two surfaces share one brand:
+ *
+ *   1. alphawolfdecals.com (marketing) — DARK first, electric-blue
+ *      accent. Bold, automotive, declarative. Source of truth:
+ *      archerverified/AlphaWolfDecals (app/globals.css,
+ *      tailwind.config.ts, components/sections/*).
+ *
+ *   2. Alpha Wolf Wrap Studio (the SaaS app) — LIGHT first,
+ *      zinc-neutral chrome, black actions. The workshop face of the
+ *      brand. Source: archerverified/alphawolfedecals-app.
+ *
+ * The TWO PALETTES live side by side below. Pick `--awd-*` tokens
+ * for marketing / brand / dark surfaces; pick `--aws-*` tokens for
+ * Wrap-Studio app surfaces.
+ *
+ * Both share Geist Sans + Geist Mono and the wolf logo.
+ * ================================================================= */
+
+@font-face {
+  font-family: "Geist";
+  src: url("./fonts/Geist-Variable.woff2") format("woff2-variations"),
+       url("./fonts/Geist-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: optional;
+}
+
+@font-face {
+  font-family: "Geist Mono";
+  src: url("./fonts/GeistMono-Variable.woff2") format("woff2-variations"),
+       url("./fonts/GeistMono-Variable.woff2") format("woff2");
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: optional;
+}
+
+:root {
+  /* ============================================================
+   * 1. ALPHAWOLFDECALS.COM — marketing palette (dark)
+   * Exact tokens from app/globals.css + tailwind.config.ts.
+   * ============================================================ */
+
+  /* Brand */
+  --awd-blue:        #00AEEF;                       /* electric blue, primary accent */
+  --awd-blue-glow:   rgba(0, 174, 239, 0.32);       /* soft ring / glow */
+  --awd-blue-radial: radial-gradient(60% 60% at 50% 40%,
+                       rgba(0, 174, 239, 0.18) 0%,
+                       rgba(10, 10, 10, 0) 70%);    /* hero / final-CTA glow */
+
+  /* Surfaces (dark) */
+  --awd-true-black:  #000000;   /* hero cinema band, service cards */
+  --awd-black:       #0A0A0A;   /* default page surface */
+  --awd-neutral-900: #1A1A1A;   /* hairline border on dark */
+  --awd-neutral-800: #2A2A2A;   /* button border, raised divider */
+
+  /* Text on dark */
+  --awd-white:       #FFFFFF;
+  --awd-neutral-500: #8B92A0;   /* metadata, eyebrows on dark */
+  --awd-neutral-400: #9CA3AF;   /* body copy, lede */
+
+  /* ============================================================
+   * 2. ALPHA WOLF WRAP STUDIO — app palette (light, zinc neutrals)
+   * Tokens from packages/ui (shadcn re-skin) + apps/web (Tailwind v4).
+   * ============================================================ */
+
+  /* Neutral scale (Tailwind v4 zinc) */
+  --aws-zinc-50:   #FAFAFA;
+  --aws-zinc-100:  #F4F4F5;
+  --aws-zinc-200:  #E4E4E7;
+  --aws-zinc-300:  #D4D4D8;
+  --aws-zinc-400:  #A1A1AA;
+  --aws-zinc-500:  #71717A;
+  --aws-zinc-600:  #52525B;
+  --aws-zinc-700:  #3F3F46;
+  --aws-zinc-800:  #27272A;
+  --aws-zinc-900:  #18181B;
+  --aws-zinc-950:  #09090B;
+
+  /* Semantic surfaces */
+  --aws-bg-page:    var(--aws-zinc-50);   /* marketing + project list */
+  --aws-bg-app:     var(--aws-zinc-100);  /* admin + editor shell */
+  --aws-bg-canvas:  var(--aws-zinc-200);  /* canvas workspace */
+  --aws-bg-card:    #FFFFFF;
+  --aws-bg-inverse: var(--aws-zinc-900);
+
+  /* Semantic text */
+  --aws-fg-strong:  var(--aws-zinc-900);
+  --aws-fg-default: var(--aws-zinc-800);
+  --aws-fg-muted:   var(--aws-zinc-600);
+  --aws-fg-subtle:  var(--aws-zinc-500);
+  --aws-fg-faint:   var(--aws-zinc-400);
+
+  /* Borders / actions */
+  --aws-border:        var(--aws-zinc-200);
+  --aws-border-strong: var(--aws-zinc-300);
+  --aws-action:        var(--aws-zinc-900);
+  --aws-action-hover:  var(--aws-zinc-800);
+  --aws-action-fg:     #FFFFFF;
+
+  /* Accent (shared brand cyan, used sparingly inside the app) */
+  --aws-accent:        var(--awd-blue);
+  --aws-accent-soft:   rgba(0, 174, 239, 0.10);
+
+  /* ============================================================
+   * 3. SHARED — status, motion, type, spacing, radii, shadows
+   * ============================================================ */
+
+  /* Status palette (works on both surfaces — choose contrast accordingly) */
+  --status-success-bg:    #ECFDF5;  --status-success-bd: #A7F3D0;
+  --status-success-fg:    #064E3B;  --status-success-solid: #059669;
+  --status-warning-bg:    #FFFBEB;  --status-warning-bd: #FDE68A;
+  --status-warning-fg:    #78350F;  --status-warning-solid: #92400E;
+  --status-danger-bg:     #FEF2F2;  --status-danger-bd:  #FECACA;
+  --status-danger-fg:     #7F1D1D;  --status-danger-solid:  #DC2626;
+
+  /* Strength meter (from SignupForm.tsx — five-step progression) */
+  --strength-0: #EF4444;  /* too weak */
+  --strength-1: #F97316;  /* weak */
+  --strength-2: #EAB308;  /* okay */
+  --strength-3: #84CC16;  /* strong */
+  --strength-4: #10B981;  /* excellent */
+
+  /* Type */
+  --font-sans: "Geist", Inter, system-ui, -apple-system, "Segoe UI",
+               Helvetica, Arial, sans-serif;
+  --font-mono: "Geist Mono", ui-monospace, "SF Mono", Menlo,
+               Consolas, monospace;
+  /* The script "Alpha Wolf Decals" on the logo is bespoke lettering —
+     never re-set as type. Always place the logo asset. */
+
+  --fs-xs:   12px;  --lh-xs:   16px;
+  --fs-sm:   14px;  --lh-sm:   20px;
+  --fs-base: 16px;  --lh-base: 24px;
+  --fs-lg:   18px;  --lh-lg:   28px;
+  --fs-xl:   20px;  --lh-xl:   28px;
+  --fs-2xl:  24px;  --lh-2xl:  32px;
+  --fs-3xl:  30px;  --lh-3xl:  36px;
+  --fs-4xl:  36px;  --lh-4xl:  40px;
+  --fs-5xl:  48px;  --lh-5xl:  1;
+  --fs-6xl:  64px;  --lh-6xl:  0.95;
+  --fs-7xl:  72px;  --lh-7xl:  0.95;
+  --fs-hero: 88px;  --lh-hero: 0.95;  /* hero tagline, desktop */
+
+  --fw-light:     300;
+  --fw-regular:   400;
+  --fw-medium:    500;
+  --fw-semibold:  600;
+  --fw-bold:      700;
+
+  /* Brand letter-spacing system. The marketing surface is built on
+     wide tracking; the app surface uses near-neutral tracking. */
+  --tracking-tight:        -0.02em;
+  --tracking-normal:        0;
+  --tracking-button:        0.08em;   /* all CTAs uppercase 0.08em */
+  --tracking-eyebrow-app:   0.10em;   /* zinc-app eyebrows */
+  --tracking-eyebrow-soft:  0.18em;   /* trust-band label */
+  --tracking-eyebrow-brand: 0.20em;   /* brand-blue eyebrow (default) */
+  --tracking-eyebrow-wide:  0.22em;   /* about-page eyebrow */
+  --tracking-eyebrow-hero:  0.30em;   /* "Salem, Oregon" hero eyebrow */
+
+  /* Spacing (4 px base) */
+  --space-1: 4px;   --space-2:  8px;   --space-3: 12px;
+  --space-4: 16px;  --space-5: 20px;   --space-6: 24px;
+  --space-8: 32px;  --space-10: 40px;  --space-12: 48px;
+  --space-16: 64px; --space-20: 80px;  --space-24: 96px;
+
+  /* Radii — note the two-product split */
+  --radius-sm:   4px;
+  --radius-md:   6px;    /* WrapStudio buttons / inputs */
+  --radius-lg:   8px;    /* MARKETING cards / buttons   */
+  --radius-xl:  12px;    /* WrapStudio cards / dialogs  */
+  --radius-pill: 9999px;
+
+  /* Shadows */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.05);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.08),
+               0 1px 2px -1px rgb(0 0 0 / 0.05);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.10),
+               0 2px 4px -2px rgb(0 0 0 / 0.05);
+  --shadow-cyan-rest: 0 0 0 1px rgba(0,174,239,0.2),
+                       0 24px 48px -24px rgba(0,174,239,0.45);
+  --shadow-cyan-focus: 0 0 0 2px rgba(0,174,239,0.6);
+
+  /* Motion — driven by AWD's locked easing */
+  --ease-awd:    cubic-bezier(0.32, 0.72, 0, 1);   /* tagline draw, card lift */
+  --ease-out:    cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1);
+  --dur-fast:    120ms;
+  --dur-base:    200ms;
+  --dur-slow:    400ms;     /* underline draw on hero */
+
+  /* Containers */
+  --container-narrow: 672px;    /* max-w-2xl   */
+  --container-prose:  896px;    /* max-w-4xl   */
+  --container-app:   1024px;    /* max-w-5xl   */
+  --container-site:  1280px;    /* max-w-7xl   */
+}
+
+/* =================================================================
+ * Semantic element styles
+ * Default body is MARKETING (dark). Add `.aws-light` on a wrapper
+ * to switch into Wrap Studio app surfaces.
+ * ================================================================= */
+
+body, .awd-dark {
+  font-family: var(--font-sans);
+  color: var(--awd-white);
+  background: var(--awd-black);
+  font-feature-settings: "ss01", "cv11";
+  -webkit-font-smoothing: antialiased;
+}
+
+.aws-light {
+  background: var(--aws-bg-page);
+  color: var(--aws-fg-strong);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Marketing display headline — "Don't Blend In. / Lead the Pack." */
+.awd-display {
+  font-family: var(--font-sans);
+  font-size: 56px;
+  line-height: 0.95;
+  letter-spacing: var(--tracking-tight);
+  color: var(--awd-white);
+}
+@media (min-width: 768px) {
+  .awd-display { font-size: 88px; }
+}
+
+/* Brand-blue eyebrow (default for the marketing site) */
+.awd-eyebrow {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-semibold);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow-brand);
+  color: var(--awd-blue);
+}
+.awd-eyebrow--hero {
+  font-family: var(--font-mono);
+  letter-spacing: var(--tracking-eyebrow-hero);
+}
+
+/* Wrap Studio app eyebrow (zinc, narrower tracking) */
+.aws-eyebrow {
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-medium);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-eyebrow-app);
+  color: var(--aws-fg-subtle);
+}
+
+/* Marketing section title */
+.awd-h2 {
+  font-size: var(--fs-3xl);
+  line-height: 1.05;
+  letter-spacing: var(--tracking-tight);
+  font-weight: var(--fw-bold);
+  color: var(--awd-white);
+}
+@media (min-width: 768px) {
+  .awd-h2 { font-size: var(--fs-4xl); }
+}
+
+/* App page H1 */
+.aws-h1 {
+  font-size: var(--fs-2xl);
+  font-weight: var(--fw-semibold);
+  letter-spacing: var(--tracking-tight);
+  color: var(--aws-fg-strong);
+}
+
+/* App description text */
+.aws-p {
+  font-size: var(--fs-sm);
+  line-height: var(--lh-sm);
+  color: var(--aws-fg-muted);
+}
+
+/* Mono usage — stats, code, IDs */
+.mono, code, kbd, samp {
+  font-family: var(--font-mono);
+  font-feature-settings: "tnum";
+}
+
+/* Big mono trust stat — "1,200+" */
+.awd-stat {
+  font-family: var(--font-mono);
+  font-size: var(--fs-5xl);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--tracking-tight);
+  line-height: 0.95;
+  color: var(--awd-white);
+  font-variant-numeric: tabular-nums;
+}
+@media (min-width: 768px) {
+  .awd-stat { font-size: var(--fs-7xl); }
+}
+.awd-stat__suffix { color: var(--awd-blue); }
