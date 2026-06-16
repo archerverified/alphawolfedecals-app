@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Alpha Wolf Wrap Studio — Catalogue</title>
+<link rel="stylesheet" href="./colors_and_type.css" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100%; }
+  body {
+    font-family: var(--font-sans); background: var(--aws-bg-page);
+    color: var(--aws-fg-strong); -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01","cv11";
+  }
+  a { text-decoration: none; color: inherit; }
+  .icon { width: 16px; height: 16px; stroke: currentColor; stroke-width: 2;
+    fill: none; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: 36px; padding: 0 16px; border-radius: 6px; border: 1px solid transparent;
+    font-size: 13px; font-weight: 500; line-height: 1; white-space: nowrap;
+    transition: background-color 150ms, border-color 150ms; cursor: pointer;
+  }
+  .btn--primary { background: #18181B; color: #fff; box-shadow: var(--shadow-sm); }
+  .btn--primary:hover { background: #27272A; }
+  /* the sanctioned amber action — the ONE palette break */
+  .btn--amber { background: #78350F; color: #fff; }
+  .btn--amber:hover { background: #5c2a0c; }
+
+  /* thin brand band */
+  .topband { background: var(--aws-zinc-900); }
+  .topband::after { content:""; display:block; height:2px; background: var(--awd-blue); }
+  .topband__inner { max-width: 1024px; margin: 0 auto; padding: 16px 32px;
+    display:flex; align-items:center; justify-content:space-between; }
+  .topband__logo { height: 24px; width:auto; display:block; }
+  .topband__user { font-size: 12px; color: var(--aws-zinc-400); }
+
+  .page { max-width: 1024px; margin: 0 auto; padding: 44px 32px 72px; }
+
+  .head { margin-bottom: 32px; }
+  .head__eyebrow { margin:0 0 6px; font-size: 11px; font-weight:500; text-transform:uppercase;
+    letter-spacing:.10em; color: var(--aws-fg-subtle); }
+  .head__h1 { margin:0; font-size: 24px; font-weight:600; letter-spacing:-0.01em; color: var(--aws-fg-strong); }
+  .head__p { margin: 8px 0 0; font-size: 14px; line-height: 1.55; color: var(--aws-fg-muted); max-width: 64ch; }
+
+  .stack { display:flex; flex-direction: column; gap: 32px; }
+
+  .field { display:flex; flex-direction: column; gap: 6px; }
+  .lab { font-size: 13px; font-weight: 500; color: var(--aws-fg-default); }
+  .ipt, .sel {
+    height: 36px; width: 100%; box-sizing: border-box; border-radius: 6px;
+    border: 1px solid var(--aws-border-strong); padding: 0 12px; font-size: 14px;
+    color: var(--aws-fg-strong); background: #fff; box-shadow: var(--shadow-xs);
+    font-family: inherit; outline: none; transition: border-color 150ms, box-shadow 150ms;
+  }
+  .ipt:focus, .sel:focus { border-color: #18181B; box-shadow: 0 0 0 3px rgba(228,228,231,.65); }
+  .hint { margin: 2px 0 0; font-size: 11px; color: var(--aws-fg-subtle); }
+
+  .cascade { display:grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  /* locked select: greyed, with a "pick a year first" hint so it doesn't read broken */
+  .field--locked .sel {
+    background: var(--aws-zinc-100); color: var(--aws-fg-faint);
+    border-color: var(--aws-border); cursor: not-allowed;
+  }
+  .field--locked .lab { color: var(--aws-fg-subtle); }
+  .hint--lock { display:flex; align-items:center; gap: 6px; color: var(--aws-fg-faint); }
+  .hint--lock svg { width: 11px; height: 11px; stroke: currentColor; stroke-width: 2;
+    fill:none; stroke-linecap:round; stroke-linejoin:round; }
+
+  .resultline { font-size: 13px; color: var(--aws-fg-muted); }
+
+  /* WARM EMPTY STATE — amber request card (the one sanctioned palette break) */
+  .empty {
+    display:flex; flex-direction: column; align-items: center; text-align: center; gap: 12px;
+    background: #FFFBEB; border: 1px solid #FDE68A; border-radius: 12px;
+    padding: 40px 32px; box-shadow: var(--shadow-sm);
+  }
+  .empty__badge {
+    width: 44px; height: 44px; border-radius: 9999px; background: #FEF3C7;
+    border: 1px solid #FDE68A; display:flex; align-items:center; justify-content:center; margin-bottom: 2px;
+  }
+  .empty__badge svg { width: 20px; height: 20px; stroke: #78350F; stroke-width: 1.8;
+    fill:none; stroke-linecap:round; stroke-linejoin:round; }
+  .empty__title { margin:0; font-size: 16px; font-weight: 600; color: #78350F; }
+  .empty__p { margin:0; font-size: 13px; line-height: 1.55; color: #92400E; max-width: 50ch; }
+  .empty__cta { margin-top: 6px; }
+  .empty__meta { margin: 8px 0 0; font-family: var(--font-mono); font-size: 11px; color: #B45309; }
+</style>
+</head>
+<body>
+
+  <div class="topband">
+    <div class="topband__inner">
+      <img class="topband__logo" src="./assets/logo.png" alt="Alpha Wolf Decals" />
+      <span class="topband__user">casey@example.com</span>
+    </div>
+  </div>
+
+  <main class="page">
+    <header class="head">
+      <p class="head__eyebrow">Alpha Wolf Wrap Studio</p>
+      <h1 class="head__h1">Choose your vehicle</h1>
+      <p class="head__p">
+        Pick your exact year, make, model, and trim — or search — so your design starts on an
+        accurate, wrap-safe outline. We keep outlines for the top 50 most-wrapped vehicles in North America.
+      </p>
+    </header>
+
+    <div class="stack">
+      <!-- search -->
+      <div class="field">
+        <label class="lab" for="q">Search</label>
+        <input class="ipt" id="q" type="search" placeholder="e.g. 2024 transit 250 high roof" />
+        <p class="hint">Typo-tolerant — “transt 250” finds Transit 250.</p>
+      </div>
+
+      <!-- cascade: year picked-able, make/model/trim locked until a year is chosen -->
+      <div class="cascade">
+        <div class="field">
+          <label class="lab" for="year">Year</label>
+          <select class="sel" id="year">
+            <option>Select year</option>
+            <option>2024</option><option>2023</option><option>2022</option>
+          </select>
+        </div>
+        <div class="field field--locked">
+          <label class="lab" for="make">Make</label>
+          <select class="sel" id="make" disabled><option>Select make</option></select>
+          <p class="hint hint--lock"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Pick a year first</p>
+        </div>
+        <div class="field field--locked">
+          <label class="lab" for="model">Model</label>
+          <select class="sel" id="model" disabled><option>Select model</option></select>
+          <p class="hint hint--lock"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Pick a year first</p>
+        </div>
+        <div class="field field--locked">
+          <label class="lab" for="trim">Trim</label>
+          <select class="sel" id="trim" disabled><option>Any trim</option></select>
+          <p class="hint hint--lock"><svg viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="1.5"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>Pick a year first</p>
+        </div>
+      </div>
+
+      <p class="resultline" aria-live="polite">Pick a vehicle above or search to begin.</p>
+
+      <!-- WARM EMPTY STATE — appears EXACTLY ONCE -->
+      <div class="empty">
+        <span class="empty__badge">
+          <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M12 18v-6"/><path d="M9 15h6"/></svg>
+        </span>
+        <h2 class="empty__title">Don’t see your vehicle?</h2>
+        <p class="empty__p">Tell us the year, make, and model. We build outlines for the most-requested vehicles first — and we’ll email you the moment yours ships.</p>
+        <div class="empty__cta">
+          <a class="btn btn--amber" href="#">
+            Request it
+            <svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </a>
+        </div>
+        <p class="empty__meta">Most requests turn into an outline within a week.</p>
+      </div>
+    </div>
+  </main>
+
+</body>
+</html>

@@ -8,6 +8,7 @@
 // public receive_code) — never the encrypted address/website/phone or the owner.
 
 import { shops } from '@alphawolf/db';
+import { Eyebrow } from '@alphawolf/ui/components/ui/eyebrow';
 
 import { requireUser } from '../../lib/admin/guard';
 import { captureServerEvent } from '../../lib/notifications/posthog-server';
@@ -32,8 +33,11 @@ export default async function FindAShopPage() {
   return (
     <main className="mx-auto max-w-2xl px-6 py-12">
       <header>
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900">Find a wrap shop</h1>
-        <p className="mt-2 text-sm text-zinc-500">
+        <Eyebrow>Print &amp; install</Eyebrow>
+        <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900">
+          Find a wrap shop
+        </h1>
+        <p className="mt-2 text-sm text-zinc-600">
           Take your finished design to a shop to get it printed and installed. Browse our partners
           or search for a shop near you.
         </p>

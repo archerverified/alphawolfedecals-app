@@ -28,10 +28,10 @@ export function ReferralPanel({ url, qrSvg, referredCount, creditsEarned }: Prop
   }
 
   return (
-    <div className="rounded-xl border border-zinc-200 bg-white p-5">
-      <div className="flex flex-col gap-5 sm:flex-row sm:items-center">
+    <div className="rounded-xl border border-zinc-200 bg-white p-6 shadow-sm">
+      <div className="flex flex-col gap-6 sm:flex-row sm:items-center">
         <div
-          className="mx-auto h-32 w-32 shrink-0 [&>svg]:h-full [&>svg]:w-full"
+          className="mx-auto flex size-36 shrink-0 items-center justify-center rounded-xl border border-brand/20 bg-brand-soft p-3 [&>svg]:h-full [&>svg]:w-full"
           role="img"
           aria-label="Referral QR code"
           dangerouslySetInnerHTML={{ __html: qrSvg }}
@@ -40,20 +40,20 @@ export function ReferralPanel({ url, qrSvg, referredCount, creditsEarned }: Prop
           <label htmlFor="referral-url" className="text-xs font-medium text-zinc-500">
             Your referral link
           </label>
-          <div className="mt-1 flex items-center gap-2">
+          <div className="mt-1.5 flex items-center gap-2">
             <input
               id="referral-url"
               readOnly
               value={url}
               onFocus={(e) => e.currentTarget.select()}
               data-testid="referral-url"
-              className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-zinc-50 px-3 py-2 text-xs text-zinc-700"
+              className="h-9 min-w-0 flex-1 rounded-md border border-zinc-300 bg-zinc-50 px-3 text-xs text-zinc-700 shadow-xs"
             />
             <button
               type="button"
               onClick={() => void copy()}
               data-testid="referral-copy"
-              className="inline-flex items-center gap-1.5 rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
+              className="inline-flex h-9 items-center gap-1.5 rounded-md bg-zinc-900 px-3 text-sm font-medium text-white shadow-sm transition-colors hover:bg-zinc-800"
             >
               {copied ? (
                 <Check className="size-4" aria-hidden />

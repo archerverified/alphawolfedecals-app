@@ -224,8 +224,8 @@ export function LogoStep({ projectId, data, patch, panels, vehicleDims }: Props)
               <p className="truncate text-sm font-medium">{logo.fileName ?? 'Logo'}</p>
               {isVector ? (
                 <p className="mt-1 flex items-center gap-1 text-xs text-emerald-600">
-                  <CheckCircle2 className="size-3.5" aria-hidden /> Vector file — prints sharp at
-                  any size.
+                  <CheckCircle2 className="size-3.5" aria-hidden /> Scales sharp to any size — ideal
+                  for a full wrap.
                 </p>
               ) : rembgRemoved ? (
                 <p className="mt-1 flex items-center gap-1 text-xs text-emerald-600">

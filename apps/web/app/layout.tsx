@@ -5,6 +5,7 @@ import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Toaster } from '@alphawolf/ui/components/ui/sonner';
 import { AnalyticsProvider } from '../components/analytics/AnalyticsProvider';
 import { appBaseUrl } from '../lib/base-url';
+import { fontVariables } from './fonts';
 import './globals.css';
 
 // Site-wide metadata baseline (Goal 10 D6). metadataBase lets every page resolve
@@ -37,13 +38,15 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" className={fontVariables}>
+      <body className="font-sans antialiased">
         {/* PostHog bootstrap (env-gated, no-op without NEXT_PUBLIC_POSTHOG_KEY). */}
         <AnalyticsProvider />
         {children}
-        {/* Sonner toast host (upload success/failure, parse-complete — GH-005). */}
-        <Toaster richColors closeButton position="top-right" />
+        {/* Sonner toast host (upload success/failure, parse-complete — GH-005).
+            bottom-right so a success toast never occludes the editor top-bar
+            Save / Submit-for-production controls (Goal 14 · D13-2). */}
+        <Toaster richColors closeButton position="bottom-right" />
         {/* Vercel Speed Insights (RUM) and Analytics — no-ops outside Vercel hosting. */}
         <SpeedInsights />
         <Analytics />

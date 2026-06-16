@@ -1,19 +1,28 @@
 // Status pill for the shop dashboard. Presentational + server-rendered (no
-// 'use client'): the label/colour mapping lives in lib/shop/order-status so it
-// is unit-tested independently of this markup.
+// 'use client'): renders the shared <Badge> primitive so order statuses use the
+// design system's status palette. The human label stays sourced from
+// lib/shop/order-status (unit-tested independently); only status → Badge variant
+// is decided here. data-status carries the raw enum (the dashboard e2e asserts
+// on it), so the markup contract the tests rely on is unchanged.
 
 import { type OrderStatus } from '@alphawolf/db';
+import { Badge } from '@alphawolf/ui/components/ui/badge';
 import { orderStatusPresentation } from '@/lib/shop/order-status';
 
+// submitted = awaiting action (warning) · in_production = active (neutral fill) ·
+// fulfilled = done (success) · cancelled = inert/terminal (de-emphasised outline).
+const STATUS_VARIANT: Record<OrderStatus, 'default' | 'success' | 'warning' | 'outline'> = {
+  submitted: 'warning',
+  in_production: 'default',
+  fulfilled: 'success',
+  cancelled: 'outline',
+};
+
 export function OrderStatusBadge({ status }: { status: OrderStatus }) {
-  const { label, className } = orderStatusPresentation(status);
+  const { label } = orderStatusPresentation(status);
   return (
-    <span
-      data-testid="order-status-badge"
-      data-status={status}
-      className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ring-1 ring-inset ${className}`}
-    >
+    <Badge variant={STATUS_VARIANT[status]} data-testid="order-status-badge" data-status={status}>
       {label}
-    </span>
+    </Badge>
   );
 }

@@ -6,6 +6,71 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-15 — Goal 14 — Design System Integration — CLOSEOUT
+
+**Status:** ✅ The committed Alpha Wolf design system applied across the Wrap Studio app as a
+**presentational-only** layer — zero behavior change. **Design B− → A−, AI-Slop C+ → A−**
+(fresh-context `/design-review`; both jumped ~1.5 letters from the Goal-13 baseline). 10 commits
+on `goal/14-design-system`; the per-surface diff is Tailwind classes / copy / tokens / SVG only —
+no Konva/canvas/render/zones, no server actions/auth/RLS, no export computation, no new runtime
+deps. Diagram: [`docs/vault/diagrams/goal-14-design-system.md`](docs/vault/diagrams/goal-14-design-system.md).
+Review + gallery: `docs/deployment/screenshots/2026-06-15-goal-14/`.
+
+**What shipped (D1–D6).**
+
+- **D1 plan-design-review:** per-surface 0–10 ratings + 10/10 mockups (landing/welcome/generation/
+  catalogue) + the surgical-vs-bolder plan. `docs/goal-14/D1-plan-design-review.md` doubles as the
+  single restyle spec every worker read.
+- **D2 tokens (the lever):** the shadcn primitives already referenced semantic CSS vars that
+  globals.css never defined → defined them mapped to the `--aws-*` set, so every primitive renders
+  on-brand with ZERO component change (lands the deferred Goal-5 shadcn-theme item). Geist Sans+Mono
+  self-hosted via next/font/local (display:optional, **no new npm dep**); logo.png placed; cyan
+  #00AEEF exposed as bg/text/border-brand; `* { border-color: var(--border) }` base rule.
+- **D3 primitives:** input dark focus border + new Eyebrow + Badge primitives. Password meter
+  verified already single-sourced (no scoring touch).
+- **D4 surfaces:** landing zinc-900 inverse hero band (DEC-3); auth logo lockup; catalogue dedup +
+  progressive hint; vehicle-detail "Start design" now a primary button; brief distinct logo copy;
+  generation skeleton + boilerplate-once; editor toast bottom-right (chrome already on-brand);
+  export-PDF logo column fits; + projects/share/referral/locator/dashboard/order-confirmed (warm
+  empty states, Badge, **emoji removed app-wide**).
+- **D5 DON'T-BREAK:** unit/integration **251+ green**; axe WCAG-2.2-AA **0 violations on all 13
+  restyled pages** (baseline held); editor **positively proven** (X3 art renders, 17 zone shapes,
+  AI dialog opens). The 8 e2e reds = a pre-existing signin/`waitForURL` double-nav flake (flows.ts,
+  untouched) + missing local Transit seed + 1 stale landing assertion (fixed). Before/after gallery
+  - evidence shots committed.
+- **D6 design-review:** A−/A−; the review caught a NEW brief-Zones edge-label clipping defect →
+  fixed (smaller labels + adaptive viewBox padding; geometry/interaction unchanged).
+
+**Goal-13 defects closed:** D13-5 landing/auth (conclusive), D13-7 catalogue dedup + detail CTA
+(conclusive), D13-2 toast bottom-right (evidenced), D13-3 distinct logo copy (source + spec
+tracked), D13-6 meter agrees weak+strong (evidenced). D13-4 concept skeleton shipped; render-timing
+root → Goal 15.
+
+**DECISIONS (no-ask policy; bolder calls flagged for Archer).**
+
+1. Accent = cyan **#00AEEF** (design-system token + Archer's confirmed direction). Cyan text only on
+   dark surfaces; on white, cyan only as non-text accents (rules/dots/borders) — cyan-on-white text
+   fails AA.
+2. **Geist was NOT actually wired** (the prompt's "already the app font" was inaccurate — verified:
+   no `geist` dep, no next/font, no @font-face). Self-hosted the skill's woff2 via next/font/local →
+   zero new dependency, gate-safe.
+3. **DEC-3 (bolder, FLAG):** landing = on-system zinc-900 inverse hero band (logo-on-black sanctioned;
+   NOT the separate dark marketing surface; no third color). Recommend KEEP.
+4. **DEC-4 (bolder, FLAG):** generation featured-concept layout — shipped only the safe slop-fixes
+   (skeleton/boilerplate-once) because the populated grid can't render under the local **mock**
+   provider; the featured/asymmetric reflow is a mockup (`docs/goal-14/mockups/generation.png`)
+   pending Archer greenlight + a real/seeded capture. The tri-grid is the one remaining slop tell.
+5. Prompt's D3/DoD D13 numbering was garbled — used the canonical `findings-and-defects.md` map.
+
+**Flagged for Archer.** (a) Sign off DEC-3 + DEC-4. (b) Greenlight the generation featured layout
+(ceiling-limiter on the grade). (c) e2e: the pre-existing fresh-signup `signIn`/`waitForURL`
+double-nav flake (flows.ts) blocks 6 specs locally — not a Goal-14 change; worth a hardening pass.
+(d) The local DB harness can't seed the PVO-derived AW art or the Ford Transit (license/storage) —
+full e2e + the logo-step/generation renders need the deployed env.
+
+**PR:** `goal/14-design-system` opened for Archer's merge (presentational; CI builds it). §3
+fresh-context code-review + the design-review verdicts recorded in the PR body.
+
 ## 2026-06-15 — Goal 13 — Full E2E Acceptance Test — CLOSEOUT
 
 **Status:** ✅ Full B2C customer journey driven end-to-end against a real build, on

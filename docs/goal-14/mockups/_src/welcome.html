@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Alpha Wolf Wrap Studio — Welcome</title>
+<link rel="stylesheet" href="./colors_and_type.css" />
+<style>
+  *, *::before, *::after { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; min-height: 100%; }
+  body {
+    font-family: var(--font-sans); background: var(--aws-bg-page);
+    color: var(--aws-fg-strong); -webkit-font-smoothing: antialiased;
+    font-feature-settings: "ss01","cv11";
+  }
+  a { text-decoration: none; color: inherit; }
+  .icon { width: 16px; height: 16px; stroke: currentColor; stroke-width: 2;
+    fill: none; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+    height: 44px; padding: 0 22px; border-radius: 6px; border: 1px solid transparent;
+    font-size: 14px; font-weight: 500; line-height: 1; white-space: nowrap;
+    transition: background-color 150ms, border-color 150ms; cursor: pointer;
+  }
+  .btn--primary { background: #18181B; color: #fff; box-shadow: var(--shadow-sm); }
+  .btn--primary:hover { background: #27272A; }
+  .btn--link {
+    background: transparent; color: var(--aws-fg-muted); height: auto; padding: 0;
+    font-size: 13px; text-decoration: underline; text-underline-offset: 2px;
+  }
+  .btn--link:hover { color: var(--aws-fg-strong); }
+
+  /* thin zinc-900 brand band at top carrying the logo lockup */
+  .topband { background: var(--aws-zinc-900); }
+  .topband::after { content:""; display:block; height:2px; background: var(--awd-blue); }
+  .topband__inner {
+    max-width: 1100px; margin: 0 auto; padding: 18px 48px;
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .topband__logo { height: 26px; width: auto; display: block; }
+  .topband__user { font-size: 12px; color: var(--aws-zinc-400); }
+
+  .page {
+    min-height: calc(100vh - 64px);
+    display: flex; align-items: center;
+  }
+  .wrap {
+    max-width: 1100px; margin: 0 auto; padding: 0 48px; width: 100%;
+    display: grid; grid-template-columns: 1fr 0.9fr; gap: 64px; align-items: center;
+  }
+
+  .lead__eyebrow {
+    margin: 0 0 14px; font-size: 11px; font-weight: 500; text-transform: uppercase;
+    letter-spacing: .10em; color: var(--aws-fg-subtle);
+  }
+  .lead__h1 {
+    margin: 0; font-size: 38px; line-height: 1.06; letter-spacing: -0.02em;
+    font-weight: 600; color: var(--aws-fg-strong); max-width: 14ch;
+  }
+  .lead__p {
+    margin: 18px 0 0; font-size: 15px; line-height: 1.6; color: var(--aws-fg-muted);
+    max-width: 44ch;
+  }
+  .lead__cta { display: flex; align-items: center; gap: 20px; margin-top: 32px; }
+
+  /* readiness line — operational, two-clause */
+  .readout {
+    margin: 36px 0 0; display: flex; flex-direction: column; gap: 10px;
+    border-top: 1px solid var(--aws-border); padding-top: 24px; max-width: 44ch;
+  }
+  .readout__item { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--aws-fg-muted); }
+  .readout__check {
+    width: 18px; height: 18px; border-radius: 9999px; background: var(--status-success-bg);
+    border: 1px solid var(--status-success-bd); display: inline-flex; align-items: center; justify-content: center; flex: none;
+  }
+  .readout__check svg { width: 11px; height: 11px; stroke: var(--status-success-solid); stroke-width: 2.4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+
+  /* vehicle visual card */
+  .vcard {
+    background: #fff; border: 1px solid var(--aws-border); border-radius: 12px;
+    box-shadow: var(--shadow-sm); overflow: hidden;
+  }
+  .vcard__art {
+    background: var(--aws-zinc-100); border-bottom: 1px solid var(--aws-border);
+    padding: 28px 32px; display: flex; align-items: center; justify-content: center;
+  }
+  .vcard__art svg { width: 100%; height: 150px; display: block; }
+  .vcard__body { padding: 20px 24px 22px; display: flex; flex-direction: column; gap: 6px; }
+  .vcard__row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+  .vcard__title { margin: 0; font-size: 14px; font-weight: 600; color: var(--aws-fg-strong); }
+  .vcard__pill {
+    font-size: 11px; color: var(--aws-fg-muted); background: var(--aws-zinc-100);
+    border-radius: 9999px; padding: 2px 9px; text-transform: capitalize;
+  }
+  .vcard__dims { margin: 0; font-family: var(--font-mono); font-size: 12px; color: var(--aws-fg-subtle); }
+</style>
+</head>
+<body>
+
+  <div class="topband">
+    <div class="topband__inner">
+      <img class="topband__logo" src="./assets/logo.png" alt="Alpha Wolf Decals" />
+      <span class="topband__user">casey@example.com</span>
+    </div>
+  </div>
+
+  <main class="page">
+    <div class="wrap">
+      <!-- LEFT: confident, action-first welcome -->
+      <section class="lead">
+        <p class="lead__eyebrow">Alpha Wolf Wrap Studio</p>
+        <h1 class="lead__h1">Choose your vehicle to start the wrap.</h1>
+        <p class="lead__p">
+          Pick your exact year, make, model, and trim. Your design starts on an accurate,
+          wrap-safe outline — every panel where it really sits on the body.
+        </p>
+        <div class="lead__cta">
+          <a class="btn btn--primary" href="#">
+            Choose your vehicle
+            <svg class="icon" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>
+          </a>
+          <a class="btn btn--link" href="#">Browse the top 50 first</a>
+        </div>
+
+        <div class="readout">
+          <div class="readout__item">
+            <span class="readout__check"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>
+            Account ready — your projects autosave as you go
+          </div>
+          <div class="readout__item">
+            <span class="readout__check"><svg viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></svg></span>
+            50 vehicle outlines on hand — request any other and we’ll build it
+          </div>
+        </div>
+      </section>
+
+      <!-- RIGHT: vehicle visual (lifted OutlinePreview / pickup) -->
+      <aside class="vcard">
+        <div class="vcard__art">
+          <svg viewBox="0 0 320 90" preserveAspectRatio="xMidYMid meet" aria-label="2024 Ford F-150 outline">
+            <line x1="14" y1="74" x2="306" y2="74" stroke="#00AEEF" stroke-width="1" opacity="0.55" />
+            <g fill="none" stroke="#27272A" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round">
+              <path d="M 20 66 L 20 48 Q 20 42 26 42 L 70 42 L 90 26 L 130 26 Q 138 26 142 34 L 150 44 L 280 44 Q 290 44 290 54 L 290 66" />
+              <line x1="20" y1="66" x2="290" y2="66" />
+              <line x1="150" y1="44" x2="150" y2="66" />
+              <circle cx="70" cy="66" r="10" fill="#FFFFFF" />
+              <circle cx="240" cy="66" r="10" fill="#FFFFFF" />
+              <circle cx="70" cy="66" r="4" fill="#27272A" />
+              <circle cx="240" cy="66" r="4" fill="#27272A" />
+            </g>
+            <g fill="none" stroke="#A1A1AA" stroke-width="1.2" stroke-linejoin="round">
+              <rect x="92" y="30" width="38" height="14" rx="2" />
+              <line x1="111" y1="30" x2="111" y2="44" />
+            </g>
+          </svg>
+        </div>
+        <div class="vcard__body">
+          <div class="vcard__row">
+            <h3 class="vcard__title">2024 Ford F-150 · SuperCrew 6.5′</h3>
+            <span class="vcard__pill">pickup</span>
+          </div>
+          <p class="vcard__dims">243.7″ L · 77.2″ H · 79.9″ W</p>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+</body>
+</html>

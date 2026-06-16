@@ -7,7 +7,9 @@
 // intentionally shows order fields only (contact, status, submitted-at).
 
 import Link from 'next/link';
+import { Inbox } from 'lucide-react';
 import { orders } from '@alphawolf/db';
+import { Eyebrow } from '@alphawolf/ui/components/ui/eyebrow';
 import { requireShopUser } from '@/lib/shop/guard';
 import { DashboardLoaded } from '@/components/dashboard/DashboardLoaded';
 import { OrderStatusBadge } from '@/components/dashboard/OrderStatusBadge';
@@ -35,8 +37,11 @@ export default async function DashboardPage() {
       <DashboardLoaded orderCount={rows.length} />
       <div className="flex flex-col gap-6">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-zinc-900">Production queue</h1>
-          <p className="mt-1 text-sm text-zinc-500">
+          <Eyebrow>Alpha Wolf · Shop</Eyebrow>
+          <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-900">
+            Production queue
+          </h1>
+          <p className="mt-1 text-sm text-zinc-600">
             Orders submitted to your shop. Open one to move it through production.
           </p>
         </div>
@@ -52,12 +57,19 @@ export default async function DashboardPage() {
 
         {rows.length === 0 ? (
           <div
-            className="rounded-lg border border-dashed border-zinc-300 bg-white px-6 py-16 text-center"
+            className="rounded-xl border border-dashed border-zinc-300 bg-white px-6 py-16 text-center"
             data-testid="dashboard-empty"
           >
+            <span
+              className="mx-auto mb-2 inline-flex size-12 items-center justify-center rounded-full border border-brand/20 bg-brand-soft"
+              aria-hidden
+            >
+              <Inbox className="size-5 text-zinc-700" />
+            </span>
             <p className="text-sm font-medium text-zinc-900">No orders yet</p>
-            <p className="mt-1 text-sm text-zinc-500">
-              Orders submitted to your shop will appear here.
+            <p className="mx-auto mt-1 max-w-sm text-sm text-zinc-600">
+              When a customer submits a design to your shop, it lands here ready to move through
+              production.
             </p>
           </div>
         ) : (
