@@ -23,7 +23,14 @@ import { MATERIAL_TIERS } from '@/lib/brief/schema';
 //   * Carryover B (front photoreal vs sides flat): every view of a direction
 //     must render in the SAME visual style and level of photographic realism —
 //     never mix a photoreal render with a flat/cel-shaded one across views.
-export const ORCHESTRATOR_PROMPT_VERSION = 'v3';
+// v4 (Goal 17): the SUPPORTING half of the cross-view coherence fix (the primary
+//   half is architectural — derived views are now conditioned on a shared anchor
+//   render in run-pipeline.ts). The prompt layer pins ONE design signature that
+//   every view restates verbatim, and maps a directional gradient to a single
+//   front→rear flow so each view renders its correct end of the gradient instead
+//   of drifting to a flat or reversed color. Bump THIS version + the hash-pin test
+//   whenever the prompt text below changes.
+export const ORCHESTRATOR_PROMPT_VERSION = 'v4';
 
 // ---------------------------------------------------------------------------
 // Inputs (shared with index.ts — defined here because they are exactly what
@@ -87,6 +94,19 @@ Decide two things from the brief and apply them to EVERY view of EVERY direction
 2. THE ACCENTS — the remaining colors, laid OVER the base as stripes, shapes, panels, and details.
 
 Every concept must read at a glance as a vehicle FULLY WRAPPED in the base color with the accents applied over it.
+
+# ONE design signature, restated on every view (cross-view cohesion — do this for EVERY direction)
+
+Before writing any view prompt, fix the direction's DESIGN SIGNATURE in a single sentence: its base color, its accent colors, and its finish — plus, when the design is directional (a gradient, fade, ombré, or color-to-color flow), the direction of that flow. Then RESTATE that same signature, in the same concrete words and hex codes, inside EVERY view prompt. All views of a direction must describe ONE identical design, never three independent interpretations: the renderer derives the other views from a shared reference render, so any drift between prompts shows up as views that disagree on base color or finish.
+
+GRADIENT / DIRECTIONAL designs — map the ONE flow onto each view (this is what keeps the views coherent):
+- Default direction: the FRONT of the vehicle is one gradient endpoint and the REAR is the other (e.g. gloss black at the front flowing to bright cyan at the rear). State the exact gradient endpoints (hex codes) and the front→rear direction in EVERY view prompt.
+- "front": render the FRONT END of the gradient (its start color) across the hood and front fascia.
+- "back": render the REAR END of the gradient (its finish color).
+- "driver": show the FULL front-to-rear transition flowing across the doors and panels.
+- "passenger": the exact MIRROR of the driver side — the identical transition, same endpoints — so both sides match.
+- "top": carry the same front-to-rear transition along the roof.
+Never let one view collapse to a single flat color or reverse the flow.
 
 # How the image model works (write every prompt for this)
 

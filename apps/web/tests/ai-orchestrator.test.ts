@@ -109,7 +109,7 @@ describe('compileBrief', () => {
     expect(result.directions.map((d) => d.key)).toEqual(['literal', 'bolder', 'minimal']);
     expect(Object.keys(result.directions[0]!.viewPrompts).sort()).toEqual([...views].sort());
     expect(result.promptVersion).toBe(ORCHESTRATOR_PROMPT_VERSION);
-    expect(result.promptVersion).toBe('v3');
+    expect(result.promptVersion).toBe('v4');
     expect(createMock).toHaveBeenCalledTimes(1);
   });
 
@@ -273,7 +273,7 @@ describe('compileIteration', () => {
     expect(result.affectedViews).toEqual(['front', 'top']);
     expect(result.editPrompt).toContain('matte black');
     expect(result.title).toBe('Matte black hood');
-    expect(result.promptVersion).toBe('v3');
+    expect(result.promptVersion).toBe('v4');
 
     // Request carried the current prompts + instruction; no-text rule in system.
     const params = createMock.mock.calls[0]![0];
@@ -291,6 +291,19 @@ describe('compileIteration', () => {
   });
 });
 
+describe('v4 coherence contract (Goal 17)', () => {
+  it('fixes ONE design signature and restates it across every view', () => {
+    expect(ORCHESTRATOR_SYSTEM_PROMPT).toMatch(/design signature/i);
+    expect(ORCHESTRATOR_SYSTEM_PROMPT).toMatch(/restate/i);
+  });
+
+  it('maps a directional gradient to a single front→rear direction per view', () => {
+    expect(ORCHESTRATOR_SYSTEM_PROMPT).toMatch(/gradient endpoints/i);
+    // Each end view renders its own end of the gradient, not a flat colour.
+    expect(ORCHESTRATOR_SYSTEM_PROMPT).toMatch(/front end of the gradient|rear end/i);
+  });
+});
+
 describe('prompt provenance', () => {
   it('pins the prompt text to ORCHESTRATOR_PROMPT_VERSION (edit a prompt? bump the version AND this hash)', () => {
     // Run provenance records the version string; this pin makes a silent
@@ -301,7 +314,7 @@ describe('prompt provenance', () => {
       .update(ITERATION_SYSTEM_PROMPT)
       .digest('hex');
     expect(`${ORCHESTRATOR_PROMPT_VERSION}:${hash}`).toBe(
-      'v3:ff7cac142ce68f4a17eeafe51dddba454686913ca6301b6a2d645e4d266de3c8',
+      'v4:f3818875acce8caf73ee2762c1b6d9f572c33cb242adcf83993d6e5c57cd88b6',
     );
   });
 });
