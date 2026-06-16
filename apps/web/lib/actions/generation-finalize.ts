@@ -46,7 +46,6 @@ import { captureServerEvent } from '../notifications/posthog-server';
 import {
   centeredPlacement,
   coverPlacement,
-  largestPanel,
   viewBbox,
   type PanelGeom,
 } from '../generation/placement';
@@ -221,46 +220,51 @@ async function insertIntoCanvas(
 
     let changed = false;
 
-    // Per-view final render → LOCKED element at the BACK of the largest panel.
+    // Per-view final render → a LOCKED layer at the BACK of EVERY panel in the
+    // view (Goal 15 D3). One element per panel, each clipped to its own
+    // wrap-safe area, all sharing the SAME cover placement over the view bbox —
+    // so the design reads as ONE continuous wrap across the whole vehicle
+    // instead of a single clipped fragment in the largest panel (the Goal-13
+    // "messy raster fragments" bug — only the largest panel showed the design).
     for (const img of images) {
       if (!VEHICLE_VIEWS.has(img.view)) continue;
       const viewPanels = panelGeoms.filter((p) => p.view === img.view);
-      const panel = largestPanel(viewPanels);
       const box = viewBbox(viewPanels);
-      if (!panel || !box) continue;
+      if (!box) continue;
       const assetId = assetIdByImage.get(img.id);
       const srcUrl = signedByImageId.get(img.id);
       if (!assetId || !srcUrl) continue;
-      // Idempotency, two keys: same asset already placed (normal retry), OR a
-      // locked AI layer with this view's name already exists (two concurrent
-      // sweeps registered DUPLICATE asset rows with different ids — the rev
-      // CAS forces the loser to re-read, and this name check stops its copy).
       const layerName = `AI design — ${img.view}`;
-      if (hasElementForAsset(doc, panel.id, assetId)) continue;
-      if (hasLockedLayerNamed(doc, panel.id, layerName)) continue;
-
       const placement = coverPlacement(box, img.width, img.height);
-      const el = factory.newImage(
-        {
-          id: mint('ai'),
-          panelId: factory.panelId(panel.id),
-          view: img.view as VehicleView,
-          assetId: factory.assetId(assetId),
-          srcUrl,
-          naturalW: img.width,
-          naturalH: img.height,
-        },
-        {
-          x: placement.x,
-          y: placement.y,
-          scaleX: placement.scale,
-          scaleY: placement.scale,
-          locked: true,
-          name: layerName,
-        },
-      );
-      insertElement(doc, el, 'back');
-      changed = true;
+      for (const panel of viewPanels) {
+        // Idempotency, two keys: same asset already placed in THIS panel
+        // (normal retry), OR a locked AI layer with this view's name already
+        // exists here (concurrent sweeps registered duplicate asset rows — the
+        // rev CAS forces the loser to re-read, this name check stops its copy).
+        if (hasElementForAsset(doc, panel.id, assetId)) continue;
+        if (hasLockedLayerNamed(doc, panel.id, layerName)) continue;
+        const el = factory.newImage(
+          {
+            id: mint('ai'),
+            panelId: factory.panelId(panel.id),
+            view: img.view as VehicleView,
+            assetId: factory.assetId(assetId),
+            srcUrl,
+            naturalW: img.width,
+            naturalH: img.height,
+          },
+          {
+            x: placement.x,
+            y: placement.y,
+            scaleX: placement.scale,
+            scaleY: placement.scale,
+            locked: true,
+            name: layerName,
+          },
+        );
+        insertElement(doc, el, 'back');
+        changed = true;
+      }
     }
 
     // Logo on its brief-assigned zones — UNLOCKED, on top, exact uploaded art.
