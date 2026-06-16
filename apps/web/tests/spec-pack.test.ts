@@ -94,6 +94,33 @@ describe('buildSpecPack', () => {
     expect(bytes.length).toBeGreaterThan(empty.length + png.length);
   });
 
+  it('renders the multi-view grid (D4) when per-view renders are supplied', async () => {
+    const png = await tinyPng();
+    const base = baseData();
+    const withViews: SpecPackData = {
+      ...base,
+      vehicle: {
+        ...base.vehicle,
+        heroPng: png,
+        heroKind: 'png',
+        views: [
+          { view: 'driver', png, kind: 'png' },
+          { view: 'front', png, kind: 'png' },
+          { view: 'back', png, kind: 'png' },
+          { view: 'passenger', png, kind: 'png' },
+        ],
+      },
+    };
+    const bytes = await buildSpecPack(withViews);
+    expect((await PDFDocument.load(bytes)).getPageCount()).toBe(4);
+    // Four embedded view images make it heavier than the single-hero pack.
+    const single = await buildSpecPack({
+      ...base,
+      vehicle: { ...base.vehicle, heroPng: png, heroKind: 'png' },
+    });
+    expect(bytes.length).toBeGreaterThan(single.length);
+  });
+
   it('never throws on junk image bytes (skips them)', async () => {
     const data: SpecPackData = {
       ...baseData(),

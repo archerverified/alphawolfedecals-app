@@ -194,10 +194,13 @@ async function insertIntoCanvas(
       ),
     ),
   );
-  const logoAsset =
-    logo?.assetId && (logo.zonePanelIds?.length ?? 0) > 0
-      ? await projects.getAsset(userId, logo.assetId)
-      : null;
+  const logoAsset = logo?.assetId ? await projects.getAsset(userId, logo.assetId) : null;
+  // D2: a logo with no assigned zone still lands on a prominent panel (driver
+  // door / hood) — mirrors the export compositor so editor and pack agree.
+  const logoZoneIds =
+    logo?.zonePanelIds && logo.zonePanelIds.length > 0
+      ? logo.zonePanelIds
+      : prominentLogoZoneIds(vehicle.panels);
   const logoKey = logoAsset?.parsedUrl ?? logoAsset?.sourceUrl ?? null;
   const logoSrcUrl =
     logoAsset && logoAsset.projectId === projectId && logoKey
@@ -269,7 +272,7 @@ async function insertIntoCanvas(
       const meta = (logoAsset.parseMetadata ?? {}) as Record<string, unknown>;
       const naturalW = typeof meta.naturalWidth === 'number' ? meta.naturalWidth : 1000;
       const naturalH = typeof meta.naturalHeight === 'number' ? meta.naturalHeight : 1000;
-      for (const zoneId of logo.zonePanelIds ?? []) {
+      for (const zoneId of logoZoneIds) {
         const panel = panelGeoms.find((p) => p.id === zoneId);
         if (!panel || !VEHICLE_VIEWS.has(panel.view)) continue;
         if (hasElementForAsset(doc, panel.id, logo.assetId)) continue; // idempotent
@@ -315,6 +318,16 @@ async function insertIntoCanvas(
     // more against the fresh rev.
   }
   return false;
+}
+
+// D2: pick a prominent panel for a logo the brief left unzoned — driver door,
+// else hood, else the first panel. Mirrors compose-views.defaultLogoZonePanelIds.
+function prominentLogoZoneIds(panels: { id: string; name: string; view: string }[]): string[] {
+  const find = (re: RegExp, view?: string) =>
+    panels.find((p) => re.test(p.name) && (!view || p.view === view));
+  const pick =
+    find(/front door/i, 'driver') ?? find(/\bhood\b/i) ?? find(/front door/i) ?? panels[0];
+  return pick ? [pick.id] : [];
 }
 
 /** True when the panel already holds a LOCKED image layer with this name. */
