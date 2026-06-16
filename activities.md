@@ -6,6 +6,95 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-16 — Goal 15 — Generation & Export Correctness — CLOSEOUT
+
+**Status:** ✅ All 9 deliverables shipped on `goal/15-export-correctness` → **PR #192** (7 commits;
+full web suite green **191**; lint + typecheck green; 3 fresh-context reviews, all APPROVE-WITH-NITS,
+nits addressed). The core value chain is fixed: the AI honors the brief, the logo lands ON the
+vehicle, zones composite cleanly, and the export shows the real design across views. **Real-fal
+proof committed (D9)** — a gloss-black X3 + cyan stripes + the Alpha Wolf logo on the door, across
+4 views: the before/after vs the Goal-13 white-car export. **Spend ≈ $0.36 Anthropic + $0.23 fal**
+(of the $1 + $6 ceilings). **NET-ZERO** (no prod DB / live-storage writes). Diagram:
+[`docs/vault/diagrams/goal-15-export-correctness.md`](docs/vault/diagrams/goal-15-export-correctness.md).
+Proof: `docs/deployment/screenshots/2026-06-16-goal-15/goal-15-export-pack.pdf`.
+
+**THE HEADLINE — D1 root cause (systematic-debugging overturned the prompt's guess).** Goal-13's
+export was a near-stock WHITE X3 because the brief→concept **orchestrator had no base-color
+contract** — NOT because nano-banana-edit was "too conservative" (the prompt's hypothesis). Proven
+on real fal: nano-banana-edit faithfully renders whatever Haiku asks — a black-base prompt → a black
+car, a white-base prompt → a white car. The real bug is upstream: with an UNROLED color palette that
+included white + a white conditioning vehicle + a "PARTIAL wrap / select panels" framing, Haiku
+defaulted to a WHITE base ("crisp white with blue accents on select panels" — Goal-13 screen 20).
+The exact triggering brief was purged in the Goal-13 net-zero, so the failure isn't byte-reproducible
+(my reconstructions came back black across ~13 A/B runs), but the mechanism + the manifested defect
+are documented. **Fix:** orchestrator prompt **v1→v2** (versioned + hash-pinned) — derive the base
+color (customer's words > `primary` role > first pick), NEVER default to the factory-white vehicle;
+wrapped panels always get the base; explicit `BASE COLOR` directive in the user message; logo-extracted
+colors marked reference-only. Eval: deterministic CI guardrail + env-gated **3-brief** real-Haiku eval
+(black/white/red base — all honored across every view).
+
+**Deliverables (commit · what).**
+
+- **D1** `603ada1` — brief honored (root cause above).
+- **D2 + D4** `466363b` — a server-side **sharp** compositor bakes the customer's logo ONTO each
+  view render at its zone (composited, never AI-rendered; a zone-less logo → driver door/hood in
+  BOTH the export and the editor handoff). Spec-table Logo column is a clean **"Yes"** (no more
+  clipped filename). The pack renders **every view** in a grid with a strong hero (driver/front),
+  never the bare rear.
+- **D3** `843859d` (+ clip hardening `ff378e7`) — the AI render now fills EVERY panel of a view
+  (was: one largest-panel fragment → the Goal-13 grey raster bits); editor clips fall back to the
+  outline so a clip-less panel never bleeds.
+- **D5** `ff378e7` — concept cards bind the FIRST rendered view (never blank during the per-view
+  paint gap, D13-4) + a branded skeleton until the design decodes.
+- **D6** `243503a` — concepts are shadcn Cards (hover lift); the final concept gets a brand-cyan
+  (#35B6E8) ring + elevated treatment. (The "odd blue ring around the vehicle" was the Goal-13 WHITE
+  design's accent — D1 fixes the design; confirmed black+cyan in the D9 proof.)
+- **D7** — **audit-resolved**: the X3/Contender/Crown detail pages already render the clean
+  `wrapped.svg` line-art (Goal 14 set `svg_storage_key`; verified `wrapped.svg` is the AW-framed thin
+  outline, `outline.svg` is the ugly black-block fallback). Only the Ford Transit (no wrapped.svg)
+  still falls back to `outline.svg` — a missing-ASSET gap, logged. No detail-page code change needed
+  for the proof vehicle.
+- **D8** `6dabf4e` — the parse worker verifies the Redis `maxmemory-policy` on boot, pins it to
+  `noeviction`, and warns LOUDLY if the host forbids CONFIG SET (Upstash free tier) — an evicting
+  Redis silently DROPS queued jobs and BullMQ's 3-attempt retry never fires (eviction isn't a
+  failure). UI: photo/logo upload shows a "still processing…" status instead of a bare spinner.
+- **D9** `212dbc1` — real-fal proof export PDF (the before/after).
+
+**DECISIONS (no-questions policy).**
+
+1. D1 fixed at the ORCHESTRATOR-PROMPT layer (not edit-strength / model swap) — the evidence showed
+   the image model is faithful; the prompt was the lever. Versioned v2 + hash-pinned.
+2. ONE goal PR (#192) with per-deliverable commits + reviews recorded, not 9 stacked PRs — matches
+   the DoD "(or PR open for Archer)"; Archer is the sole reviewer.
+3. D9 proof = a vertical slice through the REAL code (V2 compileBrief → real fal → composeView →
+   buildSpecPack), NOT the full DB-pipeline journey. It proves the headline value (the export IS the
+   product) on real fal, is inherently NET-ZERO (no DB/storage writes to purge), and avoids standing
+   up the missing local-PG harness. The DB pipeline + editor finalize stay covered by 191 unit tests.
+4. D7 accepted as audit-resolved for the 3 AW vehicles; Transit asset gap logged rather than building
+   an inline stroked-SVG renderer.
+
+**Spend ledger.** Anthropic (Haiku): root-cause probing ≈ $0.29 (~32 A/B calls — the bulk; the
+brief→concept failure was not reproducible so it took many runs), D1 eval ×2 ≈ $0.05, D9 compileBrief
+≈ $0.02 → **≈ $0.36**. fal: D1 experiment 2 nano-edits $0.078, D9 proof 4 nano-edits $0.156 →
+**≈ $0.234**. Total **≈ $0.60** of the $1 + $6 ceiling.
+
+**Net-zero.** The proof harness writes NOTHING to the prod DB or `project-assets` storage (reads the
+public white view renders, generates to fal's temp CDN, composites in memory, writes the PDF locally).
+`generation_runs` count still 0; storage at baseline by construction. Supabase advisors at the known
+baseline (1 WARN `pg_trgm` + 3 INFO rls-no-policy on internal tables — **0 net-new**, no schema
+change). No prod deploy → Sentry 0 new.
+
+**Carryovers for Archer / next goal.**
+
+- The orchestrator occasionally returns <3 directions (Haiku truncation) — pre-existing; the run
+  fails + refunds rather than hangs, but worth a directions-count repair beyond the single retry.
+- D7: generate a clean `wrapped.svg` line-art for the Ford Transit so its detail page matches the
+  AW vehicles.
+- D8 ops: pin the parse Redis / Upstash DB to `noeviction` or a dedicated instance (the code now
+  surfaces the risk; the policy is a console setting on the free tier).
+- A `db:setup-local` harness + the full DB-pipeline + editor real-fal journey (vs the vertical-slice
+  proof) when a throwaway local Postgres is landed.
+
 ## 2026-06-15 — Goal 14 — Design System Integration — CLOSEOUT
 
 **Status:** ✅ The committed Alpha Wolf design system applied across the Wrap Studio app as a
