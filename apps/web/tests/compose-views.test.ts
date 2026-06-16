@@ -2,6 +2,9 @@
 // no network. Verifies the logo lands at its zone, the no-logo path is a clean
 // pass-through, junk never throws, and hero/default-zone selection.
 
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+
 import sharp from 'sharp';
 import { describe, expect, it } from 'vitest';
 
@@ -11,6 +14,15 @@ import {
   pickHeroView,
   type ExportPanel,
 } from '../lib/export/compose-views';
+
+async function changedFraction(a: Uint8Array, b: Uint8Array): Promise<number> {
+  const ra = await sharp(Buffer.from(a)).raw().toBuffer();
+  const rb = await sharp(Buffer.from(b)).raw().toBuffer();
+  let changed = 0;
+  const n = Math.min(ra.length, rb.length);
+  for (let i = 0; i < n; i++) if (Math.abs(ra[i]! - rb[i]!) > 10) changed++;
+  return changed / n;
+}
 
 async function solid(w: number, h: number, r: number, g: number, b: number): Promise<Uint8Array> {
   return new Uint8Array(
@@ -66,6 +78,33 @@ describe('composeView (D2 logo compositing)', () => {
     expect(out[1]).toBe(0xd8);
     const px = await pixelAt(out, 40, 30);
     expect(px.g).toBeGreaterThan(120); // still green
+  });
+
+  it('composites a REAL raster-embedded-SVG logo (the customer fixture) visibly (Goal 17)', async () => {
+    // The fixture is a PNG wrapped in an SVG via a data: URI — the shape the parse
+    // sanitizer used to blank. composeView must rasterize it to a visible logo, not
+    // an empty box. (Paired with the services/parse sanitiser test that keeps the
+    // raster, this proves the whole export-logo chain.)
+    const render = await solid(400, 200, 0, 174, 239); // cyan front door
+    const logo = readFileSync(join(__dirname, '..', 'e2e', 'fixtures', 'alpha-wolf-logo.svg'));
+    const withLogo = await composeView({
+      renderBytes: render,
+      viewPanels: [panel],
+      logoZonePanelIds: ['door'],
+      logoBytes: new Uint8Array(logo),
+    });
+    const noLogo = await composeView({
+      renderBytes: render,
+      viewPanels: [panel],
+      logoZonePanelIds: [],
+      logoBytes: null,
+    });
+    expect(await changedFraction(withLogo, noLogo)).toBeGreaterThan(0.01);
+    // Emit a visual artifact (the composited door) for the closeout proof.
+    if (process.env.LOGO_PROOF_OUT) {
+      const { writeFileSync } = await import('node:fs');
+      writeFileSync(process.env.LOGO_PROOF_OUT, Buffer.from(withLogo));
+    }
   });
 
   it('never throws on junk render bytes', async () => {
