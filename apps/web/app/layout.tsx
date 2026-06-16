@@ -5,6 +5,7 @@ import { SpeedInsights } from '@vercel/speed-insights/next';
 import { Toaster } from '@alphawolf/ui/components/ui/sonner';
 import { AnalyticsProvider } from '../components/analytics/AnalyticsProvider';
 import { appBaseUrl } from '../lib/base-url';
+import { fontVariables } from './fonts';
 import './globals.css';
 
 // Site-wide metadata baseline (Goal 10 D6). metadataBase lets every page resolve
@@ -37,8 +38,8 @@ export const metadata: Metadata = {
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en">
-      <body>
+    <html lang="en" className={fontVariables}>
+      <body className="font-sans antialiased">
         {/* PostHog bootstrap (env-gated, no-op without NEXT_PUBLIC_POSTHOG_KEY). */}
         <AnalyticsProvider />
         {children}

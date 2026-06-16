@@ -5,8 +5,105 @@
    e.g. the shadcn Dialog's fixed-center top-[50%]/translate-x-[-50%] — were
    silently missing from the generated CSS (dev AND prod; found via Goal 5 /
    B2C-004 e2e, where the un-centered Start-Project dialog rendered off-viewport).
-   Scan the ui package's sources explicitly. NOTE: the shadcn THEME VARIABLES
-   (--ring, --destructive, …) are still not defined here — color/ring utilities
-   referencing them stay inert as before; restoring the full shadcn theme block
-   is a separate, visual-review change (Goal 5 launch item). */
+   Scan the ui package's sources explicitly. */
 @source '../../../packages/ui/src';
+
+/* =====================================================================
+ * Alpha Wolf Wrap Studio — design tokens (Goal 14 · D2)
+ * ---------------------------------------------------------------------
+ * The APP surface of the alpha-wolf-design system: light, zinc-neutral
+ * chrome · black actions · cyan #00AEEF accent (used sparingly, never a
+ * button fill). These shadcn semantic vars are exactly what the
+ * packages/ui primitives already reference (Button bg-primary, Card
+ * bg-card, focus ring-ring) — defining them here restyles every
+ * primitive on-brand with NO component change (this finally lands the
+ * shadcn theme block deferred as a Goal-5 launch item). Source of truth:
+ * .claude/skills/alpha-wolf-design/colors_and_type.css (the --aws-* set).
+ * Presentational only — no behavior, no API changes.
+ * ===================================================================== */
+
+@theme inline {
+  /* shadcn semantic colors → app tokens */
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Brand cyan — selective accent only (wolf mark, accent borders, the
+     "AI is thinking" bar, links on dark). NEVER a button fill. Exposed as
+     bg-brand / text-brand / border-brand / ring-brand for intentional use. */
+  --color-brand: var(--brand);
+  --color-brand-foreground: var(--brand-foreground);
+  --color-brand-soft: var(--brand-soft);
+
+  /* Type — Geist Sans + Geist Mono (self-hosted, see app/fonts.ts) */
+  --font-sans:
+    var(--font-geist-sans), ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Helvetica, Arial,
+    sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Radius scale → 4 / 6 / 8 / 12 px (buttons rounded-md = 6, cards rounded-xl = 12) */
+  --radius-sm: calc(var(--radius) - 4px);
+  --radius-md: calc(var(--radius) - 2px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+}
+
+:root {
+  --radius: 0.5rem; /* 8px → sm 4 · md 6 · lg 8 · xl 12 */
+
+  /* Surfaces (zinc) */
+  --background: #fafafa; /* zinc-50 — page */
+  --foreground: #18181b; /* zinc-900 */
+  --card: #ffffff;
+  --card-foreground: #18181b;
+  --popover: #ffffff;
+  --popover-foreground: #18181b;
+
+  /* Actions / neutrals */
+  --primary: #18181b; /* black action — one primary per screen */
+  --primary-foreground: #ffffff;
+  --secondary: #f4f4f5; /* zinc-100 */
+  --secondary-foreground: #18181b;
+  --muted: #f4f4f5; /* zinc-100 */
+  --muted-foreground: #52525b; /* zinc-600 — secondary text (.aws-p) */
+  --accent: #f4f4f5; /* zinc-100 — hover/selected wash (NOT the brand cyan) */
+  --accent-foreground: #18181b;
+  --destructive: #dc2626; /* red-600 */
+  --destructive-foreground: #ffffff;
+
+  /* Lines / fields / focus */
+  --border: #e4e4e7; /* zinc-200 — chrome borders */
+  --input: #e4e4e7; /* zinc-200 — field borders */
+  --ring: #d4d4d8; /* zinc-300 — soft neutral focus ring */
+
+  /* Brand cyan */
+  --brand: #00aeef;
+  --brand-foreground: #ffffff;
+  --brand-soft: rgb(0 174 239 / 0.1);
+}
+
+@layer base {
+  body {
+    font-family: var(--font-sans);
+    background-color: var(--background);
+    color: var(--foreground);
+    font-feature-settings: 'ss01', 'cv11';
+    -webkit-font-smoothing: antialiased;
+  }
+}
