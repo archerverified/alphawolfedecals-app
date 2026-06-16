@@ -413,13 +413,12 @@ export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
         font,
         color: INK,
       });
-      page.drawText(logoZoneIds.has(panel.id) && logoName ? safe(logoName).slice(0, 18) : '—', {
-        x: cols[3]!,
-        y,
-        size: 9.5,
-        font,
-        color: INK,
-      });
+      // Fit the logo filename inside the Logo column (cols[3]→cols[4]); a long
+      // name used to overrun into Notes (Goal 14 — clipped logo column). Display
+      // only — what's included is unchanged.
+      const logoFull = logoZoneIds.has(panel.id) && logoName ? safe(logoName) : '—';
+      const logoCell = logoFull.length > 14 ? `${logoFull.slice(0, 13)}…` : logoFull;
+      page.drawText(logoCell, { x: cols[3]!, y, size: 9.5, font, color: INK });
       const note = data.brief.zoneNotes?.[panel.id];
       const noteLines = note
         ? wrapText(ctx.font, safe(note), 8.5, PAGE_W - MARGIN - cols[4]!)
