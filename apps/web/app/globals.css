@@ -99,6 +99,13 @@
 }
 
 @layer base {
+  /* Tailwind v4 defaults a bare `border` utility to currentColor; shadcn relies
+     on this rule so unqualified borders (Card, outline Button, Separator…) read
+     as the zinc-200 chrome border, not the dark text color. */
+  * {
+    border-color: var(--border);
+  }
+
   body {
     font-family: var(--font-sans);
     background-color: var(--background);
