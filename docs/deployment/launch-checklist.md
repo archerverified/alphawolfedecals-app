@@ -5,7 +5,34 @@
 `docs/claude-code-prompts/post-launch-hardening.md` (post-deploy hardening) — this
 is the launch DECISION layer on top of them. Each row is an explicit gate.
 
-## CURRENT CALL: ⛔ NO-GO — 3 blockers (2 need Archer, 1 is deferred Goal-8 work)
+## CURRENT CALL (Goal 16, 2026-06-16): 🟢 CONDITIONAL GO
+
+Re-audited against prod `1bb9d00` (Goal 15) across all four axes. The Goal-10 blockers
+are resolved by Goals 11–15 (auth/email recovery → G11; catalogue-template editor + art → G12;
+brief/logo/export correctness → G15). **No High-severity code blocker remains.** The remaining
+gates are: 2 in-goal items (real-fal export verification + Sentry NODE-9 triage) and the 4
+human gates (legal copy, dependency-triage goal, domain migration, `APP_ALLOW_INDEXING` flip).
+
+| Axis                 | Goal-16 result                                                                                                                                             | Gate                                                                                                         |
+| -------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| Security             | ✅ PASS (13/13, 0 High FAIL) — headers/CSP, DB-split, RLS deny-all + SECURITY-DEFINER money rails, dev/cron/admin guards, rate-limit fail-closed, gitleaks | clear                                                                                                        |
+| Production-readiness | 🟡 READY-with-1-triage                                                                                                                                     | Sentry NODE-9 (`/signin` SSR, 6 events) — triage                                                             |
+| Performance          | 🟢 B (public CWV good)                                                                                                                                     | `perf-detail-lcp-cls-poor` [Med] non-blocking                                                                |
+| Design / UX / a11y   | 🟢 Design A− / AI-Slop A− held; axe AA on public                                                                                                           | 2 G15 carryovers code-fixed (orchestrator v3 + grey conditioning) — **effect pending real-fal verification** |
+
+**Net-zero verified:** prod DB untouched (local throwaway only); `project-assets` storage swept 55 → 4
+(13 orphans + 19 smoke projects purged via the guarded path); `vehicle-templates` 58 untouched; Supabase
+advisors at the known baseline (0 net-new); Sentry 0 new from this goal (local telemetry blanked).
+
+**Remaining human gates (perform before go-live):** (1) final legal copy; (2) dependency-triage (separate
+goal); (3) domain migration off `*.vercel.app` (separate goal); (4) `APP_ALLOW_INDEXING` flip at launch.
+
+Full evidence: `docs/deployment/audits/2026-06-16-goal-16/findings.md`. Gallery + export proof:
+`docs/deployment/screenshots/2026-06-16-goal-16/`.
+
+---
+
+## CURRENT CALL (Goal 10 snapshot, SUPERSEDED by Goal 16): ⛔ NO-GO — 3 blockers (2 need Archer, 1 is deferred Goal-8 work)
 
 The security + ops axes are GREEN. Launch is blocked by legal copy, password
 recovery, and the catalogue-template editor gap. None are security holes; all are

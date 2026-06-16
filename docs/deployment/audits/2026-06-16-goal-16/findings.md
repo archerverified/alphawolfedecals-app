@@ -11,7 +11,19 @@ Environment: local build + LOCAL throwaway Postgres (`alphawolf_g16`, NEVER prod
 - **Supabase PERF advisors (baseline):** ~22 `auth_rls_initplan` WARN (RLS re-evaluates `auth/current_setting` per-row → wrap in `(select …)`), `multiple_permissive_policies` on `orders` (owner+shop overlap), 7 unindexed FKs, 6 unused indexes.
 - **Local harness BUILT + VALIDATED** (the long-pole infra the G13/G15 carryovers requested): fresh `alphawolf_g16` DB → `extensions` schema + pgcrypto → `app_user` (LOGIN, NOBYPASSRLS) → 18 migrations → `auth_rls.sql` (23 tables, all RLS-enabled) → X3 catalogue (1 vehicle + 15 panels) copied read-only from prod (`COPY`, net-zero) → art read from public `vehicle-templates` bucket. Dev server smoke: landing/signup/signin/X3-detail all HTTP 200, 0 module errors.
 
-## D2 — Security (audit agent TIMED OUT — re-run pending). Baselines clean (advisors above). God-node DB-split intact.
+## D2 — Security — PASS (13/13 checks, 0 High-severity FAIL) — LAUNCH-SAFE
+
+Fresh-context security re-run (the first agent timed out). All verified live + in source:
+
+- **Headers/CSP (PASS):** HSTS `max-age=63072000; includeSubDomains`, X-Frame-Options DENY, nosniff, Referrer-Policy, Permissions-Policy, full CSP (`middleware.ts:34-77`). `script-src 'unsafe-inline' 'unsafe-eval'` is the accepted Next-bootstrap/Tailwind-v4/Konva trade-off (Phase-2 nonce deferred).
+- **DB split (PASS):** every `withSystem` is bootstrap / system-maintenance / token-gated-public-no-PII; all customer reads `withUser` (RLS). `DATABASE_URL_APP`-missing→superuser fallback is guarded (`client.ts:68-95` warns once; optional hardening: throw in prod).
+- **Dev/cron/admin guards (PASS):** `/api/dev/*` returns 404 in production + suffix-restricted + repo self-refuses; cron `CRON_SECRET` fail-closed; admin `requireAdmin()` → notFound.
+- **Money rails (PASS):** `credit_ledger` INSERT/UPDATE/DELETE revoked from app_user; spend/refund only via `app_spend_credits`/`app_refund_credits` (SECURITY DEFINER, advisory-locked).
+- **`concept_votes` deny-all (PASS):** does NOT break voting — written via the `withSystem` token-gated `recordConceptVote` path (`share.ts:223`), idempotent upsert.
+- **transfer_token / GH-012 (PASS):** owner-scoped mint, "not secret", not a transfer-authority; future GH-012 must enforce.
+- **Rate limiting (PASS):** PG-backed, fail-closed (DB error → action aborts). Auth lockout (IP + account), generation daily ceiling + global spend cap, export.
+- **Secrets (PASS):** gitleaks CI on every PR/push; `.gitignore` covers `.env*` + `.mcp.json` (the latter remediated in `ae403cb`).
+- Accepted residuals (not blockers): CSP unsafe-\* (Phase-2 nonce), warn-not-throw superuser fallback, PG (single-region) rate-limit pending Upstash.
 
 ## D3 — Production-readiness + storage sweep (storage sweep DONE)
 
