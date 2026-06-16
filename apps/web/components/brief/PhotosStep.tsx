@@ -141,6 +141,19 @@ export function PhotosStep({ projectId, data, patch }: Props) {
         </span>
       </div>
 
+      {phase === 'parsing' ? (
+        <p
+          className="mb-4 flex items-center gap-2 text-xs text-zinc-500"
+          role="status"
+          aria-live="polite"
+          data-testid="photo-processing"
+        >
+          <Loader2 className="size-3.5 animate-spin" aria-hidden />
+          Still processing your photo — this can take up to a minute. You can keep filling out the
+          brief; we&apos;ll add it as soon as it&apos;s ready.
+        </p>
+      ) : null}
+
       <p className="mb-4 text-xs text-zinc-400">
         Tip: keep people out of frame — we only need the vehicle.
       </p>

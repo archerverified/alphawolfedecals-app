@@ -4,9 +4,16 @@
 // non-owner's loads return null and the route 404s.
 
 import * as Sentry from '@sentry/nextjs';
-import { briefs, generation, projects, storage, vehicles } from '@alphawolf/db';
+import { VIEW_ORDER, briefs, generation, projects, storage, vehicles } from '@alphawolf/db';
 import { parseBriefData, type BriefData } from '@/lib/brief/schema';
 import type { AiProvenance, SpecPackData, SpecPackPhoto } from './spec-pack';
+import {
+  composeView,
+  defaultLogoZonePanelIds,
+  pickHeroView,
+  type ComposedView,
+  type ExportPanel,
+} from './compose-views';
 
 const MAX_EMBEDDED_PHOTOS = 4;
 
@@ -33,34 +40,91 @@ async function fetchHeroPng(url: string | null): Promise<Uint8Array | undefined>
   }
 }
 
-// Goal 7 D6: the pack cover prefers the customer's CHOSEN design — the newest
-// complete FINAL run's largest render — over the stock template thumb. PNG
-// and JPEG only (what pdf-lib can embed; the fal provider returns JPEG by
-// default, the mock returns PNG); a webp final falls back to the template
-// hero rather than failing the pack.
-async function loadFinalHero(
+// The logo bytes (parsed PNG, or the raw SVG which sharp rasterizes) to
+// composite onto the renders. Capped — a giant upload must not blow up memory.
+async function loadLogoBytes(
   userId: string,
   projectId: string,
-): Promise<{ png: Uint8Array; kind: 'png' | 'jpg'; provenance: AiProvenance } | null> {
+  brief: BriefData,
+): Promise<Uint8Array | null> {
+  const logo = brief.logo;
+  if (!logo?.assetId) return null;
+  try {
+    const asset = await projects.getAsset(userId, logo.assetId);
+    if (!asset || asset.projectId !== projectId) return null;
+    const key = asset.parsedUrl ?? asset.sourceUrl;
+    if (!key) return null;
+    const bytes = await storage.downloadAssetObject(key);
+    if (bytes.byteLength > 4 * 1024 * 1024) return null;
+    return new Uint8Array(bytes);
+  } catch (error) {
+    Sentry.captureException(error, { tags: { feature: 'spec-pack-logo' } });
+    return null;
+  }
+}
+
+// Goal 7 D6 + Goal 15 D2/D4: the pack shows the customer's CHOSEN design across
+// every view (the largest render per view), with the LOGO COMPOSITED onto each
+// view at its assigned zone (D2) — over the stock template thumb. PNG/JPEG only
+// (what pdf-lib can embed); composited output is always JPEG. A webp-only final
+// or an oversized render is skipped rather than failing the pack.
+async function loadFinalViews(
+  userId: string,
+  projectId: string,
+  brief: BriefData,
+  panels: ExportPanel[],
+): Promise<{ views: ComposedView[]; provenance: AiProvenance } | null> {
   try {
     const runs = await generation.listRunsForProject(userId, projectId);
     const finalRun = runs.find(
       (r) => r.kind === 'final' && r.status === 'complete' && r.images.length > 0,
     );
     if (!finalRun) return null;
-    const candidates = finalRun.images.filter(
+    const renderable = finalRun.images.filter(
       (i) => i.storagePath.endsWith('.png') || i.storagePath.endsWith('.jpg'),
     );
-    if (candidates.length === 0) return null;
-    const hero = candidates.reduce((a, b) => (b.width * b.height > a.width * a.height ? b : a));
-    const bytes = await storage.downloadAssetObject(hero.storagePath);
-    // The pack is emailed as an attachment (B2C-010) — an outsized render must
-    // not balloon the PDF. Past the cap, fall back to the template thumb.
-    if (bytes.byteLength > 8 * 1024 * 1024) return null;
-    const prov = (hero.provenance ?? {}) as Record<string, unknown>;
+    if (renderable.length === 0) return null;
+
+    // Largest render per view (a view can have multiple if re-rendered).
+    const bestByView = new Map<string, (typeof renderable)[number]>();
+    for (const img of renderable) {
+      const cur = bestByView.get(img.view);
+      if (!cur || img.width * img.height > cur.width * cur.height) bestByView.set(img.view, img);
+    }
+
+    const logoBytes = await loadLogoBytes(userId, projectId, brief);
+    let logoZoneIds = brief.logo?.zonePanelIds ?? [];
+    // D2: a logo with no assigned zone defaults to a prominent panel.
+    if (logoBytes && logoZoneIds.length === 0) logoZoneIds = defaultLogoZonePanelIds(panels);
+    const logoZoneSet = new Set(logoZoneIds);
+
+    const orderedViews = [...bestByView.keys()].sort((a, b) => {
+      const ia = VIEW_ORDER.indexOf(a);
+      const ib = VIEW_ORDER.indexOf(b);
+      return (ia === -1 ? 99 : ia) - (ib === -1 ? 99 : ib);
+    });
+
+    const views: ComposedView[] = [];
+    for (const view of orderedViews) {
+      const img = bestByView.get(view)!;
+      const raw = await storage.downloadAssetObject(img.storagePath);
+      // The pack is emailed (B2C-010) — skip an outsized source render.
+      if (raw.byteLength > 8 * 1024 * 1024) continue;
+      const viewPanels = panels.filter((p) => p.view === view);
+      const zoneIdsInView = viewPanels.filter((p) => logoZoneSet.has(p.id)).map((p) => p.id);
+      const bytes = await composeView({
+        renderBytes: new Uint8Array(raw),
+        viewPanels,
+        logoZonePanelIds: zoneIdsInView,
+        logoBytes,
+      });
+      views.push({ view, bytes, kind: 'jpg' });
+    }
+    if (views.length === 0) return null;
+
+    const prov = (renderable[0]!.provenance ?? {}) as Record<string, unknown>;
     return {
-      png: new Uint8Array(bytes),
-      kind: hero.storagePath.endsWith('.jpg') ? ('jpg' as const) : ('png' as const),
+      views,
       provenance: {
         provider: typeof prov.provider === 'string' ? prov.provider : finalRun.provider,
         model: typeof prov.model === 'string' ? prov.model : finalRun.model,
@@ -70,8 +134,8 @@ async function loadFinalHero(
     };
   } catch (error) {
     // A missing object / transient storage error never blocks the pack — but
-    // it must not be INVISIBLE either (e.g. generation tables missing on a
-    // surface = the whole hero feature silently dead).
+    // it must not be INVISIBLE either (generation tables missing on a surface =
+    // the whole hero feature silently dead).
     Sentry.captureException(error, { tags: { feature: 'spec-pack-hero' } });
     return null;
   }
@@ -121,8 +185,16 @@ export async function loadSpecPackData(
     : null;
 
   const label = [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(' ');
-  const finalHero = await loadFinalHero(userId, projectId);
-  const heroPng = finalHero?.png ?? (await fetchHeroPng(vehicle.thumbPngUrl));
+  const exportPanels: ExportPanel[] = vehicle.panels.map((p) => ({
+    id: p.id,
+    name: p.name,
+    view: p.view,
+    outlinePath: p.svgPath,
+  }));
+  const finalViews = await loadFinalViews(userId, projectId, briefData, exportPanels);
+  // D4: hero is a strong angle (driver/front), never the bare rear.
+  const hero = finalViews ? pickHeroView(finalViews.views) : null;
+  const heroPng = hero?.bytes ?? (await fetchHeroPng(vehicle.thumbPngUrl));
   const photos = await loadPhotos(userId, projectId, briefData);
 
   return {
@@ -136,18 +208,16 @@ export async function loadSpecPackData(
       widthMm: vehicle.widthMm,
       heightMm: vehicle.heightMm,
       heroPng,
-      heroKind: finalHero?.kind ?? 'png',
+      heroKind: hero ? 'jpg' : 'png',
+      ...(finalViews
+        ? { views: finalViews.views.map((v) => ({ view: v.view, png: v.bytes, kind: v.kind })) }
+        : {}),
     },
-    panels: vehicle.panels.map((p) => ({
-      id: p.id,
-      name: p.name,
-      view: p.view,
-      outlinePath: p.svgPath,
-    })),
+    panels: exportPanels,
     brief: briefData,
     briefVersion,
     photos,
     createdAt: new Date(),
-    ...(finalHero ? { aiProvenance: finalHero.provenance } : {}),
+    ...(finalViews ? { aiProvenance: finalViews.provenance } : {}),
   };
 }

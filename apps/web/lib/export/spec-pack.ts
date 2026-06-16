@@ -47,6 +47,11 @@ export interface SpecPackData {
      * 'png' when omitted.
      */
     heroKind?: 'png' | 'jpg';
+    /**
+     * Goal 15 D4: per-view final renders (logo already composited, D2), shown
+     * as a grid on page 2. Compositor output is JPEG. Absent → single hero.
+     */
+    views?: Array<{ view: string; png: Uint8Array; kind?: 'png' | 'jpg' }>;
   };
   panels: BriefPanel[];
   brief: BriefData;
@@ -70,6 +75,17 @@ const WASTE_FACTOR = 1.15; // +15% waste allowance (PRD §3 step 5 page 4)
 
 function mmToIn(mm: number): string {
   return `${Math.round(mm / MM_PER_IN)} in`;
+}
+
+const VIEW_LABELS: Record<string, string> = {
+  front: 'Front',
+  driver: 'Driver side',
+  back: 'Rear',
+  passenger: 'Passenger side',
+  top: 'Roof',
+};
+function viewLabel(view: string): string {
+  return VIEW_LABELS[view] ?? view;
 }
 
 interface Ctx {
@@ -308,7 +324,50 @@ export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
       y -= 18;
     }
     y -= 10;
-    if (v.heroPng) {
+    const designViews = v.views ?? [];
+    if (designViews.length > 0) {
+      // Goal 15 D4: show the design on EVERY view in a 2-column grid (logo
+      // already composited on each — D2), not a single bare hero.
+      page.drawText('Your design — every view', {
+        x: MARGIN,
+        y,
+        size: 10,
+        font: bold,
+        color: MUTED,
+      });
+      y -= 16;
+      const gap = 16;
+      const cellW = (PAGE_W - 2 * MARGIN - gap) / 2;
+      const cellH = 150;
+      let col = 0;
+      let rowTop = y;
+      for (const view of designViews) {
+        try {
+          const img =
+            view.kind === 'png' ? await doc.embedPng(view.png) : await doc.embedJpg(view.png);
+          const scale = Math.min(cellW / img.width, cellH / img.height);
+          const w = img.width * scale;
+          const h = img.height * scale;
+          const cx = MARGIN + col * (cellW + gap);
+          page.drawImage(img, { x: cx + (cellW - w) / 2, y: rowTop - h, width: w, height: h });
+          page.drawText(safe(viewLabel(view.view)), {
+            x: cx,
+            y: rowTop - cellH - 2,
+            size: 8.5,
+            font,
+            color: MUTED,
+          });
+        } catch {
+          /* skip a bad view image — never fail the pack */
+        }
+        col += 1;
+        if (col === 2) {
+          col = 0;
+          rowTop -= cellH + 22;
+        }
+        if (rowTop < 120) break;
+      }
+    } else if (v.heroPng) {
       try {
         const img = await embedHero(doc, data);
         const maxW = PAGE_W - 2 * MARGIN;
@@ -332,7 +391,6 @@ export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
     const sizes = panelPrintSizesIn(data.panels, dims);
     const included = includedPanels(data);
     const logoZoneIds = new Set(data.brief.logo?.zonePanelIds ?? []);
-    const logoName = data.brief.logo?.fileName;
 
     // Colors block (HEX + RGB + SKU + finish — PRD page-3 table requirement).
     page.drawText('Colors', { x: MARGIN, y, size: 11, font: bold, color: INK });
@@ -413,12 +471,17 @@ export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
         font,
         color: INK,
       });
-      // Fit the logo filename inside the Logo column (cols[3]→cols[4]); a long
-      // name used to overrun into Notes (Goal 14 — clipped logo column). Display
-      // only — what's included is unchanged.
-      const logoFull = logoZoneIds.has(panel.id) && logoName ? safe(logoName) : '—';
-      const logoCell = logoFull.length > 14 ? `${logoFull.slice(0, 13)}…` : logoFull;
-      page.drawText(logoCell, { x: cols[3]!, y, size: 9.5, font, color: INK });
+      // Goal 15 D2: the logo is COMPOSITED onto the views (page 2), so this
+      // column just flags WHICH zone carries it — no more clipped filename
+      // overrunning into Notes (the Goal-14 bug).
+      const hasLogo = logoZoneIds.has(panel.id);
+      page.drawText(hasLogo ? 'Yes' : '—', {
+        x: cols[3]!,
+        y,
+        size: 9.5,
+        font: hasLogo ? bold : font,
+        color: hasLogo ? INK : MUTED,
+      });
       const note = data.brief.zoneNotes?.[panel.id];
       const noteLines = note
         ? wrapText(ctx.font, safe(note), 8.5, PAGE_W - MARGIN - cols[4]!)

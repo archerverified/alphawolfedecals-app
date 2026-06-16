@@ -183,25 +183,39 @@ export function LogoStep({ projectId, data, patch, panels, vehicleDims }: Props)
       />
 
       {!logo?.assetId ? (
-        <Button
-          type="button"
-          variant="outline"
-          className="gap-2"
-          disabled={busy}
-          onClick={() => inputRef.current?.click()}
-          data-testid="logo-upload"
-        >
-          {busy ? (
-            <>
-              <Loader2 className="size-4 animate-spin" aria-hidden />
-              {phase === 'uploading' ? 'Uploading…' : 'Processing…'}
-            </>
-          ) : (
-            <>
-              <Upload className="size-4" aria-hidden /> Upload your logo
-            </>
-          )}
-        </Button>
+        <>
+          <Button
+            type="button"
+            variant="outline"
+            className="gap-2"
+            disabled={busy}
+            onClick={() => inputRef.current?.click()}
+            data-testid="logo-upload"
+          >
+            {busy ? (
+              <>
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+                {phase === 'uploading' ? 'Uploading…' : 'Processing…'}
+              </>
+            ) : (
+              <>
+                <Upload className="size-4" aria-hidden /> Upload your logo
+              </>
+            )}
+          </Button>
+          {phase === 'parsing' ? (
+            <p
+              className="mt-3 flex items-center gap-2 text-xs text-zinc-500"
+              role="status"
+              aria-live="polite"
+              data-testid="logo-processing"
+            >
+              <Loader2 className="size-3.5 animate-spin" aria-hidden />
+              Still processing your logo — this can take up to a minute. We&apos;ll show it as soon
+              as it&apos;s ready.
+            </p>
+          ) : null}
+        </>
       ) : (
         <div className="flex flex-col gap-4">
           <div className="flex items-start gap-3 rounded-md border border-zinc-200 bg-white p-3">

@@ -13,9 +13,12 @@ interface Props {
   /** Generated preview (the "after"). */
   afterUrl: string;
   alt: string;
+  /** Fired when the AFTER (design) image decodes — drives a skeleton-until-paint
+   *  overlay on the caller so a concept card never flashes blank (Goal 15 D5). */
+  onAfterLoad?: () => void;
 }
 
-export function BeforeAfterSlider({ beforeUrl, afterUrl, alt }: Props) {
+export function BeforeAfterSlider({ beforeUrl, afterUrl, alt, onAfterLoad }: Props) {
   const [pos, setPos] = useState(100); // % of width showing the AFTER image
   const [beforeBroken, setBeforeBroken] = useState(false);
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -36,7 +39,13 @@ export function BeforeAfterSlider({ beforeUrl, afterUrl, alt }: Props) {
     return (
       <div className="relative overflow-hidden rounded-md bg-zinc-100" data-testid="before-after">
         {/* Signed/storage URLs — next/image's optimizer can't fetch them. */}
-        <img src={afterUrl} alt={alt} className="block w-full select-none" draggable={false} />
+        <img
+          src={afterUrl}
+          alt={alt}
+          className="block w-full select-none"
+          draggable={false}
+          onLoad={onAfterLoad}
+        />
       </div>
     );
   }
@@ -78,6 +87,7 @@ export function BeforeAfterSlider({ beforeUrl, afterUrl, alt }: Props) {
           alt={alt}
           className="absolute inset-0 h-full w-full object-cover"
           draggable={false}
+          onLoad={onAfterLoad}
         />
       </div>
       {/* Divider handle. */}

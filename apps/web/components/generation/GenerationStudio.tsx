@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { ArrowLeft, BadgeCheck, Coins, Loader2, Sparkles, Wand2 } from 'lucide-react';
 import { Button } from '@alphawolf/ui/components/ui/button';
+import { Card } from '@alphawolf/ui/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -46,6 +47,41 @@ import { ShareForFeedback } from './ShareForFeedback';
 import { WaitlistSheet } from './WaitlistSheet';
 
 type GenerationContext = Extract<GenerationContextResult, { ok: true }>;
+
+/**
+ * Concept preview with a branded skeleton until the design image actually
+ * decodes (Goal 15 D5 / D13-4 — the money shot must never flash blank). Keyed
+ * by afterUrl at the call site, so switching views or landing a final re-arms
+ * the skeleton until the new image paints.
+ */
+function ConceptMedia({
+  beforeUrl,
+  afterUrl,
+  alt,
+}: {
+  beforeUrl: string | null;
+  afterUrl: string;
+  alt: string;
+}) {
+  const [loaded, setLoaded] = useState(false);
+  return (
+    <div className="relative min-h-32 overflow-hidden rounded-md">
+      {!loaded ? (
+        <div
+          data-testid="concept-skeleton"
+          className="absolute inset-0 z-10 animate-pulse bg-gradient-to-br from-zinc-100 via-white to-cyan-50"
+          aria-hidden
+        />
+      ) : null}
+      <BeforeAfterSlider
+        beforeUrl={beforeUrl}
+        afterUrl={afterUrl}
+        alt={alt}
+        onAfterLoad={() => setLoaded(true)}
+      />
+    </div>
+  );
+}
 
 const POLL_MS = 2500;
 
@@ -425,15 +461,30 @@ export function GenerationStudio({
 
           <section className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             {concepts.map((card) => {
-              const finalUrl = view ? (card.finalViews?.[view] ?? null) : null;
-              const previewUrl = view ? (card.views[view] ?? null) : null;
+              // D5: show the selected view if it has rendered, else the FIRST
+              // rendered view (canonical order), so a settled card is never
+              // blank during the per-view paint gap (D13-4 — the money shot).
+              const shownView =
+                (view && (card.finalViews?.[view] ?? card.views[view]) ? view : undefined) ??
+                views.find((v) => card.finalViews?.[v] ?? card.views[v]);
+              const finalUrl = shownView ? (card.finalViews?.[shownView] ?? null) : null;
+              const previewUrl = shownView ? (card.views[shownView] ?? null) : null;
               const mediaUrl = finalUrl ?? previewUrl;
+              const beforeUrl = shownView ? (stockViews[shownView] ?? null) : null;
               const busyHere = runBusy && pendingConceptKey === card.key;
               return (
-                <article
+                <Card
                   key={card.key}
                   data-testid={`concept-card-${card.key}`}
-                  className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4"
+                  aria-current={card.finalViews ? 'true' : undefined}
+                  className={
+                    'flex flex-col gap-3 p-4 transition-all duration-200 ' +
+                    // D6: the SELECTED/final concept is distinctly more prominent
+                    // (brand-cyan ring + lift); the others animate on hover.
+                    (card.finalViews
+                      ? 'border-[#35B6E8] shadow-lg shadow-cyan-100 ring-2 ring-[#35B6E8]/60 -translate-y-0.5'
+                      : 'hover:-translate-y-0.5 hover:shadow-md')
+                  }
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -452,10 +503,11 @@ export function GenerationStudio({
 
                   {mediaUrl ? (
                     <>
-                      <BeforeAfterSlider
-                        beforeUrl={view ? (stockViews[view] ?? null) : null}
+                      <ConceptMedia
+                        key={mediaUrl}
+                        beforeUrl={beforeUrl}
                         afterUrl={mediaUrl}
-                        alt={`${card.title} — ${view ? viewLabel(view) : 'preview'}`}
+                        alt={`${card.title} — ${shownView ? viewLabel(shownView) : 'preview'}`}
                       />
                       {finalUrl ? (
                         <p className="text-[11px] text-zinc-400">
@@ -552,7 +604,7 @@ export function GenerationStudio({
                       </div>
                     </div>
                   )}
-                </article>
+                </Card>
               );
             })}
           </section>

@@ -42,6 +42,31 @@ async function getConnection(): Promise<IORedisClient> {
   return connection;
 }
 
+// Goal 15 D8 (D13-1): an EVICTING Redis silently DROPS queued parse jobs — they
+// vanish from Redis, so BullMQ's retry/attempts never fire (eviction isn't a job
+// failure). BullMQ requires `noeviction`. On worker boot, verify the policy; try
+// to pin it; if the host forbids CONFIG SET (Upstash free tier is fixed), warn
+// LOUDLY so the reliability risk is visible instead of silent.
+async function ensureNoEviction(conn: IORedisClient): Promise<void> {
+  try {
+    const res = (await conn.config('GET', 'maxmemory-policy')) as unknown;
+    const policy = Array.isArray(res) ? (res[1] as string | undefined) : undefined;
+    if (!policy || policy === 'noeviction') return;
+    try {
+      await conn.config('SET', 'maxmemory-policy', 'noeviction');
+      console.warn(`[parse] redis maxmemory-policy was "${policy}" — pinned to noeviction`);
+    } catch {
+      console.error(
+        `[parse] REDIS maxmemory-policy is "${policy}", NOT noeviction — queued parse jobs can ` +
+          'be silently dropped. Pin the Redis/Upstash DB to noeviction or use a dedicated ' +
+          'instance (Goal 15 D8 / ADR-0009).',
+      );
+    }
+  } catch {
+    // CONFIG GET unavailable (some managed Redis restrict it) — never block boot.
+  }
+}
+
 async function getQueue(): Promise<BullQueue> {
   if (!queue) {
     const { Queue } = await import('bullmq');
@@ -67,13 +92,15 @@ export async function enqueue(
 export async function startWorker(): Promise<BullWorker | null> {
   if (!isQueueEnabled()) return null;
   const { Worker } = await import('bullmq');
+  const conn = await getConnection();
+  await ensureNoEviction(conn);
   const worker = new Worker<ParseAssetPayload>(
     PARSE_QUEUE_NAME,
     async (job) => {
       await processParseAsset(job.data);
     },
     {
-      connection: await getConnection(),
+      connection: conn,
       concurrency: 2,
       // Longer drain delay = fewer idle blocking-pop commands against the free-tier
       // command budget when the queue is empty (ADR-0009 budget tuning).

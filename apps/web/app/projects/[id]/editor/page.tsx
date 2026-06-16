@@ -36,7 +36,11 @@ export default async function EditorPage({ params }: { params: Promise<{ id: str
       name: p.name,
       view: p.view,
       outlinePath: p.svgPath,
-      wrapSafePath: zone.clip_path ?? '',
+      // Fall back to the panel outline when a panel has no wrap-safe path, so
+      // EVERY panel always clips (matches layout-sheet.ts). Without this, a
+      // clip-less panel renders its locked AI layer unclipped and the design
+      // bleeds across the view (Goal 15 D3 review).
+      wrapSafePath: zone.clip_path ?? p.svgPath,
       finishHint: p.finishHint,
       printableAreaMm2: p.printableAreaMm2,
     };
