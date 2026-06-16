@@ -162,9 +162,13 @@ export function BriefWizard({
             data-testid={`brief-step-tab-${s.key}`}
             className={
               'rounded-full px-3 py-1 text-xs transition-colors ' +
+              // Three states so progress is legible (Goal 14): active = filled,
+              // visited (passed) = strong zinc-900, upcoming = lighter zinc-500.
               (i === stepIndex
                 ? 'bg-zinc-900 text-white'
-                : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200')
+                : i < stepIndex
+                  ? 'bg-zinc-100 text-zinc-900 hover:bg-zinc-200'
+                  : 'bg-zinc-100 text-zinc-500 hover:bg-zinc-200')
             }
           >
             {s.label}
