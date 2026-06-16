@@ -14,6 +14,7 @@ import Link from 'next/link';
 import { toast } from 'sonner';
 import { ArrowLeft, BadgeCheck, Coins, Loader2, Sparkles, Wand2 } from 'lucide-react';
 import { Button } from '@alphawolf/ui/components/ui/button';
+import { Card } from '@alphawolf/ui/components/ui/card';
 import {
   Dialog,
   DialogContent,
@@ -472,10 +473,18 @@ export function GenerationStudio({
               const beforeUrl = shownView ? (stockViews[shownView] ?? null) : null;
               const busyHere = runBusy && pendingConceptKey === card.key;
               return (
-                <article
+                <Card
                   key={card.key}
                   data-testid={`concept-card-${card.key}`}
-                  className="flex flex-col gap-3 rounded-xl border border-zinc-200 bg-white p-4"
+                  aria-current={card.finalViews ? 'true' : undefined}
+                  className={
+                    'flex flex-col gap-3 p-4 transition-all duration-200 ' +
+                    // D6: the SELECTED/final concept is distinctly more prominent
+                    // (brand-cyan ring + lift); the others animate on hover.
+                    (card.finalViews
+                      ? 'border-[#35B6E8] shadow-lg shadow-cyan-100 ring-2 ring-[#35B6E8]/60 -translate-y-0.5'
+                      : 'hover:-translate-y-0.5 hover:shadow-md')
+                  }
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div>
@@ -595,7 +604,7 @@ export function GenerationStudio({
                       </div>
                     </div>
                   )}
-                </article>
+                </Card>
               );
             })}
           </section>
