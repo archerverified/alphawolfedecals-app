@@ -6,6 +6,81 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-16 — Goal 16 — Launch-Readiness Audit — CLOSEOUT
+
+**Status:** ✅ All four audit axes run + reported; everything fixable fixed in-goal, the rest
+on a prioritized punch-list. Full customer journey re-proven on REAL fal. **Verdict: 🟢
+CONDITIONAL GO** — no High-severity code blocker remains; gated on 2 in-goal items
+(real-fal export-B verification done below + Sentry NODE-9 triage) + the 4 human gates.
+6 commits on `goal/16-launch-readiness` (off `origin/main` @ 1bb9d00 = live prod; **PR open for
+Archer**, not merged). **Spend ≈ $0.77–0.81** (fal $0.7134 + Anthropic ~$0.05–0.10) of the $6 + $1
+ceiling. Net-zero verified. Diagram: [`docs/vault/diagrams/goal-16-launch-readiness.md`](docs/vault/diagrams/goal-16-launch-readiness.md).
+Checklist: [`docs/deployment/launch-checklist.md`](docs/deployment/launch-checklist.md). Findings:
+`docs/deployment/audits/2026-06-16-goal-16/findings.md`. Proof: `docs/deployment/screenshots/2026-06-16-goal-16/`.
+
+**Per-axis (all 4 run in parallel via full-stack-audit subagents + connectors):**
+
+- **D2 Security — ✅ PASS 13/13, 0 High FAIL (LAUNCH-SAFE):** headers/CSP, DB-split (no user-scoped `withSystem`),
+  RLS deny-all + SECURITY-DEFINER money rails, dev(404-in-prod)/cron(fail-closed)/admin(requireAdmin) guards,
+  rate-limit fail-closed, `concept_votes` deny-all doesn't break voting, transfer_token/GH-012 scoping, gitleaks.
+  No fixes needed.
+- **D3 Prod-readiness — 🟡 READY-with-1-triage** (Sentry NODE-9 `/signin` SSR, 6 events). **Storage swept 55→4**
+  (guarded): 13 reference-less orphans (Goal-7 `bakeoff/` + 1 leaked parsed.svg) + retired 11 `@e2e.alphawolf.test`
+  - `purgeTestProjects()` cleared the `@alphawolf.test` smoke-keeper's 19 leaked projects/38 assets. The remaining
+    4 are legit (real `@gmail` project + the `ownerShopId`-pinned smoke fixture). `vehicle-templates` 58 untouched.
+    Smoke-leak root cause: the daily cron purge IS wired (`sweep-generation`→`sweepTestData`→`purgeTestProjects`);
+    the 19-pileup was dev-sprint burst residue outpacing the daily 9am tick (Hobby forbids sub-daily crons, #155).
+- **D4 Performance — 🟢 B.** Fixed the one Med: vehicle-detail hero `<img>` now reserves height + `fetchPriority="high"`
+  (was CLS 0.14–0.17 / LCP 5.4s mobile). Catalogue `<img>`/force-dynamic/editor-waterfall punch-listed (Low).
+- **D5 Design/UX/a11y — 🟢 Design A− / AI-Slop A− held; axe AA clean on public.** On-brand cyan `in_progress` badge
+  (was off-brand sky) + favicon added. zinc-400 caption contrast + doubled `<title>` (×~20 pages) punch-listed.
+
+**THE HEADLINE — the two G15 export carryovers (root-caused + the verified outcome):**
+
+- **Carryover A (door white-box): FIXED — verified on real fal.** Root cause: hard-rule 2 told the model to reserve
+  the logo zone as "a single background color" → rendered WHITE; with no logo composited there it read as a white box.
+  Fix: orchestrator prompt **v2→v3** (hash-pinned) — reserved logo clear-space is now the BASE WRAP COLOR (blends in);
+  - grey conditioning fill defense-in-depth (`render-view-conditioning.ts`, live re-render gated on `db:render-views
+--upload`). The real-fal export shows NO white box. (Not a compositor bug — `compose-views` only touches logo-zone panels.)
+- **Carryover B (multi-view style/colour consistency): OPEN — verified, punch-listed (NOT papered over).** The 4 real-fal
+  views diverge: driver = glossy-black + cyan wireframe, passenger = solid cyan — the two sides disagree on the BASE
+  COLOUR, and neither is the brief's gradient. v3's render-style directive didn't enforce coherence. Root cause is
+  **architectural** (each view is an independent img2img call, no cross-view coherence) → a prompt tweak can't fix it
+  (systematic-debugging: don't thrash more fal). **#1 quality risk for the core export.** Recommended follow-up: a
+  cross-view coherence pass (single multi-view generation / canonical-side-then-derive / post-gen palette normalization).
+
+**D6 E2E (real fal) + D7 regression:** new `apps/web/e2e/goal-16-full-journey.spec.ts` (ported from goal-13 POM) drives
+landing→signup→X3→11-step brief (gloss-black→cyan gradient; logo on driver+passenger doors + hood)→3 real concepts→
+iterate→final→editor→export. Green **3×** (mock first-try + REAL fal + mock), net-zero. 26-shot ordered gallery +
+`goal-16-export-pack.pdf` (395 KB, %PDF-1.7, 4 pages, real AI hero). Real fal confirmed (`generation_runs.provider='fal'`,
+`nano_banana_edit`→`kontext_dev`→`flux2_pro_edit`).
+
+**Local throwaway-DB harness LANDED** (the long-pole the G13/G15 carryovers asked for): `alphawolf_g16` (extensions+pgcrypto,
+`app_user` LOGIN NOBYPASSRLS, 18 migrations, auth_rls, 23 RLS tables) + X3 catalogue COPY'd read-only from prod; worktree
+env points DB→local + real fal + live storage + telemetry blanked. Recipe documented in the findings doc + memory.
+
+**DECISIONS (no-questions policy):**
+
+1. Carryover A fixed at the orchestrator-prompt layer (the proven G15-D1 lever); B is architectural → punch-list, don't
+   thrash (1 real-fal run = $0.71, didn't re-burn).
+2. Storage sweep via the guarded `retire-test-accounts`/`purgeTestProjects` path (cohort-scoped, real-domain/admin/blast
+   guards). New true clean baseline = **4** (the old "~21" was leak-inflated); smoke-keeper + 2 real accounts preserved.
+3. Conditioning grey-fill code lands but live re-render NOT done (would write the read-only `vehicle-templates` bucket) —
+   flagged as a gated deploy op.
+4. ONE goal PR with per-deliverable commits (matches DoD "(or PR open for Archer)").
+5. Security/prod-readiness/perf/design fixes are presentational or audit-only → fresh-context review sufficed; no RLS/auth/
+   DB-split/deploy surface changed (graphify god-nodes `withUser`/`withSystem` untouched), so no advisor second-opinion needed.
+
+**Net-zero (verified):** prod DB never written by the journey (local throwaway only; the storage sweep + account retirement
+were sanctioned system-maintenance). `project-assets` 55→4; `vehicle-templates` 58 untouched; Supabase advisors at the known
+baseline (no schema change, 0 net-new); Sentry 0 new from this goal (local telemetry blanked). Local DB has 0 projects.
+
+**Punch-list (prioritized) + remaining HUMAN gates:** Carryover B (architectural coherence — top quality risk); Sentry
+NODE-9 triage; zinc-400 caption contrast (light surfaces); doubled `<title>`; conditioning live re-render; catalogue/editor
+perf (Low); wire the storage hard-purge into the spec afterAll for fully-automatic net-zero; optional `DATABASE_URL_APP`
+prod boot-assert. **Human gates (OUT, per Archer):** final legal copy · dependency-triage (separate goal) · domain migration
+(separate goal) · `APP_ALLOW_INDEXING` flip.
+
 ## 2026-06-16 — Goal 15 — Generation & Export Correctness — CLOSEOUT
 
 **Status:** ✅ All 9 deliverables shipped on `goal/15-export-correctness` → **PR #192** (7 commits;
