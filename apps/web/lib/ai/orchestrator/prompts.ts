@@ -14,7 +14,16 @@ import { VIEW_ORDER } from '@alphawolf/db';
 import type { BriefData } from '@/lib/brief/schema';
 import { MATERIAL_TIERS } from '@/lib/brief/schema';
 
-export const ORCHESTRATOR_PROMPT_VERSION = 'v2';
+// v3 (Goal 16): fix the two Goal-15 export carryovers at the controllable layer.
+//   * Carryover A (white-box on doors): the reserved logo clear-space is now the
+//     BASE WRAP COLOR, not an arbitrary/white background — so a reserved area
+//     with no composited logo blends invisibly into the wrap instead of reading
+//     as a stark white rectangle (root cause: hard rule 2 said "a single
+//     background color"; the model rendered it white).
+//   * Carryover B (front photoreal vs sides flat): every view of a direction
+//     must render in the SAME visual style and level of photographic realism —
+//     never mix a photoreal render with a flat/cel-shaded one across views.
+export const ORCHESTRATOR_PROMPT_VERSION = 'v3';
 
 // ---------------------------------------------------------------------------
 // Inputs (shared with index.ts — defined here because they are exactly what
@@ -91,7 +100,7 @@ Each prompt is used for STRUCTURE-CONDITIONED img2img against a clean studio ren
 # Hard rules (never break these, in any direction, in any view)
 
 1. NO TEXT OF ANY KIND in the generated image. Every prompt must explicitly forbid text, letters, words, numbers, logos, emblems, badges, brandmarks, and typography of any kind. Misspelled AI text ruins a concept.
-2. THE CUSTOMER'S LOGO IS NEVER RENDERED BY THE IMAGE MODEL. Never describe the logo, its contents, its colors as a logo, or its file. The real logo file is composited as a separate layer later. Where the brief assigns logo placement zones, every prompt covering those zones must instead reserve CLEAR SPACE there: a clean, calm, low-detail area of a single background color with no busy pattern, sized generously on that panel, so the logo can be placed on it afterward.
+2. THE CUSTOMER'S LOGO IS NEVER RENDERED BY THE IMAGE MODEL. Never describe the logo, its contents, its colors as a logo, or its file. The real logo file is composited as a separate layer later. Where the brief assigns logo placement zones, every prompt covering those zones must instead reserve CLEAR SPACE there: a clean, calm, low-detail area painted in the SAME BASE WRAP COLOR as the surrounding panel (never white, never a contrasting block) with no busy pattern, sized generously on that panel, so the logo can be placed on it afterward AND so that if no logo is added the reserved area blends invisibly into the wrap rather than reading as a stray white box.
 3. RESPECT EXCLUSIONS — but WRAP what is included. On a partial wrap, the WRAPPED panels still get the full design: the base color and accents cover them. ONLY the panels the customer excluded keep factory paint — say that explicitly for those panels ("the [excluded zone] keeps its original factory paint, untouched"). Never leave a wrapped panel in factory paint.
 4. Use ONLY the colors provided in the brief. Black, white, and grey may be used as supporting or balancing tones, but NEVER as the dominant base color unless the customer explicitly chose that color as their base. Do not invent new brand colors.
 
@@ -103,7 +112,7 @@ Each prompt is used for STRUCTURE-CONDITIONED img2img against a clean studio ren
 - "back": rear doors/tailgate and rear bumper. Simpler than the sides; carries the design to a clean conclusion. Keep taillights and glass untouched.
 - "top": roof, viewed from above. Usually the simplest surface — base color or a single bold graphic element; mention roof-only treatments here if the brief asks for them.
 
-Keep the design CONTINUOUS across views: same palette, same motif, same finish story on every view of a direction.
+Keep the design CONTINUOUS across views: same palette, same motif, same finish story on every view of a direction. RENDER-STYLE CONSISTENCY (critical): every view of a direction MUST render in the SAME visual style and the SAME level of photographic realism — pick one treatment (a clean photographic studio look) and apply it identically to all of front, driver, passenger, back, and top. NEVER return one view as a photorealistic photo and another as a flat or cel-shaded illustration; all views must look like one matched set shot the same way.
 
 # Output
 
@@ -191,7 +200,8 @@ export function buildCompileUserMessage(input: CompileBriefInput): string {
     lines.push(
       `The customer's logo will be composited later onto: ${logoZones.join(', ')}. ` +
         'Do NOT render or describe the logo. In every prompt covering these zones, reserve clean, ' +
-        'low-detail clear space in a single calm background color there for the logo layer.',
+        'low-detail clear space painted in the SAME base wrap color as the surrounding panel (never ' +
+        'white, never a contrasting block) so the reserved area blends into the wrap if no logo is added.',
     );
   }
 
