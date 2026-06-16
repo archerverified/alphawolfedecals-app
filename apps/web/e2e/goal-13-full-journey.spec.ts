@@ -88,7 +88,9 @@ class AuthDriver {
 
   async landing(): Promise<void> {
     await this.page.goto('/');
-    await expect(this.page.getByRole('heading', { name: /alpha wolf wrap studio/i })).toBeVisible();
+    // Goal 14: the "Alpha Wolf Wrap Studio" wordmark moved to the eyebrow + the
+    // placed logo; the hero H1 now carries the product headline.
+    await expect(this.page.getByRole('heading', { name: /wrap your truck/i })).toBeVisible();
     await shot(this.page, '01-landing');
   }
 
