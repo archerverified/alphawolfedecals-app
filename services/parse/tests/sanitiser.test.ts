@@ -46,4 +46,24 @@ describe('sanitizeSvg hardening', () => {
     const benign = '<path d="M0 0 L10 10 Z" fill="#3366ff"/>';
     expect(clean(benign)).toContain(benign);
   });
+
+  // Goal 17: a logo is frequently a raster (PNG/JPEG) wrapped in an SVG via a
+  // data: URI (e.g. exported from Figma/Illustrator). The old blanket data:-strip
+  // erased the artwork → an invisible logo in the export. Safe rasters must survive
+  // while text/html, svg+xml, and script schemes stay blocked.
+  it('PRESERVES a safe embedded raster (data:image/png) so logo artwork is not erased', () => {
+    const out = clean('<image xlink:href="data:image/png;base64,iVBORw0KGgoAAAANS"/>');
+    expect(out).toContain('data:image/png;base64,iVBORw0KGgoAAAANS');
+  });
+
+  it('PRESERVES data:image/jpeg too', () => {
+    expect(clean('<image href="data:image/jpeg;base64,/9j/4AAQ"/>')).toContain(
+      'data:image/jpeg;base64,/9j/4AAQ',
+    );
+  });
+
+  it('still strips data:image/svg+xml (a nested SVG can re-introduce active content)', () => {
+    const out = clean('<image href="data:image/svg+xml,%3Csvg onload=alert(1)%3E"/>');
+    expect(out).not.toContain('data:image/svg+xml');
+  });
 });

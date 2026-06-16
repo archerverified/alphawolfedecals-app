@@ -56,6 +56,22 @@ export function pdfToSvg(input: Buffer): Promise<Buffer> {
 //   • <foreignObject> (arbitrary embedded HTML),
 //   • event handlers in ANY namespace (on*, xlink:on*, ev:on*…),
 //   • dangerous URI schemes (javascript:, data:, vbscript:) in href/xlink:href/src.
+// Scheme-aware href/xlink:href/src cleaner. Strips javascript:/vbscript: and
+// non-raster data: URIs, but KEEPS safe embedded rasters (data:image/png|jpeg|
+// gif|webp) — legitimate logo artwork. Fragment (#id), http(s), and relative refs
+// are untouched.
+const SAFE_RASTER_DATA_URI = /^data:image\/(?:png|jpe?g|gif|webp)(?:;|,)/i;
+function sanitizeUriSchemes(s: string): string {
+  const attr = /\b((?:xlink:)?href|src)\s*=\s*(?:("|')([^"']*)\2|([^\s">]+))/gi;
+  return s.replace(attr, (full, _name, _quote, quoted, unquoted) => {
+    const value = ((quoted ?? unquoted) || '').trim();
+    const isScript = /^(?:javascript|vbscript)\s*:/i.test(value);
+    const isData = /^data\s*:/i.test(value);
+    const dangerous = isScript || (isData && !SAFE_RASTER_DATA_URI.test(value));
+    return dangerous ? '' : full;
+  });
+}
+
 export function sanitizeSvg(input: Buffer): Buffer {
   let s = input.toString('utf8');
   // Active elements, both paired and self-closing forms.
@@ -70,11 +86,14 @@ export function sanitizeSvg(input: Buffer): Buffer {
   s = s.replace(/\s[\w:-]*\bon\w+\s*=\s*'[^']*'/gi, '');
   s = s.replace(/\s[\w:-]*\bon\w+\s*=\s*[^\s">]+/gi, '');
   // Dangerous URI schemes in any href/xlink:href/src (covers <image>, <use>, <a>).
-  s = s.replace(
-    /\b((?:xlink:)?href|src)\s*=\s*("|')\s*(?:javascript|data|vbscript)\s*:[^"']*\2/gi,
-    '',
-  );
-  s = s.replace(/\b((?:xlink:)?href|src)\s*=\s*(?:javascript|data|vbscript)\s*:[^\s">]+/gi, '');
+  // javascript:/vbscript: are always stripped. data: is stripped EXCEPT safe
+  // embedded rasters (data:image/png|jpeg|gif|webp) — a logo is frequently a raster
+  // wrapped in an SVG via a data: URI (exported from Figma/Illustrator); the old
+  // blanket data:-strip erased that artwork, rendering the logo invisible in the
+  // export (Goal 17). data:image/svg+xml stays stripped — a nested SVG could
+  // re-introduce active content. The bytes are only ever rasterised server-side
+  // (sharp/resvg, no script execution) or rendered via Konva/Image, never innerHTML.
+  s = sanitizeUriSchemes(s);
   return Buffer.from(s, 'utf8');
 }
 
