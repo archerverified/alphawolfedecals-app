@@ -7,6 +7,14 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 ---
 
 
+
+## 2026-06-17 - Cowork session - branch cleanup + Goal 19 finalized
+
+- Deleted merged remote feature branches `goal/17-cross-view-coherence` and `goal/18-generation-polish` (PRs #194/#195 merged; squash-merge leaves them diverged, so safe to delete). Confirmed 404. Many older merged branches remain (goal/7-*, feat/*, plus the 12 dependabot/* that Goal 19 will triage); left for a future sweep.
+- Goal 19 prompt finalized via /prompt-engineer and committed to main (commit 63976af) at `prompts/21-goal-19-dependency-triage.md`. It had only ever been a local-only draft (never on remote); now on origin/main so the Goal 19 worktree picks it up. Stripped pre-ban em-dashes. Added D5 carryover riders from Goal 18: R1 Sentry truth-up (triage `node` to a documented 0-new baseline; retire the empty `sentry-awd` / `alphawolfdecals-1c` duplicate) and R2 draft-model smooth gradient (bounded ~$2 fal, with an explicit escape to its own Goal 20 if it grows). Close-out renumbered to D6; budget + DoD updated.
+- Showcase v3 delivered in the Cowork outputs scratchpad (NOT the repo): design-system rebuild on real brand tokens (Geist embedded, wolf logo, cyan glow, shadcn-style cards), real-work strip, honest gradient-direction proof, graphify graph embedded as a companion file. Deliverable export section pulled per Archer's standing rule.
+- NEXT: ultracode full-app test run with fresh per-page screenshots + a dedicated app-details HTML (Archer providing specifics). graphify update runs CC-side after further merges. REDIS_URL + GitHub PAT rotation pending (Archer).
+
 ## 2026-06-17 - Cowork session - Goal 18 VERIFIED and MERGED (PR #195)
 
 **Context:** Cowork orchestration. Verified the Goal 18 report against ground truth (verify, do not trust) before accepting it, then merged.
