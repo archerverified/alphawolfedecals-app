@@ -6,6 +6,17 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-16 — Cowork verification of Goal 17 (cross-view coherence + punch-list)
+
+Cowork verified Goal 17 (PR #194, OPEN — not yet merged) against ground truth (PR/CI, the export PDF, the logo proof, prod DB + storage).
+- **VERIFIED GOOD — coherence is genuinely fixed (the headline):** Cowork viewed `docs/deployment/screenshots/2026-06-17-goal-17/goal-17-export-pack.pdf` p2 — all four views (front, driver side, rear, passenger side) now read as ONE cohesive gloss-black↔cyan gradient in the same colour family. Real before/after vs Goal-16's disagreeing views. Root-cause fix landed where claimed: `services/parse/src/converters.ts` (SVG sanitizer), `apps/web/lib/ai/orchestrator/prompts.ts` (orchestrator v4 shared design signature), `apps/web/lib/actions/generation.ts` (anchor-view conditioning) + tests.
+- **PR #194:** open, mergeable=clean, 8 commits, 83 files (+999/-83). CI green: Node lint+types, Python×2, gitleaks, license guard, Vercel Preview all success; MVP-flow + Supabase Preview skipped (normal). Carries the §3 flag for a second security review of the sanitizer change before merge.
+- **TWO DISCLOSED CAVEATS — both confirmed honest (not hidden):** (1) the committed export PDF predates the logo fix, so **the logo is NOT visible on the car** in it — the logo is proven only separately by `logo-composite-proof.jpg` (the raster now decodes past the sanitizer). A single export showing the logo ON a coherent vehicle does NOT yet exist → CARRYOVER. (2) **Gradient DIRECTION is reversed / model-variable** — brief = black-front→cyan-rear, export renders cyan-front→black-rear. Disclosed in the report; confirmed in the PDF.
+- **Net-zero:** Goal 17 ran on a LOCAL DB — zero prod writes attributable to it. Prod is at projects 6 (3 legit keepers + 3 new in last 14h), users 4, `project-assets` 10 (+6 in 14h), `vehicle-templates` 58. The +3 projects / +6 assets are deploy-smoke accreted since Goal 16, NOT Goal 17 — but it means the Goal-16 smoke-self-clean still leaves residue between cron purges. WATCH-ITEM, not a Goal-17 failure.
+- **Verdict:** Goal 17 delivered the coherence fix + cleared the punch-list (NODE-9, doubled `<title>`, zinc-400 AA contrast, editor await-waterfall). 🟢 GO minus human gates. **Before merge:** run the §3 second review on the sanitizer diff. **After merge:** (a) regenerate ONE post-fix export proving the logo on a coherent vehicle; (b) pin gradient direction (orchestrator contract or post-process); (c) Archer rotates the exposed keys (FAL / Anthropic / Supabase-service-role / AUTH — **NOT** PII_ENCRYPTION_KEY, §2).
+- **Human gates remaining:** final legal copy; dependency-triage goal (12 Dependabot PRs incl. Next 16 / Prisma 7 / sharp / resend majors); domain migration goal; flip `APP_ALLOW_INDEXING=true`.
+- **Cleanup pending (Archer, in CC):** merge #194 after §3 review; drop `../alphawolf-goal-17` worktree + local DB; confirm `graphify update .` (report claims refreshed to 6332 nodes — Cowork cannot verify graphify from this orchestrator).
+
 ## 2026-06-16 — Goal 17 — Cross-View Coherence (carryover B) + Goal-16 punch-list — CLOSEOUT
 
 **Status:** ✅ The #1 launch-quality risk from Goal 16 (the export's four views disagreeing on base
