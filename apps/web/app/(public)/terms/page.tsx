@@ -1,7 +1,7 @@
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
-  title: 'Terms of Service — Alpha Wolf Wrap Studio',
+  title: 'Terms of Service',
   // Placeholder route — keep it out of the index until real copy lands.
   robots: { index: false, follow: false },
 };

@@ -22,7 +22,7 @@ import { ProjectCardMenu } from '../../components/projects/ProjectCardMenu';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Your projects — Alpha Wolf Wrap Studio',
+  title: 'Your projects',
 };
 
 function formatUpdated(date: Date): string {

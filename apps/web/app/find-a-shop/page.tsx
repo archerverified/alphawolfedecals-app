@@ -18,7 +18,7 @@ import { ShopLocator } from '../../components/locator/ShopLocator';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Find a wrap shop — Alpha Wolf Wrap Studio',
+  title: 'Find a wrap shop',
 };
 
 export default async function FindAShopPage() {

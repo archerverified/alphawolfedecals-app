@@ -7,7 +7,7 @@ import Link from 'next/link';
 import { Eyebrow } from '@alphawolf/ui/components/ui/eyebrow';
 
 export const metadata = {
-  title: 'Welcome — Alpha Wolf Wrap Studio',
+  title: 'Welcome',
 };
 
 // Line-art vehicle outline (design system OutlinePreview), currentColor so it tints

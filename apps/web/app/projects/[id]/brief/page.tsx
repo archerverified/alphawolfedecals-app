@@ -11,7 +11,7 @@ import { parseBriefData, type BriefData } from '../../../../lib/brief/schema';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Design brief — Alpha Wolf Wrap Studio',
+  title: 'Design brief',
 };
 
 export default async function BriefPage({ params }: { params: Promise<{ id: string }> }) {

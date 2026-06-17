@@ -15,7 +15,7 @@ import { ReferralPanel } from '../../components/referral/ReferralPanel';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Refer a friend — Alpha Wolf Wrap Studio',
+  title: 'Refer a friend',
 };
 
 export default async function ReferPage() {

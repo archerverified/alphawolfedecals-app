@@ -120,11 +120,11 @@ export function BriefWizard({
 
   const saveBadge =
     autosave.status === 'saving' || autosave.status === 'pending' ? (
-      <span className="flex items-center gap-1 text-xs text-zinc-400">
+      <span className="flex items-center gap-1 text-xs text-zinc-500">
         <Loader2 className="size-3 animate-spin" aria-hidden /> Saving…
       </span>
     ) : autosave.status === 'saved' ? (
-      <span className="flex items-center gap-1 text-xs text-zinc-400">
+      <span className="flex items-center gap-1 text-xs text-zinc-500">
         <Check className="size-3" aria-hidden /> Saved
       </span>
     ) : autosave.status === 'error' ? (

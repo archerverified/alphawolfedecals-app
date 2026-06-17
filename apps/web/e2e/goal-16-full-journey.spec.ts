@@ -38,13 +38,20 @@ const AW_X3_VEHICLE_ID = 'aa000001-0000-4000-8000-000000000001';
 
 // Brand inputs for the journey (the Goal 16 locked brief). The gradient runs
 // gloss black → cyan; both endpoint colors land in the palette.
-const BRAND_PALETTE = ['#000000', '#00AEEF'] as const; // gloss black → cyan
+// Goal 17: env-overridable (EVAL_PALETTE / EVAL_STYLE_PROMPT / EVAL_ZONE_NOTE /
+// EVAL_SHOT_DIR) so the SAME journey proves cross-view coherence across a 2–3
+// brief eval. With NO overrides this is the verbatim Goal-16 locked brief, so the
+// regression suite (which sets none) is unchanged.
+const BRAND_PALETTE: string[] = process.env.EVAL_PALETTE
+  ? process.env.EVAL_PALETTE.split(',').map((h) => h.trim())
+  : ['#000000', '#00AEEF']; // gloss black → cyan
 const STYLE_PROMPT =
+  process.env.EVAL_STYLE_PROMPT ??
   'A bold cohesive GRADIENT wrap that flows gloss black into cyan across the ' +
-  'entire vehicle — not flat color blocks. Glossy, high-shine finish (NOT matte, ' +
-  'NOT flat). The black-to-cyan gradient is continuous and consistent across ' +
-  'every panel, aggressive and premium. The Alpha Wolf logo sits on both front ' +
-  'doors and the hood.';
+    'entire vehicle — not flat color blocks. Glossy, high-shine finish (NOT matte, ' +
+    'NOT flat). The black-to-cyan gradient is continuous and consistent across ' +
+    'every panel, aggressive and premium. The Alpha Wolf logo sits on both front ' +
+    'doors and the hood.';
 
 // The names of the wrap zones the Alpha Wolf logo MUST land on (the must-have):
 // both front doors (driver + passenger side) plus the hood. Targeted by their
@@ -57,7 +64,11 @@ const LOGO_SVG = path.resolve(__dirname, 'fixtures/alpha-wolf-logo.svg');
 const PHOTO_PNG = path.resolve(__dirname, 'fixtures/opaque-logo.png');
 
 // Ordered screenshot gallery — zero-padded numeric prefixes in journey order.
-const SHOT_DIR = path.resolve(__dirname, '../../../docs/deployment/screenshots/2026-06-16-goal-16');
+// Goal 17: EVAL_SHOT_DIR redirects the gallery (so eval runs never clobber the
+// committed Goal-16 evidence); default stays the Goal-16 dir for the regression suite.
+const SHOT_DIR = process.env.EVAL_SHOT_DIR
+  ? path.resolve(process.env.EVAL_SHOT_DIR)
+  : path.resolve(__dirname, '../../../docs/deployment/screenshots/2026-06-16-goal-16');
 
 async function shot(page: Page, name: string): Promise<void> {
   fs.mkdirSync(SHOT_DIR, { recursive: true });
@@ -335,7 +346,8 @@ class BriefWizardDriver {
     const noteArea = this.page.getByTestId('brief-step-zoneNotes').locator('textarea').first();
     await noteArea.waitFor({ state: 'visible', timeout: 15_000 });
     await noteArea.fill(
-      'gradient should be darkest (gloss black) at the front, brightest cyan at the rear',
+      process.env.EVAL_ZONE_NOTE ??
+        'gradient should be darkest (gloss black) at the front, brightest cyan at the rear',
     );
     await shot(this.page, '13-brief-zone-notes');
   }

@@ -14,7 +14,7 @@ import { GenerationStudio } from '../../../../components/generation/GenerationSt
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'AI design studio — Alpha Wolf Wrap Studio',
+  title: 'AI design studio',
 };
 
 export default async function GeneratePage({

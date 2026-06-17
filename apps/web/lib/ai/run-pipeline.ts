@@ -127,6 +127,53 @@ export function sortViews(views: string[]): string[] {
   });
 }
 
+// Cross-view coherence (Goal 17 D2): a concept renders ONE canonical "anchor"
+// view first; every other view is then conditioned on the anchor's render so all
+// views share ONE base colour, gradient, and finish. Preference = a full-length
+// SIDE (driver, the largest canvas that carries the whole front→rear design) →
+// passenger → front → back → top; falls back to the first given view.
+const ANCHOR_PREFERENCE = ['driver', 'passenger', 'front', 'back', 'top'] as const;
+
+export function anchorViewFor(views: string[]): string {
+  for (const pref of ANCHOR_PREFERENCE) {
+    if (views.includes(pref)) return pref;
+  }
+  const [first] = views;
+  if (first === undefined) throw new Error('anchorViewFor called with no views');
+  return first;
+}
+
+/**
+ * Render-time directive appended to a derived/final view's prompt so the image
+ * model reproduces ONE shared design from a reference image (the concept's anchor
+ * render for drafts; the customer-approved render for finals) instead of re-rolling
+ * an independent colourway — the architectural fix for cross-view divergence
+ * (Goal 17). Model-aware:
+ *  - 'final' (flux-2-pro/edit — indexed @image1/@image2 reference editing): @image1
+ *    is the structure, @image2 the approved design to reproduce at export quality.
+ *  - draft/iteration (nano-banana — a fusion model that will freely change camera
+ *    angle): pin THIS view's geometry hard, take ONLY the colour/gradient/finish.
+ * Both forbid AI text/logos — the logo is composited separately, NEVER AI-rendered.
+ */
+export function coherenceDirective(kind: GenerationRunKind): string {
+  if (kind === 'final') {
+    return [
+      'COHERENCE: @image1 is the clean structural render of THIS vehicle view; @image2 is the',
+      "customer-APPROVED final wrap design. Reproduce @image2's EXACT base colour, gradient and its",
+      "direction, accent graphics, and finish onto @image1's panels at premium export quality.",
+      "Preserve @image1's geometry, camera angle, panel layout, and composition exactly — change only",
+      'fidelity/resolution. Render NO text, letters, numbers, logos, emblems, or badges of any kind.',
+    ].join(' ');
+  }
+  return [
+    'COHERENCE: the reference image is the SAME wrap design on a different angle of this same vehicle.',
+    'Adopt ONLY its base colour, its gradient and gradient direction, its accent colours, and its finish',
+    'so every view reads as one cohesive design. Keep THIS view’s vehicle shape, camera angle, panel',
+    'layout, and geometry EXACTLY as in the structural render — do NOT copy the reference’s camera angle',
+    'or panel layout. Render NO text, letters, numbers, logos, emblems, or badges of any kind.',
+  ].join(' ');
+}
+
 type PanelLike = { id: string; view: string; name: string };
 
 /**
@@ -425,6 +472,37 @@ async function harvestJob(
   await generation.completeJob(userId, job.id, { costUsd: state.costUsd });
 }
 
+// A coherence reference image (anchor / approved-draft donor) is fetched by the
+// provider (fal) from a Supabase signed URL. The TTL must comfortably outlive the
+// run deadline (RUN_TTL ≈ 15 min) so a slow poll never hands fal an expired URL.
+const COHERENCE_URL_TTL_S = 3600;
+
+// Final-stage conditioning donor: the customer-APPROVED render per view, resolved
+// as the LATEST render for the chosen concept across the parent lineage
+// (final → iteration* → draft). Closes the draft→final coherence gap — the export
+// reproduces exactly what the customer approved instead of re-rolling from the
+// template. Bounded walk (a draft run has no parent); first-seen wins (the
+// closest parent is the most recently approved). Returns view → storagePath.
+async function resolveApprovedDonors(
+  userId: string,
+  run: GenerationRunRow,
+): Promise<Map<string, string>> {
+  const donors = new Map<string, string>();
+  if (!run.conceptKey) return donors;
+  let cursor: string | null = run.parentRunId;
+  for (let depth = 0; cursor && depth < 6; depth += 1) {
+    const imgs = await generation.listImages(userId, cursor);
+    for (const img of imgs) {
+      if (img.conceptKey === run.conceptKey && !donors.has(img.view)) {
+        donors.set(img.view, img.storagePath);
+      }
+    }
+    const parent = await generation.getRun(userId, cursor);
+    cursor = parent?.parentRunId ?? null;
+  }
+  return donors;
+}
+
 async function renderSlice(userId: string, run: GenerationRunRow): Promise<void> {
   const jobs = await generation.listJobs(userId, run.id);
   if (jobs.length === 0) {
@@ -450,32 +528,121 @@ async function renderSlice(userId: string, run: GenerationRunRow): Promise<void>
     const existingImages = await generation.listImages(userId, run.id);
     const imagedJobIds = new Set(existingImages.map((i) => i.jobId));
 
+    // --- Cross-view coherence (Goal 17) --------------------------------------
+    // Each concept renders ONE canonical anchor view first; every other DRAFT
+    // view is then conditioned on that anchor's render so all views share one
+    // base colour, gradient, and finish. FINAL views are instead conditioned on
+    // the customer-APPROVED draft render (resolveApprovedDonors). Both keep their
+    // OWN structure render at imageUrls[0] (per-view geometry → the editor handoff
+    // + logo compositing are unaffected). NOTE: the deterministic mock ignores
+    // imageUrls, so this is proven on REAL fal, not the mock.
+    const runViews = [...new Set(jobs.map((j) => j.view))];
+    const anchorView = anchorViewFor(runViews);
+    // The anchor render per concept = the colour/style donor for derived draft views.
+    const anchorImageByConcept = new Map<string, { storagePath: string }>();
+    // A concept whose anchor JOB failed can never produce derived views.
+    const failedAnchorConcepts = new Set<string>();
+    if (run.kind === 'initial') {
+      for (const img of existingImages) {
+        if (img.view === anchorView) {
+          anchorImageByConcept.set(img.conceptKey, { storagePath: img.storagePath });
+        }
+      }
+      for (const j of jobs) {
+        if (j.view === anchorView && j.status === 'failed') failedAnchorConcepts.add(j.conceptKey);
+      }
+    }
+    const donorByView =
+      run.kind === 'final' ? await resolveApprovedDonors(userId, run) : new Map<string, string>();
+    // Shared per-concept seed: every view of a concept renders from one seed
+    // (reinforces coherence; deterministic + resubmit-safe like the per-job seed).
+    const seedForConcept = (conceptKey: string) => seedFor(`${run.id}:${conceptKey}`);
+
     let processed = 0;
     for (const job of open) {
       if (processed >= JOBS_PER_SLICE) break;
+
+      // Dependency GATE for derived draft views — a skip must NOT consume the
+      // slice budget (so a slice still does up to JOBS_PER_SLICE real units even
+      // when some opens are anchor-blocked).
+      if (
+        run.kind === 'initial' &&
+        job.view !== anchorView &&
+        job.status === 'pending' &&
+        !job.providerRequestId
+      ) {
+        if (failedAnchorConcepts.has(job.conceptKey)) {
+          // Cascade-fail this JOB only — the anchor it derives from can never
+          // render. The settle block owns the single idempotent run-level refund
+          // (never strand a sibling concept's already-submitted spend).
+          await generation.failJob(userId, job.id, 'anchor view failed');
+          continue;
+        }
+        if (!anchorImageByConcept.has(job.conceptKey)) continue; // GATE: anchor not rendered yet
+      }
+
       processed += 1;
       try {
         if (job.status === 'pending' && !job.providerRequestId) {
-          // PER-JOB SUBMIT CLAIM (review fix F2): CAS pending→submitting
-          // BEFORE the provider call. Exactly one concurrent slice wins;
-          // losers skip — two racing polls can never double-submit a job.
-          const claimed = await generation.claimJob(userId, job.id);
-          if (!claimed) continue; // another slice holds (or held) the claim
-
-          // Conditioning image: the PRE-GENERATED clean view render in the
-          // public templates bucket (rendered by db:render-views).
-          const conditioningUrl = storage.templatePublicUrl(
+          // Conditioning: imageUrls[0] is ALWAYS this view's own structure render
+          // (geometry). Derived draft / final views add a second reference image
+          // (the anchor / approved-draft render) so the design stays coherent.
+          // Resolved BEFORE the claim (review fix): signing the donor URL is
+          // side-effect-free, so a transient signer error leaves the job 'pending'
+          // (retried next slice) instead of stranding it 'submitting' until the
+          // run deadline. A lost claim simply discards the resolved URL.
+          const structureUrl = storage.templatePublicUrl(
             `views/${project.vehicleId}/${job.view}.png`,
           );
+          let imageUrls = [structureUrl];
+          let prompt = job.prompt;
+          let finalDonorMissing = false;
+          if (run.kind === 'initial' && job.view !== anchorView) {
+            // Ungated above ⇒ this concept's anchor render exists.
+            const anchor = anchorImageByConcept.get(job.conceptKey)!;
+            imageUrls = [
+              structureUrl,
+              await storage.signedAssetReadUrl(anchor.storagePath, COHERENCE_URL_TTL_S),
+            ];
+            prompt = `${job.prompt}\n\n${coherenceDirective('initial')}`;
+          } else if (run.kind === 'final') {
+            const donor = donorByView.get(job.view);
+            if (donor) {
+              imageUrls = [
+                structureUrl,
+                await storage.signedAssetReadUrl(donor, COHERENCE_URL_TTL_S),
+              ];
+              prompt = `${job.prompt}\n\n${coherenceDirective('final')}`;
+            } else {
+              // No approved-draft donor: graceful structure-only fallback — but a
+              // final view re-rolling independently is the Goal-16 divergence risk,
+              // so flag it (emitted by the claim winner below) for observability.
+              finalDonorMissing = true;
+            }
+          }
+
+          // PER-JOB SUBMIT CLAIM (review fix F2): CAS pending→submitting before the
+          // provider call. Exactly one concurrent slice wins; losers skip — two
+          // racing polls can never double-submit a job.
+          const claimed = await generation.claimJob(userId, job.id);
+          if (!claimed) continue; // another slice holds (or held) the claim
+          if (finalDonorMissing) {
+            await captureServerEvent('final_donor_missing', userId, {
+              runId: run.id,
+              projectId: run.projectId,
+              conceptKey: job.conceptKey,
+              view: job.view,
+            });
+          }
           let submission;
           try {
             submission = await provider.submit({
               modelKey,
-              prompt: job.prompt,
-              imageUrls: [conditioningUrl],
+              prompt,
+              imageUrls,
               width: dims.width,
               height: dims.height,
-              seed: seedFor(job.id),
+              seed: seedForConcept(job.conceptKey),
             });
           } catch (submitError) {
             Sentry.captureException(submitError, {

@@ -26,7 +26,7 @@ import { VOTER_COOKIE } from '../../../../lib/share/cookie';
 export const dynamic = 'force-dynamic';
 
 export const metadata: Metadata = {
-  title: 'Pick a wrap concept — Alpha Wolf Wrap Studio',
+  title: 'Pick a wrap concept',
   // Per-project ephemeral content shared by link, not for search indexes.
   robots: { index: false, follow: false },
 };
@@ -111,7 +111,7 @@ export default async function SharePage({ params }: { params: Promise<{ token: s
         </div>
       )}
 
-      <footer className="mt-12 text-center text-xs text-zinc-400">
+      <footer className="mt-12 text-center text-xs text-zinc-500">
         Designed with Alpha Wolf Wrap Studio.
       </footer>
     </main>

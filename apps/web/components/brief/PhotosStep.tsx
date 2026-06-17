@@ -154,12 +154,12 @@ export function PhotosStep({ projectId, data, patch }: Props) {
         </p>
       ) : null}
 
-      <p className="mb-4 text-xs text-zinc-400">
+      <p className="mb-4 text-xs text-zinc-500">
         Tip: keep people out of frame — we only need the vehicle.
       </p>
 
       {photos.length === 0 ? (
-        <p className="rounded-md border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-400">
+        <p className="rounded-md border border-dashed border-zinc-300 p-6 text-center text-sm text-zinc-500">
           No photos yet. You can skip this — the template still covers the design.
         </p>
       ) : (
@@ -177,7 +177,7 @@ export function PhotosStep({ projectId, data, patch }: Props) {
                     className="h-32 w-full rounded object-cover"
                   />
                 ) : (
-                  <div className="flex h-32 w-full items-center justify-center rounded bg-zinc-100 text-xs text-zinc-400">
+                  <div className="flex h-32 w-full items-center justify-center rounded bg-zinc-100 text-xs text-zinc-500">
                     Loading preview…
                   </div>
                 )}

@@ -41,7 +41,7 @@ export default function Error({
         </a>
       </div>
       {error.digest ? (
-        <p className="mt-6 text-xs text-zinc-400">Reference: {error.digest}</p>
+        <p className="mt-6 text-xs text-zinc-500">Reference: {error.digest}</p>
       ) : null}
     </main>
   );

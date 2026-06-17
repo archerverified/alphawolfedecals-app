@@ -10,7 +10,7 @@ import { VehicleBrowser } from '../../../components/vehicles/VehicleBrowser';
 export const dynamic = 'force-dynamic';
 
 export const metadata = {
-  title: 'Choose your vehicle — Alpha Wolf Wrap Studio',
+  title: 'Choose your vehicle',
 };
 
 export default async function VehicleSelectPage() {

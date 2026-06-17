@@ -6,7 +6,7 @@
 import { Eyebrow } from '@alphawolf/ui/components/ui/eyebrow';
 
 export const metadata = {
-  title: 'Set up your shop — Alpha Wolf Wrap Studio',
+  title: 'Set up your shop',
 };
 
 export default function ShopWelcomePage() {

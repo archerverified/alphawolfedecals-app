@@ -183,7 +183,14 @@ vi.mock('@/lib/notifications/posthog-server', () => ({ captureServerEvent: h.cap
 vi.mock('@sentry/nextjs', () => ({ captureException: h.sentryCaptureMock }));
 
 import { mockProvider } from '@/lib/ai/mock';
-import { advanceRun, parseRunDirections, resolveRunViews, sortViews } from '@/lib/ai/run-pipeline';
+import {
+  advanceRun,
+  anchorViewFor,
+  coherenceDirective,
+  parseRunDirections,
+  resolveRunViews,
+  sortViews,
+} from '@/lib/ai/run-pipeline';
 
 const USER = 'user-1';
 const realCheck = mockProvider.check.bind(mockProvider);
@@ -566,6 +573,229 @@ describe('advanceRun — iteration and final kinds', () => {
   });
 });
 
+describe('cross-view coherence (Goal 17) — anchor-then-derive + approved-draft conditioning', () => {
+  const MV = ['front', 'driver', 'back']; // anchor resolves to 'driver'
+
+  function multiViewVehicle(views: string[]) {
+    return {
+      id: 'veh-1',
+      year: 2024,
+      make: 'BMW',
+      model: 'X3',
+      bodyType: 'suv',
+      panels: views.map((v, i) => ({ id: `p${i}`, view: v, name: `${v} panel` })),
+    };
+  }
+
+  function submitsByView(spy: { mock: { calls: unknown[][] } }) {
+    // The conditioning structure image is always views/veh-1/<view>.png at imageUrls[0].
+    const out: Record<string, { imageUrls: string[]; prompt: string; seed?: number }> = {};
+    for (const call of spy.mock.calls) {
+      const req = call[0] as { imageUrls?: string[]; prompt: string; seed?: number };
+      const first = req.imageUrls?.[0] ?? '';
+      const m = first.match(/views\/veh-1\/(\w+)\.png/);
+      if (m) out[m[1]!] = { imageUrls: req.imageUrls ?? [], prompt: req.prompt, seed: req.seed };
+    }
+    return out;
+  }
+
+  it('initial: anchor (driver) renders alone; derived views condition on [structure, signed(anchor)] + share one seed', async () => {
+    h.fakeVehicles.getPublishedDetail.mockResolvedValue(multiViewVehicle(MV));
+    h.compileBriefMock.mockResolvedValue({
+      directions: [directionFixture('literal', MV)],
+      promptVersion: 'v4',
+      usage: { inputTokens: 1000, outputTokens: 800, estimatedUsd: 0.005 },
+    });
+    const submitSpy = vi.spyOn(mockProvider, 'submit');
+    const runId = seedRun({ model: 'nano_banana_edit' });
+
+    const snapshot = await advanceUntilTerminal(runId, 20);
+    expect(snapshot.status).toBe('complete');
+
+    const byView = submitsByView(submitSpy);
+    // Anchor (driver) — structure-only conditioning, no coherence directive.
+    expect(byView.driver!.imageUrls).toEqual(['https://templates.test/views/veh-1/driver.png']);
+    expect(byView.driver!.prompt).not.toContain('COHERENCE');
+    // Derived views — [own structure, signed(anchor render)] + coherence directive.
+    for (const v of ['front', 'back']) {
+      expect(byView[v]!.imageUrls).toEqual([
+        `https://templates.test/views/veh-1/${v}.png`,
+        'https://signed.test/generations/proj-1/run-1/literal-driver.png',
+      ]);
+      expect(byView[v]!.prompt).toContain('COHERENCE');
+    }
+    // Shared per-concept seed: every view of the concept rendered from one seed.
+    const seeds = new Set(Object.values(byView).map((s) => s.seed));
+    expect(seeds.size).toBe(1);
+  });
+
+  it('initial: anchor failure cascade-fails the concept derived views — never submits them, run refunds', async () => {
+    h.fakeVehicles.getPublishedDetail.mockResolvedValue(multiViewVehicle(MV));
+    h.compileBriefMock.mockResolvedValue({
+      directions: [directionFixture('literal', MV)],
+      promptVersion: 'v4',
+      usage: { inputTokens: 1000, outputTokens: 800, estimatedUsd: 0.005 },
+    });
+    // The anchor (driver) render fails at the provider; derived views must never submit.
+    vi.spyOn(mockProvider, 'check').mockImplementation(async (modelKey, requestId) => {
+      const req = h.state.jobs.find((j) => j.providerRequestId === requestId);
+      if (req?.view === 'driver') return { status: 'failed', error: 'anchor render exploded' };
+      return realCheck(modelKey, requestId);
+    });
+    const submitSpy = vi.spyOn(mockProvider, 'submit');
+    const runId = seedRun({ model: 'nano_banana_edit' });
+
+    const snapshot = await advanceUntilTerminal(runId, 20);
+    expect(snapshot.status).toBe('failed');
+    expect(h.state.refunds).toContain(runId);
+    // ONLY the anchor was ever submitted; derived views were cascade-failed pre-submit.
+    const submittedViews = submitSpy.mock.calls
+      .map((c) => (c[0] as { imageUrls?: string[] }).imageUrls?.[0] ?? '')
+      .map((u) => u.match(/views\/veh-1\/(\w+)\.png/)?.[1])
+      .filter(Boolean);
+    expect(submittedViews).toEqual(['driver']);
+  });
+
+  it('final: each view conditions on [structure, signed(APPROVED-DRAFT render)] + coherence — closes the draft→final gap', async () => {
+    const parentId = seedRun({
+      id: 'parent-1',
+      status: 'complete',
+      kind: 'initial',
+      directions: {
+        promptVersion: 'v4',
+        orchestratorCostUsd: 0.005,
+        directions: [directionFixture('literal', MV)],
+      },
+      completedAt: new Date(),
+    });
+    // The customer-approved draft renders live on the parent run.
+    MV.forEach((v, i) =>
+      h.state.images.push({
+        id: `pimg-${i}`,
+        runId: parentId,
+        jobId: `pj-${i}`,
+        conceptKey: 'literal',
+        view: v,
+        storagePath: `generations/proj-1/parent-1/literal-${v}.png`,
+        previewPath: null,
+        width: 1024,
+        height: 768,
+        provider: 'mock',
+        model: 'nano_banana_edit',
+        costUsd: 0,
+        provenance: {},
+        createdAt: new Date(),
+      }),
+    );
+    h.fakeVehicles.getPublishedDetail.mockResolvedValue(multiViewVehicle(MV));
+    const submitSpy = vi.spyOn(mockProvider, 'submit');
+    const runId = seedRun({
+      id: 'final-1',
+      kind: 'final',
+      parentRunId: parentId,
+      conceptKey: 'literal',
+      model: 'flux2_pro_edit',
+    });
+
+    const snapshot = await advanceUntilTerminal(runId, 20);
+    expect(snapshot.status).toBe('complete');
+
+    const byView = submitsByView(submitSpy);
+    for (const v of MV) {
+      expect(byView[v]!.imageUrls).toEqual([
+        `https://templates.test/views/veh-1/${v}.png`,
+        `https://signed.test/generations/proj-1/parent-1/literal-${v}.png`,
+      ]);
+      expect(byView[v]!.prompt).toContain('COHERENCE');
+    }
+  });
+
+  it('a transient signed-URL failure on a derived view never strands the job — a later slice retries to completion', async () => {
+    h.fakeVehicles.getPublishedDetail.mockResolvedValue(multiViewVehicle(MV));
+    h.compileBriefMock.mockResolvedValue({
+      directions: [directionFixture('literal', MV)],
+      promptVersion: 'v4',
+      usage: { inputTokens: 1000, outputTokens: 800, estimatedUsd: 0.005 },
+    });
+    // Fail the FIRST anchor-donor CONDITIONING sign (a non-preview key) once.
+    // signedAssetReadUrl is also used for preview URLs (buildSnapshot swallows
+    // those), so target the conditioning path specifically. Conditioning is
+    // resolved BEFORE claimJob, so the job stays 'pending' (never stuck
+    // 'submitting') and a later slice retries cleanly — the run still completes.
+    let injected = false;
+    h.fakeStorage.signedAssetReadUrl.mockImplementation(async (key: string) => {
+      if (!injected && !key.includes('-preview') && key.includes('-driver')) {
+        injected = true;
+        throw new Error('transient storage error');
+      }
+      return `https://signed.test/${key}`;
+    });
+    const runId = seedRun({ model: 'nano_banana_edit' });
+
+    const snapshot = await advanceUntilTerminal(runId, 24);
+    expect(snapshot.status).toBe('complete');
+    expect(h.state.jobs.every((j) => j.status === 'complete')).toBe(true);
+    expect(injected).toBe(true); // the failure path was actually exercised
+    // Restore the default impl (mockImplementation persists past clearAllMocks).
+    h.fakeStorage.signedAssetReadUrl.mockImplementation(
+      async (key: string) => `https://signed.test/${key}`,
+    );
+  });
+
+  it('final: a missing lineage donor falls back to structure-only AND emits final_donor_missing', async () => {
+    const parentId = seedRun({
+      id: 'parent-1',
+      status: 'complete',
+      kind: 'initial',
+      directions: {
+        promptVersion: 'v4',
+        orchestratorCostUsd: 0.005,
+        directions: [directionFixture('literal', MV)],
+      },
+      completedAt: new Date(),
+    });
+    // Only front + driver have approved draft renders; 'back' has none → its final
+    // view must degrade to structure-only, but that degradation must be OBSERVABLE.
+    ['front', 'driver'].forEach((v, i) =>
+      h.state.images.push({
+        id: `pimg-${i}`,
+        runId: parentId,
+        jobId: `pj-${i}`,
+        conceptKey: 'literal',
+        view: v,
+        storagePath: `generations/proj-1/parent-1/literal-${v}.png`,
+        previewPath: null,
+        width: 1024,
+        height: 768,
+        provider: 'mock',
+        model: 'nano_banana_edit',
+        costUsd: 0,
+        provenance: {},
+        createdAt: new Date(),
+      }),
+    );
+    h.fakeVehicles.getPublishedDetail.mockResolvedValue(multiViewVehicle(MV));
+    const submitSpy = vi.spyOn(mockProvider, 'submit');
+    const runId = seedRun({
+      id: 'final-1',
+      kind: 'final',
+      parentRunId: parentId,
+      conceptKey: 'literal',
+      model: 'flux2_pro_edit',
+    });
+
+    const snapshot = await advanceUntilTerminal(runId, 20);
+    expect(snapshot.status).toBe('complete');
+    const byView = submitsByView(submitSpy);
+    // 'back' has no donor → structure-only fallback.
+    expect(byView.back!.imageUrls).toEqual(['https://templates.test/views/veh-1/back.png']);
+    // front/driver have donors → two-image conditioning.
+    expect(byView.front!.imageUrls).toHaveLength(2);
+    // The degraded export view is observable.
+    expect(events()).toContain('final_donor_missing');
+  });
+});
+
 describe('view resolution helpers', () => {
   const panels = [
     { id: 'p1', view: 'front', name: 'Hood' },
@@ -592,5 +822,49 @@ describe('view resolution helpers', () => {
       'top',
       'mystery',
     ]);
+  });
+});
+
+describe('anchorViewFor — the canonical view every other view derives from', () => {
+  it('prefers a side view (driver) — the largest canvas showing the full front→rear design', () => {
+    expect(anchorViewFor(['front', 'driver', 'back', 'passenger'])).toBe('driver');
+  });
+
+  it('falls back to passenger when driver is absent (still a full-length side)', () => {
+    expect(anchorViewFor(['front', 'back', 'passenger', 'top'])).toBe('passenger');
+  });
+
+  it('falls back through front, then back, then top by preference', () => {
+    expect(anchorViewFor(['front', 'back', 'top'])).toBe('front');
+    expect(anchorViewFor(['back', 'top'])).toBe('back');
+    expect(anchorViewFor(['top'])).toBe('top');
+  });
+
+  it('returns the first given view when none match the preference list', () => {
+    expect(anchorViewFor(['mystery', 'front'])).toBe('front');
+    expect(anchorViewFor(['mystery'])).toBe('mystery');
+  });
+});
+
+describe('coherenceDirective — anchors a derived/final view to one shared design via the reference image', () => {
+  it('draft (fusion model): keep THIS view geometry, adopt ONLY colour/gradient/finish from the reference', () => {
+    const d = coherenceDirective('initial');
+    expect(d).toMatch(/reference/i);
+    expect(d).toMatch(/colou?r|gradient|finish/i);
+    // It must forbid geometry/camera contamination — the nano-banana fusion risk.
+    expect(d).toMatch(/keep|same|exact|preserve/i);
+    expect(d).toMatch(/geometry|shape|angle|panel|camera/i);
+  });
+
+  it('final (reference-edit model): reproduce the approved design at export quality, preserve geometry', () => {
+    const d = coherenceDirective('final');
+    expect(d).toMatch(/approved|reference|image\s*2|@image2/i);
+    expect(d).toMatch(/export|quality|premium|high/i);
+    expect(d).toMatch(/geometry|composition|panel|shape|camera/i);
+  });
+
+  it('never reintroduces text/logos (the composited-logo invariant)', () => {
+    expect(coherenceDirective('initial')).toMatch(/no text|never.*text|without.*text|no logos?/i);
+    expect(coherenceDirective('final')).toMatch(/no text|never.*text|without.*text|no logos?/i);
   });
 });

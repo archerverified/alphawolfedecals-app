@@ -310,8 +310,11 @@ describe('startFinalAction', () => {
         kind: 'final',
         creditCost: 0,
         model: AI_CONFIG.defaults.final,
-        // flux2_pro_metered at 1600×1200 (2MP) + 1 input: 0.03 + 0.015×2 = 0.06 × 2 views.
-        estimatedCostUsd: 0.12,
+        // Goal 17: every final view conditions on the approved-draft donor → 2 input
+        // images. flux2_pro_metered at 1600×1200 (2MP) + 2 inputs: 0.03 + 0.015×(2-1+2)
+        // = 0.075 × 2 views = 0.15. The pre-estimate must count both so the daily
+        // spend cap stays a true upper bound (it under-counted at 1 input).
+        estimatedCostUsd: 0.15,
       }),
     );
     expect(h.captureMock).toHaveBeenCalledWith(

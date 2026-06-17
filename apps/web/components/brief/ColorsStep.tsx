@@ -139,7 +139,7 @@ export function ColorsStep({ projectId, data, patch }: Props) {
                 <span className="font-mono">{p.hex}</span>
                 {p.name ? <span className="text-zinc-500"> — {p.name}</span> : null}
                 {p.sku ? (
-                  <span className="block truncate text-xs text-zinc-400">
+                  <span className="block truncate text-xs text-zinc-500">
                     {p.brand} {p.sku}
                     {p.finish ? ` · ${p.finish}` : ''}
                   </span>
@@ -162,7 +162,7 @@ export function ColorsStep({ projectId, data, patch }: Props) {
                 type="button"
                 onClick={() => removePick(i)}
                 aria-label={`Remove ${p.name ?? p.hex}`}
-                className="rounded-full p-1 text-zinc-400 hover:text-zinc-700"
+                className="rounded-full p-1 text-zinc-500 hover:text-zinc-700"
               >
                 <X className="size-4" aria-hidden />
               </button>
@@ -170,7 +170,7 @@ export function ColorsStep({ projectId, data, patch }: Props) {
           ))}
         </ul>
       ) : (
-        <p className="mb-5 rounded-md border border-dashed border-zinc-300 p-4 text-center text-sm text-zinc-400">
+        <p className="mb-5 rounded-md border border-dashed border-zinc-300 p-4 text-center text-sm text-zinc-500">
           No colors yet — add from any of the three ways below.
         </p>
       )}
@@ -216,7 +216,7 @@ export function ColorsStep({ projectId, data, patch }: Props) {
             Pull colors from my logo
           </Button>
           {!logoAssetId ? (
-            <span className="text-xs text-zinc-400">Upload a logo first (Logo step).</span>
+            <span className="text-xs text-zinc-500">Upload a logo first (Logo step).</span>
           ) : null}
         </div>
         {extracted.length > 0 ? (
@@ -282,7 +282,7 @@ export function ColorsStep({ projectId, data, patch }: Props) {
                 />
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{c.name}</span>
-                  <span className="block truncate text-zinc-400">
+                  <span className="block truncate text-zinc-500">
                     {c.brand} {c.sku} · {c.finish}
                   </span>
                 </span>
@@ -290,10 +290,10 @@ export function ColorsStep({ projectId, data, patch }: Props) {
             </li>
           ))}
           {results.length === 0 ? (
-            <li className="p-2 text-xs text-zinc-400">No matches — try a color or finish name.</li>
+            <li className="p-2 text-xs text-zinc-500">No matches — try a color or finish name.</li>
           ) : null}
         </ul>
-        <p className="mt-2 text-xs text-zinc-400">
+        <p className="mt-2 text-xs text-zinc-500">
           On-screen swatches are close, not exact — your shop confirms against a physical sample.
         </p>
       </div>
