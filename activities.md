@@ -6,9 +6,111 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-17 — Goal 18 — Generation Polish (gradient direction + logo-on-coherent-vehicle) — CLOSEOUT
+
+**Status:** ✅ Both Goal-17 carryovers addressed. Branch `goal/18-generation-polish` off `origin/main`
+@ `1c43173` (Goal 17). **PR open for Archer** (worktree retained until merge). Environment: local build
+
+- real fal + LOCAL throwaway Postgres `alphawolf_g18` (cloned from `alphawolf_g16`, NEVER prod) + live
+  storage (hard-purged after). **Spend: fal ≈ $1.9 of the $4 ceiling** (journey images $1.47 + real-fal
+  probes ≈ $0.49) + Anthropic ≈ $0.6 of $0.75 (orchestration + evals). Net-zero verified. Diagram:
+  [`docs/vault/diagrams/goal-18-generation-polish.md`](docs/vault/diagrams/goal-18-generation-polish.md).
+  Proof: `docs/deployment/screenshots/2026-06-17-goal-18/`.
+
+**THE ROOT CAUSE (systematic-debugging RIGID, proven on real fal).** The gradient direction was NOT the
+orchestrator. A cheap Anthropic-only probe showed the orchestrator (Haiku AND Sonnet) emits the briefed
+direction correctly in every per-view prompt (hex-anchored, landmarked: "#000000 at the front fascia ...
+into #00AEEF at the rear"). The DIFFUSION IMAGE MODEL ignores directional text and paints the gradient
+start-to-finish as left-to-right in image space. On the driver-side anchor (front on the right), "black to
+cyan" lands black-rear / cyan-front = reversed; the Goal-17 anchor + coherence directive then propagate the
+reversal to every view (coherent but reversed). Four real-fal probe rounds confirmed: anatomical text,
+image-space text, and a guide image on the DRAFT model (nano) all fail; only the EXPORT model
+(flux2_pro_edit) reliably reproduces a conditioning image's left-to-right colour layout. This is exactly
+the Goal-16 lesson (text cannot pin a pixel-level property) applied to direction.
+
+**THE FIX (deterministic, D1).** Orchestrator v4 -> v5 now also emits a STRUCTURED gradient descriptor
+`{ directional, frontHex, rearHex }` (Haiku/Sonnet reason direction correctly; the structured form feeds a
+deterministic post-process). New `apps/web/lib/ai/gradient-guide.ts` builds a per-view directional gradient
+GUIDE image: front colour at the front side, rear colour at the rear side, with per-view image-space
+orientation derived from the template's panel `svgPath` (front/rear panels by name, mean centre-x). The
+FINAL/export stage (`run-pipeline.ts`) conditions flux2_pro_edit on `[structure(@image1),
+approvedDraft(@image2), guide(@image3)]`: the draft governs COLOURS, the guide governs DIRECTION. Proven on
+real fal: a 3-image render with a REVERSED donor + guide produced gloss black at the front / cyan at the rear
+(`goal-18-direction-proof-driver.png`) — the guide flips a reversed draft to the briefed direction. Eval
+asserts the descriptor (front darker than rear) on both models. Non-directional briefs (solid colour, unknown
+orientation, bad hex) build no guide and fall back to Goal-17 conditioning untouched.
+
+**D2 — the logo-on-coherent-vehicle export (CLOSES the #1 Goal-17 carryover).** The full B2C journey ran
+end-to-end on REAL fal (twice, green) and produced an export PDF
+(`goal-18-export-pack-logo-coherence.pdf`) where the Alpha Wolf logo (the transparent `alpha-wolf-logo.svg`,
+composited NEVER AI-rendered) is visibly on both front doors + the hood across four coherent views. The
+Goal-17 caveat "a single export showing the logo ON a coherent vehicle does not yet exist" is now CLOSED.
+HONEST CAVEAT: the locked brief carries a pinstripe-accent extra and the draft model (nano) renders this
+brief as cyan linework on black rather than a smooth gradient, so the integrated export showcases logo +
+coherence rather than a textbook gradient. The front is correctly black (NOT the reversed cyan-front bug).
+The correctly-directed GRADIENT is proven separately by `goal-18-direction-proof-driver.png` (the shipped
+directive on the export model). Carryover: make the draft model reliably produce gradients for gradient
+briefs (a draft-model-interpretation gap, not a direction-fix gap).
+
+**MID-RUN ADDITION (Archer) — orchestrator model off the weakest model.** `ai-config.ts` hardcoded
+`claude-haiku-4-5`; the PRD §10 spec is Sonnet 4.6. The orchestrator model is now configurable via
+`ANTHROPIC_ORCHESTRATOR_MODEL` (allowlist `claude-sonnet-4-6` / `claude-opus-4-8` / `claude-haiku-4-5`,
+fail-fast on anything else, model-tied $/MTok pricing), default `claude-sonnet-4-6`. Docs: `.env.example` +
+`docs/deployment/env-matrix.md`; local `.env.local` set. **Eval before/after (real Anthropic):** Haiku 3/3
+~13s $0.01/brief; Sonnet 3/3 ~30s $0.04/brief; BOTH emit identical correct descriptors (so the direction fix
+is model-independent). FINDING: Sonnet is slower + pricier and was flaky on this dense structured task until
+I added title/summary truncation (it overran the ≤140-char summary) + a per-attempt time budget; the
+structured-output API still rejects `minItems>1`, so "exactly 3" stays a zod+repair contract.
+
+**DECISIONS (no-questions policy).**
+
+1. Gradient direction fixed deterministically (guide image on the export model), NOT by more prompt text
+   (text proven unsteerable on real fal). Guide orientation from panel geometry; donor governs colour, guide
+   governs direction.
+2. Orchestrator default = Sonnet 4.6 per PRD §10 (configurable). RECOMMEND pinning
+   `ANTHROPIC_ORCHESTRATOR_MODEL=claude-haiku-4-5` on the Hobby prod deploy until the function budget is
+   raised: Sonnet's ~30s orchestration is tight against the 60s slice and Haiku is reliable + 3x cheaper for
+   this task. The lever is the new env var.
+3. Opus 4.8 orchestrator pricing corrected to $5/$25 per MTok (was the legacy Claude-3-Opus $15/$75) after
+   the §3 review caught it; verified against the Claude model catalog.
+
+**Reviews (CLAUDE.md §3).** Fresh-context multi-agent review (4 dimensions: correctness, security, generation
+integrity, orchestrator-model) with adversarial verification of each finding. 3 confirmed mediums, all fixed:
+Opus pricing $15/$75 -> $5/$25; the gradient guide directive now makes the donor authoritative for colour so
+a colour-changing iteration is not reverted by stale descriptor hexes; the 50s orchestrator timeout is now a
+per-attempt budget bounded to ~55s so the repair retry fits the 60s slice. Two findings correctly dropped on
+verification (top-view vertical axis is handled by the null fallback; svgPath<->render orientation coupling
+verified sound).
+
+**Verification.** Web unit suite 228 passed / 8 skipped; db 131; typecheck + lint clean. Full customer
+journey green 2x on real fal. Gradient-direction eval green on Sonnet + Haiku. Guide-builder + run-pipeline
+guide-path integration tests green.
+
+**Net-zero (verified).** Prod DB never written (journeys ran on the local `alphawolf_g18` clone). Live
+`project-assets` storage hard-purged for all 3 journey projects (84 objects incl. the `_guide-*.png`
+conditioning images) -> re-check returns 0 per project. Sentry: 1 new event NODE-F (journey-1 orchestration
+401 from a stale shell `ANTHROPIC_API_KEY` overriding `.env.local`; the pipeline failed-loud + refunded as
+designed) triaged + RESOLVED as a local-dev artifact -> 0-new.
+
+**FLAGS FOR ARCHER.**
+
+- 🔴 The `UPSTASH_REDIS` connection token was inadvertently printed into the local CC transcript once (a
+  masking grep matched the commented line). Local transcript only; rotate the Upstash Redis token to be safe.
+- Set `ANTHROPIC_ORCHESTRATOR_MODEL` on Vercel + Render (a deploy-config op, net-zero this goal). Default is
+  already Sonnet 4.6; consider pinning Haiku on Hobby per DECISION 2.
+- Carryover: the draft model (nano) renders gradient briefs as linework, so the integrated export is not a
+  textbook gradient; the direction FIX is proven on the export model. A future polish: steer the draft to
+  produce gradients, or run the final on the guide directly for pure-gradient briefs.
+- Human gates unchanged: final legal copy; dependency-triage goal; domain migration goal; flip
+  `APP_ALLOW_INDEXING`.
+
+**Cleanup pending (Archer, post-merge):** drop `../alphawolf-goal-18` worktree + `alphawolf_g18` local DB;
+confirm `graphify update .`.
+
 ## 2026-06-16 — Cowork verification of Goal 17 (cross-view coherence + punch-list)
 
 Cowork verified Goal 17 (PR #194, OPEN — not yet merged) against ground truth (PR/CI, the export PDF, the logo proof, prod DB + storage).
+
 - **VERIFIED GOOD — coherence is genuinely fixed (the headline):** Cowork viewed `docs/deployment/screenshots/2026-06-17-goal-17/goal-17-export-pack.pdf` p2 — all four views (front, driver side, rear, passenger side) now read as ONE cohesive gloss-black↔cyan gradient in the same colour family. Real before/after vs Goal-16's disagreeing views. Root-cause fix landed where claimed: `services/parse/src/converters.ts` (SVG sanitizer), `apps/web/lib/ai/orchestrator/prompts.ts` (orchestrator v4 shared design signature), `apps/web/lib/actions/generation.ts` (anchor-view conditioning) + tests.
 - **PR #194:** open, mergeable=clean, 8 commits, 83 files (+999/-83). CI green: Node lint+types, Python×2, gitleaks, license guard, Vercel Preview all success; MVP-flow + Supabase Preview skipped (normal). Carries the §3 flag for a second security review of the sanitizer change before merge.
 - **TWO DISCLOSED CAVEATS — both confirmed honest (not hidden):** (1) the committed export PDF predates the logo fix, so **the logo is NOT visible on the car** in it — the logo is proven only separately by `logo-composite-proof.jpg` (the raster now decodes past the sanitizer). A single export showing the logo ON a coherent vehicle does NOT yet exist → CARRYOVER. (2) **Gradient DIRECTION is reversed / model-variable** — brief = black-front→cyan-rear, export renders cyan-front→black-rear. Disclosed in the report; confirmed in the PDF.
@@ -116,9 +218,11 @@ pinning (model-variable); re-render a fresh post-fix export to show the logo on 
 worktree's parse worker must be swapped to the goal-17 fix first); the gated conditioning `--upload`
 re-render; the 2 deferred Low perf items. **ACTION FOR ARCHER: rotate the exposed keys now** (FAL /
 Anthropic / Supabase-service-role / PII_ENCRYPTION_KEY / AUTH) — they were live throughout this run.
+
 ## 2026-06-16 — Cowork verification of Goal 16 + carryover-B → Goal 17
 
 Cowork verified Goal 16 (PR #193, merged) against ground truth (DB, storage, export PDF, CI).
+
 - **VERIFIED GOOD:** PR #193 CI green (5/5) + §3 review + security re-run PASS. Net-zero + the recurring test-data leak FINALLY cleaned — prod dropped to the legit keepers: projects 19→3, users 15→4, project-assets 55→4, vehicle-templates 58 untouched; zero prod writes from the run. Carryover A (door white-box) FIXED (confirmed in the export). Security 13/13 (0 High). Spend ~$0.78.
 - **EXPORT (Cowork viewed the PDF):** branded black+cyan X3; logo assigned to both doors + hood; brand cyan #00AEEF; the gradient intent is correctly captured in the orchestrator prompt. **BUT carryover B is real + customer-visible:** the 4 real-fal views disagree on base colour (front/rear cyan-dominant, driver side black-with-cyan-outlines) — not one cohesive gradient. Root cause: architectural (independent per-view generation). → fixed in Goal 17.
 - 🔴 **SECURITY — secret exposure (recorded for permanence):** the Goal 16 run echoed live secret VALUES (FAL, Anthropic, **Supabase service-role**, **PII_ENCRYPTION_KEY**, AUTH) into the local CC transcript. Only ever in gitignored `.env.local`; gitleaks clean; no repo/external exposure. ACTION: rotate FAL / Anthropic / Supabase-service-role / AUTH; **do NOT casually rotate PII_ENCRYPTION_KEY** (§2 rule — needs a re-encryption migration; local-only exposure = low risk). Archer to rotate AFTER Goal 17. Goal 17 carries a HARD STOP: never echo/print secret values or `.env.local` into the transcript again.

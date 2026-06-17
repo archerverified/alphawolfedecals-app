@@ -98,8 +98,21 @@ export type { ShareConcept, PublicShare, VoteResult } from './repos/share.js';
 export type { ReferralStats, ReferralGrantResult } from './repos/referrals.js';
 export { CREDIT_CONFIG, PLAN_LIMITS } from './credit-config.js';
 export type { PlanName } from './credit-config.js';
-export { AI_CONFIG, AI_MODELS, estimateImageCostUsd } from './ai-config.js';
-export type { AiModelKey, AiModelConfig, AiModelPricing } from './ai-config.js';
+export {
+  AI_CONFIG,
+  AI_MODELS,
+  estimateImageCostUsd,
+  ORCHESTRATOR_MODELS,
+  DEFAULT_ORCHESTRATOR_MODEL,
+  resolveOrchestratorModel,
+} from './ai-config.js';
+export type {
+  AiModelKey,
+  AiModelConfig,
+  AiModelPricing,
+  OrchestratorModelId,
+  ResolvedOrchestratorModel,
+} from './ai-config.js';
 // THE canonical view order (PR #142 numbering decision). Shared so consumers
 // (sheet renderers, AI orchestrator) cannot drift from the panel-number order.
 export { VIEW_ORDER, outlineBbox } from './svg/numbering.js';

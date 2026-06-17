@@ -21,7 +21,7 @@ import 'server-only';
 import Anthropic from '@anthropic-ai/sdk';
 import { z } from 'zod';
 
-import { AI_CONFIG } from '@alphawolf/db';
+import { resolveOrchestratorModel } from '@alphawolf/db';
 
 import {
   buildCompileUserMessage,
@@ -52,12 +52,32 @@ export interface OrchestratorUsage {
   estimatedUsd: number;
 }
 
+/**
+ * Structured directional-gradient descriptor (Goal 18). The image model cannot be
+ * steered on gradient DIRECTION by prose (proven on real fal), so the final-stage
+ * render is pinned with a deterministic gradient guide image built from this. When
+ * `directional` is false the design has no front→rear flow and frontHex===rearHex
+ * (the single base color); the pipeline then skips the guide.
+ */
+// Type alias (NOT an interface) so it stays assignable to Prisma's InputJsonValue
+// when carried inside the run's `directions` JSONB (RunDirectionsJson) — interfaces
+// lack the implicit index signature the JSON input types require.
+export type GradientDescriptor = {
+  directional: boolean;
+  /** Hex of the color at the FRONT of the vehicle (grille/hood end). */
+  frontHex: string;
+  /** Hex of the color at the REAR of the vehicle (tailgate end). */
+  rearHex: string;
+};
+
 export interface ConceptDirection {
   key: DirectionKey;
   /** Customer-facing, ≤40 chars. */
   title: string;
   /** Customer-facing, ≤140 chars. */
   summary: string;
+  /** Structured front→rear gradient flow (Goal 18) for the deterministic guide. */
+  gradient: GradientDescriptor;
   /** One image prompt per requested view. */
   viewPrompts: Record<string, string>;
 }
@@ -110,8 +130,20 @@ function compileResultZod(views: string[]) {
   const direction = z
     .object({
       key: z.enum(DIRECTION_KEYS),
-      title: z.string().min(1).max(40),
-      summary: z.string().min(1).max(140),
+      // Generous caps so a verbose model (Sonnet writes longer than Haiku) passes
+      // validation instead of failing the run; the hard UI limits (40 / 140) are
+      // applied by truncation in compileBrief. A genuinely runaway value still fails.
+      title: z.string().min(1).max(160),
+      summary: z.string().min(1).max(600),
+      // Goal 18: shape-validated here; hex values are normalized/validated at the
+      // guide-builder boundary (a bad hex just skips the guide, never repair-loops).
+      gradient: z
+        .object({
+          directional: z.boolean(),
+          frontHex: z.string(),
+          rearHex: z.string(),
+        })
+        .strict(),
       viewPrompts: viewPromptsZod(views),
     })
     .strict();
@@ -155,11 +187,16 @@ function compileJsonSchema(views: string[]): JsonSchema {
     properties: {
       directions: {
         type: 'array',
+        // NOTE: the structured-output subset still rejects minItems/maxItems > 1
+        // and maxLength (verified real-API, Goal 18), so "exactly 3" + the ≤40/≤140
+        // limits live in zod + the repair retry, not here. Over-long title/summary
+        // are TRUNCATED in compileBrief (not failed) so a verbose model degrades
+        // gracefully instead of erroring the run.
         description: 'Exactly three directions, keys literal, bolder, minimal in that order.',
         items: {
           type: 'object',
           additionalProperties: false,
-          required: ['key', 'title', 'summary', 'viewPrompts'],
+          required: ['key', 'title', 'summary', 'gradient', 'viewPrompts'],
           properties: {
             key: { type: 'string', enum: [...DIRECTION_KEYS] },
             title: {
@@ -169,6 +206,28 @@ function compileJsonSchema(views: string[]): JsonSchema {
             summary: {
               type: 'string',
               description: 'Customer-facing one-liner, 140 characters max.',
+            },
+            gradient: {
+              type: 'object',
+              additionalProperties: false,
+              required: ['directional', 'frontHex', 'rearHex'],
+              properties: {
+                directional: {
+                  type: 'boolean',
+                  description:
+                    'true if the wrap is a directional gradient/fade/ombré along the vehicle.',
+                },
+                frontHex: {
+                  type: 'string',
+                  description:
+                    'Hex (e.g. #000000) of the color at the FRONT of the vehicle. If not directional, the single base color.',
+                },
+                rearHex: {
+                  type: 'string',
+                  description:
+                    'Hex of the color at the REAR of the vehicle. If not directional, the same base color as frontHex.',
+                },
+              },
             },
             viewPrompts: {
               type: 'object',
@@ -218,15 +277,20 @@ function getClient(): Anthropic {
   if (!apiKey?.trim()) {
     throw new OrchestratorError('missing_api_key', 'ANTHROPIC_API_KEY is not set');
   }
-  // Bounded (review fix F4): worst case 2 attempts × (20s + 1 SDK retry)
-  // stays well inside the 60s hobby-plan function ceiling instead of the
-  // SDK's 10-minute default eating the whole slice.
-  return new Anthropic({ apiKey, timeout: 20_000, maxRetries: 1 });
+  // Bounded so the orchestration slice fits the 60s hobby function ceiling.
+  // maxRetries:0 — the SDK's auto-retry would DOUBLE wall time on a slow model;
+  // our own callWithRepair loop is the only retry. The timeout must fit the
+  // SLOWEST allowlisted model (Sonnet/Opus are slower than Haiku) inside 60s.
+  return new Anthropic({ apiKey, timeout: 50_000, maxRetries: 0 });
 }
 
-function estimateOrchestratorUsd(inputTokens: number, outputTokens: number): number {
-  const { inputUsdPerMTok, outputUsdPerMTok } = AI_CONFIG.orchestrator;
-  const usd = (inputTokens * inputUsdPerMTok + outputTokens * outputUsdPerMTok) / 1_000_000;
+function estimateOrchestratorUsd(
+  inputTokens: number,
+  outputTokens: number,
+  pricing: { inputUsdPerMTok: number; outputUsdPerMTok: number },
+): number {
+  const usd =
+    (inputTokens * pricing.inputUsdPerMTok + outputTokens * pricing.outputUsdPerMTok) / 1_000_000;
   return Math.round(usd * 1e6) / 1e6;
 }
 
@@ -261,22 +325,40 @@ async function callWithRepair<T>(opts: {
   label: string;
 }): Promise<{ data: T; usage: OrchestratorUsage }> {
   const client = getClient();
+  // Resolve the orchestrator model + its pricing once (env-driven, allowlisted;
+  // throws on an unknown ANTHROPIC_ORCHESTRATOR_MODEL — fail fast, no fallback).
+  const orchestrator = resolveOrchestratorModel();
   const messages: Anthropic.MessageParam[] = [{ role: 'user', content: opts.userMessage }];
 
   let inputTokens = 0;
   let outputTokens = 0;
   let lastIssues = 'unknown validation failure';
 
+  // Total wall-clock budget for orchestration so a SLOW model (Sonnet/Opus) plus
+  // the repair retry still fits the 60s hobby function slice. The per-attempt
+  // timeout shrinks to whatever budget remains; if a repair would have under
+  // ORCH_MIN_ATTEMPT_MS left, we fail with the last issues instead of starting a
+  // call that the slice would kill mid-flight (stranding the run until the deadline).
+  const ORCH_BUDGET_MS = 55_000;
+  const ORCH_MIN_ATTEMPT_MS = 12_000;
+  const startedAt = Date.now();
+
   for (let attempt = 0; attempt < 2; attempt++) {
-    const response = await client.messages.create({
-      model: AI_CONFIG.orchestrator.model,
-      max_tokens: AI_CONFIG.orchestrator.maxTokens,
-      system: opts.system,
-      // Copy: the request must capture this attempt's turns, not a live
-      // reference that a later repair push would mutate.
-      messages: [...messages],
-      output_config: { format: { type: 'json_schema', schema: opts.jsonSchema } },
-    });
+    const remaining = ORCH_BUDGET_MS - (Date.now() - startedAt);
+    if (attempt === 1 && remaining < ORCH_MIN_ATTEMPT_MS) break; // not enough budget to repair
+    const attemptTimeout = Math.min(50_000, Math.max(ORCH_MIN_ATTEMPT_MS, remaining));
+    const response = await client.messages.create(
+      {
+        model: orchestrator.model,
+        max_tokens: orchestrator.maxTokens,
+        system: opts.system,
+        // Copy: the request must capture this attempt's turns, not a live
+        // reference that a later repair push would mutate.
+        messages: [...messages],
+        output_config: { format: { type: 'json_schema', schema: opts.jsonSchema } },
+      },
+      { timeout: attemptTimeout },
+    );
 
     inputTokens += response.usage?.input_tokens ?? 0;
     outputTokens += response.usage?.output_tokens ?? 0;
@@ -290,7 +372,7 @@ async function callWithRepair<T>(opts: {
         usage: {
           inputTokens,
           outputTokens,
-          estimatedUsd: estimateOrchestratorUsd(inputTokens, outputTokens),
+          estimatedUsd: estimateOrchestratorUsd(inputTokens, outputTokens, orchestrator),
         },
       };
     }
@@ -313,6 +395,11 @@ async function callWithRepair<T>(opts: {
     'invalid_model_output',
     `${opts.label}: model output failed validation after repair retry (${lastIssues})`,
   );
+}
+
+/** Clamp customer-facing copy to its hard UI limit, with an ellipsis if cut. */
+function truncate(s: string, max: number): string {
+  return s.length <= max ? s : `${s.slice(0, max - 1).trimEnd()}…`;
 }
 
 function assertViews(views: string[]): void {
@@ -342,7 +429,15 @@ export async function compileBrief(input: CompileBriefInput): Promise<Orchestrat
   const byKey = new Map(data.directions.map((d) => [d.key, d]));
   const directions: ConceptDirection[] = DIRECTION_KEYS.map((key) => {
     const d = byKey.get(key)!;
-    return { key, title: d.title, summary: d.summary, viewPrompts: d.viewPrompts };
+    return {
+      key,
+      // Hard UI limits enforced by truncation (the schema subset can't, and a
+      // verbose model can overshoot) — ellipsis on the last char so it reads clean.
+      title: truncate(d.title, 40),
+      summary: truncate(d.summary, 140),
+      gradient: d.gradient,
+      viewPrompts: d.viewPrompts,
+    };
   });
 
   return { directions, promptVersion: ORCHESTRATOR_PROMPT_VERSION, usage };

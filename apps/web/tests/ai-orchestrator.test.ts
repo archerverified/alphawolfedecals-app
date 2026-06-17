@@ -6,7 +6,7 @@ import { createHash } from 'node:crypto';
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { AI_CONFIG } from '@alphawolf/db';
+import { AI_CONFIG, DEFAULT_ORCHESTRATOR_MODEL, resolveOrchestratorModel } from '@alphawolf/db';
 
 import type { BriefData } from '../lib/brief/schema';
 
@@ -67,6 +67,7 @@ function validCompilePayload(forViews: string[]) {
       key,
       title: `${key} concept`,
       summary: `A ${key} take on the brief.`,
+      gradient: { directional: true, frontHex: '#000000', rearHex: '#00AEEF' },
       viewPrompts: Object.fromEntries(
         forViews.map((v) => [v, `Wrap design for the ${v} view following body panels, no text.`]),
       ),
@@ -109,8 +110,23 @@ describe('compileBrief', () => {
     expect(result.directions.map((d) => d.key)).toEqual(['literal', 'bolder', 'minimal']);
     expect(Object.keys(result.directions[0]!.viewPrompts).sort()).toEqual([...views].sort());
     expect(result.promptVersion).toBe(ORCHESTRATOR_PROMPT_VERSION);
-    expect(result.promptVersion).toBe('v4');
+    expect(result.promptVersion).toBe('v5');
     expect(createMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('returns the structured gradient descriptor on every direction (Goal 18 v5)', async () => {
+    createMock.mockResolvedValue(modelResponse(validCompilePayload(views)));
+    const result = await compileBrief({ briefData: briefWithLogo, vehicle, views });
+    for (const d of result.directions) {
+      expect(d.gradient).toEqual({ directional: true, frontHex: '#000000', rearHex: '#00AEEF' });
+    }
+    // The schema must REQUIRE gradient so the model always emits it.
+    const params = createMock.mock.calls[0]![0];
+    const dirItem = params.output_config.format.schema.properties.directions.items;
+    expect(dirItem.required).toEqual(expect.arrayContaining(['gradient']));
+    expect(dirItem.properties.gradient.required).toEqual(
+      expect.arrayContaining(['directional', 'frontHex', 'rearHex']),
+    );
   });
 
   it('sends a structured-outputs request with the orchestrator config', async () => {
@@ -118,7 +134,7 @@ describe('compileBrief', () => {
     await compileBrief({ briefData: briefWithLogo, vehicle, views });
 
     const params = createMock.mock.calls[0]![0];
-    expect(params.model).toBe(AI_CONFIG.orchestrator.model);
+    expect(params.model).toBe(resolveOrchestratorModel().model);
     expect(params.max_tokens).toBe(AI_CONFIG.orchestrator.maxTokens);
     expect(params.output_config.format.type).toBe('json_schema');
     const schema = params.output_config.format.schema;
@@ -216,10 +232,8 @@ describe('compileBrief', () => {
     );
     const result = await compileBrief({ briefData: briefWithLogo, vehicle, views });
 
-    const expected =
-      (1234 * AI_CONFIG.orchestrator.inputUsdPerMTok +
-        567 * AI_CONFIG.orchestrator.outputUsdPerMTok) /
-      1_000_000;
+    const { inputUsdPerMTok, outputUsdPerMTok } = resolveOrchestratorModel();
+    const expected = (1234 * inputUsdPerMTok + 567 * outputUsdPerMTok) / 1_000_000;
     expect(result.usage).toEqual({
       inputTokens: 1234,
       outputTokens: 567,
@@ -273,7 +287,7 @@ describe('compileIteration', () => {
     expect(result.affectedViews).toEqual(['front', 'top']);
     expect(result.editPrompt).toContain('matte black');
     expect(result.title).toBe('Matte black hood');
-    expect(result.promptVersion).toBe('v4');
+    expect(result.promptVersion).toBe('v5');
 
     // Request carried the current prompts + instruction; no-text rule in system.
     const params = createMock.mock.calls[0]![0];
@@ -302,6 +316,12 @@ describe('v4 coherence contract (Goal 17)', () => {
     // Each end view renders its own end of the gradient, not a flat colour.
     expect(ORCHESTRATOR_SYSTEM_PROMPT).toMatch(/front end of the gradient|rear end/i);
   });
+
+  it('v5: instructs a structured front/rear gradient descriptor (Goal 18)', () => {
+    expect(ORCHESTRATOR_SYSTEM_PROMPT).toMatch(/structured "gradient" descriptor/i);
+    expect(ORCHESTRATOR_SYSTEM_PROMPT).toMatch(/"frontHex"/);
+    expect(ORCHESTRATOR_SYSTEM_PROMPT).toMatch(/"rearHex"/);
+  });
 });
 
 describe('prompt provenance', () => {
@@ -314,8 +334,54 @@ describe('prompt provenance', () => {
       .update(ITERATION_SYSTEM_PROMPT)
       .digest('hex');
     expect(`${ORCHESTRATOR_PROMPT_VERSION}:${hash}`).toBe(
-      'v4:f3818875acce8caf73ee2762c1b6d9f572c33cb242adcf83993d6e5c57cd88b6',
+      'v5:2704b450101955a9b451e5a49968aa616e48db1fa70daa5f4f16451e0d7d1f2d',
     );
+  });
+});
+
+describe('resolveOrchestratorModel (Goal 18 — configurable, PRD default Sonnet 4.6)', () => {
+  let saved: string | undefined;
+  beforeEach(() => {
+    saved = process.env.ANTHROPIC_ORCHESTRATOR_MODEL;
+  });
+  afterEach(() => {
+    if (saved === undefined) delete process.env.ANTHROPIC_ORCHESTRATOR_MODEL;
+    else process.env.ANTHROPIC_ORCHESTRATOR_MODEL = saved;
+  });
+
+  it('defaults to claude-sonnet-4-6 (PRD §10) when the env var is unset', () => {
+    delete process.env.ANTHROPIC_ORCHESTRATOR_MODEL;
+    const r = resolveOrchestratorModel();
+    expect(r.model).toBe('claude-sonnet-4-6');
+    expect(DEFAULT_ORCHESTRATOR_MODEL).toBe('claude-sonnet-4-6');
+    // Sonnet pricing carried for the ledger.
+    expect(r.inputUsdPerMTok).toBe(3.0);
+    expect(r.outputUsdPerMTok).toBe(15.0);
+  });
+
+  it('honors an explicit allowlisted value with its own pricing', () => {
+    process.env.ANTHROPIC_ORCHESTRATOR_MODEL = 'claude-haiku-4-5';
+    expect(resolveOrchestratorModel()).toMatchObject({
+      model: 'claude-haiku-4-5',
+      inputUsdPerMTok: 1.0,
+      outputUsdPerMTok: 5.0,
+    });
+    process.env.ANTHROPIC_ORCHESTRATOR_MODEL = 'claude-opus-4-8';
+    expect(resolveOrchestratorModel()).toMatchObject({
+      model: 'claude-opus-4-8',
+      inputUsdPerMTok: 5.0, // Opus 4.8 is $5/$25, NOT the legacy Claude-3-Opus $15/$75.
+      outputUsdPerMTok: 25.0,
+    });
+  });
+
+  it('throws a clear error on an unknown model (fail fast, no silent fallback)', () => {
+    process.env.ANTHROPIC_ORCHESTRATOR_MODEL = 'gpt-4o';
+    expect(() => resolveOrchestratorModel()).toThrowError(/not allowed.*claude-sonnet-4-6/s);
+  });
+
+  it('treats a blank value as unset and uses the default', () => {
+    process.env.ANTHROPIC_ORCHESTRATOR_MODEL = '   ';
+    expect(resolveOrchestratorModel().model).toBe('claude-sonnet-4-6');
   });
 });
 

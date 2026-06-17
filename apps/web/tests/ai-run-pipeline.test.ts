@@ -710,6 +710,113 @@ describe('cross-view coherence (Goal 17) — anchor-then-derive + approved-draft
     }
   });
 
+  it('final (Goal 18): a directional-gradient concept adds the gradient GUIDE as a 3rd conditioning image + DIRECTION LOCK', async () => {
+    // Vehicle panels carry real svgPaths so the guide builder can derive the
+    // image-space front→rear axis (driver: front on the RIGHT, rear on the LEFT).
+    const geoVehicle = {
+      id: 'veh-1',
+      year: 2024,
+      make: 'BMW',
+      model: 'X3',
+      bodyType: 'suv',
+      panels: [
+        {
+          id: 'pf',
+          view: 'front',
+          name: 'Hood Front',
+          svgPath: 'M100 100 L900 100 L900 500 L100 500 Z',
+        },
+        {
+          id: 'pd1',
+          view: 'driver',
+          name: 'Rear Quarter',
+          svgPath: 'M706 190 L830 185 L830 345 L706 345 Z',
+        },
+        {
+          id: 'pd2',
+          view: 'driver',
+          name: 'Front Door',
+          svgPath: 'M995 182 L1345 185 L1345 340 L995 340 Z',
+        },
+        {
+          id: 'pd3',
+          view: 'driver',
+          name: 'Nose & Front Bumper',
+          svgPath: 'M1490 195 L1700 215 L1700 350 L1490 340 Z',
+        },
+        {
+          id: 'pb',
+          view: 'back',
+          name: 'Tailgate',
+          svgPath: 'M100 100 L900 100 L900 500 L100 500 Z',
+        },
+      ],
+    };
+    const conceptWithGradient = {
+      ...directionFixture('literal', MV),
+      gradient: { directional: true, frontHex: '#000000', rearHex: '#00AEEF' },
+    };
+    const parentId = seedRun({
+      id: 'parent-1',
+      status: 'complete',
+      kind: 'initial',
+      directions: {
+        promptVersion: 'v5',
+        orchestratorCostUsd: 0.005,
+        directions: [conceptWithGradient],
+      },
+      completedAt: new Date(),
+    });
+    MV.forEach((v, i) =>
+      h.state.images.push({
+        id: `pimg-${i}`,
+        runId: parentId,
+        jobId: `pj-${i}`,
+        conceptKey: 'literal',
+        view: v,
+        storagePath: `generations/proj-1/parent-1/literal-${v}.png`,
+        previewPath: null,
+        width: 1024,
+        height: 768,
+        provider: 'mock',
+        model: 'nano_banana_edit',
+        costUsd: 0,
+        provenance: {},
+        createdAt: new Date(),
+      }),
+    );
+    h.fakeVehicles.getPublishedDetail.mockResolvedValue(geoVehicle);
+    const submitSpy = vi.spyOn(mockProvider, 'submit');
+    const runId = seedRun({
+      id: 'final-1',
+      kind: 'final',
+      parentRunId: parentId,
+      conceptKey: 'literal',
+      model: 'flux2_pro_edit',
+    });
+
+    const snapshot = await advanceUntilTerminal(runId, 20);
+    expect(snapshot.status).toBe('complete');
+
+    const byView = submitsByView(submitSpy);
+    // Driver view: [structure, approved-draft donor, gradient guide] + DIRECTION LOCK.
+    expect(byView.driver!.imageUrls).toEqual([
+      'https://templates.test/views/veh-1/driver.png',
+      'https://signed.test/generations/proj-1/parent-1/literal-driver.png',
+      'https://signed.test/generations/proj-1/final-1/_guide-literal-driver.png',
+    ]);
+    expect(byView.driver!.prompt).toContain('DIRECTION LOCK');
+    expect(byView.driver!.prompt).not.toContain('COHERENCE');
+    // A real guide PNG was built + uploaded for every view under the run prefix.
+    const guideUploads = h.state.uploads.filter((u) => u.key.includes('/_guide-literal-'));
+    expect(guideUploads.map((u) => u.key).sort()).toEqual([
+      'generations/proj-1/final-1/_guide-literal-back.png',
+      'generations/proj-1/final-1/_guide-literal-driver.png',
+      'generations/proj-1/final-1/_guide-literal-front.png',
+    ]);
+    expect(guideUploads.every((u) => u.contentType === 'image/png' && u.bytes > 0)).toBe(true);
+  });
+
   it('a transient signed-URL failure on a derived view never strands the job — a later slice retries to completion', async () => {
     h.fakeVehicles.getPublishedDetail.mockResolvedValue(multiViewVehicle(MV));
     h.compileBriefMock.mockResolvedValue({
