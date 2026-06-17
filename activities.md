@@ -6,6 +6,32 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+
+## 2026-06-17 - Cowork session - Goal 18 VERIFIED and MERGED (PR #195)
+
+**Context:** Cowork orchestration. Verified the Goal 18 report against ground truth (verify, do not trust) before accepting it, then merged.
+
+**VERIFICATION (against live connectors, not the report's word):**
+- PR #195: open, CI fully green on the head (Node lint/typecheck/test, both Python suites, gitleaks, license-guard all pass; Playwright + Supabase preview skipped). Branch was behind main by the docs-only em-dash-ban commit; updated via the GitHub API (no force-push), CI re-ran green, mergeable_state clean.
+- Direction proofs: both PNGs render dark at the front and cyan/purple at the rear, matching the briefed black-front-to-cyan-rear direction. No regression on grey-purple.
+- Export pack PDF: the Alpha Wolf logo is composited on both front doors, the hood, and the windshield, coherent across all four views. The D2 carryover is closed. HONEST GAP confirmed and accepted: the integrated wrap renders as cyan linework, not the smooth ombre the brief demands; the smooth gradient is proven only on the standalone export-model proofs. Logged as a draft-model carryover. Note: the test brief self-contradicts (Extras says "Pinstripe / accents" while Style says "NOT pinstripes").
+- Code (fresh-context /code-review + an independent advisor subagent, both verdict SHIP, no blockers): resolveOrchestratorModel throws on an unknown ANTHROPIC_ORCHESTRATOR_MODEL (fail fast, no silent fallback); Opus 4.8 pricing corrected to 5/25; the final-render cost estimate counts 3 input images so the daily spend cap stays a true upper bound. app_generation_spend_today() confirmed SECURITY DEFINER summing all users, so the cap is genuinely global. No withSystem misuse, requireUser on every server action, SSRF allowlist on image fetch.
+- Net-zero reconciled: project-assets holds 37 objects spread 1 to 4 across 17 deploy-smoke projects (accreted deploy smoke, not a Goal-18 journey leak; a leaked journey would be one project with dozens of objects). Sentry node shows exactly the 1 disclosed local-dev 401 artifact, 0 new prod issues.
+
+**MERGE:** Squash-merged PR #195 to main (merge commit 44eef11), commit title kept em-dash-free per the ban. Branch update plus CI confirmation done first; admin bypass NOT used.
+
+**DECISIONS (Archer, this session):**
+1. Merge now; smooth-ombre-in-journey logged as a draft-model carryover for a future goal.
+2. Orchestrator model: keep the Sonnet 4.6 default on prod (env var left unset). Accepted tradeoff: Sonnet runs ~30s, tight against the 60s Hobby slice. WATCH Sentry/PostHog for orchestration timeouts after the prod deploy; pin Haiku (ANTHROPIC_ORCHESTRATOR_MODEL=claude-haiku-4-5) if it bites.
+3. Showcase: restore the deliverable section with the logo-on-coherent-vehicle export; hold the smooth-gradient headline until the draft-model carryover is fixed.
+
+**OPEN / NEXT:**
+- graphify update against merged main (CC side, where the user-scoped MCP runs).
+- Finalize and queue Goal 19 (prompts/21) with carryovers: draft-model smooth-gradient gap; Sentry node 95-error triage and retire the empty sentry-awd duplicate Sentry org; graphify-in-code-review instruction for CC.
+- Branch cleanup pending Archer's go: goal/18-generation-polish (merged) and goal/17-cross-view-coherence still on the remote; confirm the local worktrees were removed.
+- REDIS_URL rotation (Archer, accepted, handled separately).
+- The GitHub PAT was shared in plaintext again; rotate after this session.
+
 ## 2026-06-17 — Goal 18 — Generation Polish (gradient direction + logo-on-coherent-vehicle) — CLOSEOUT
 
 **Status:** ✅ Both Goal-17 carryovers addressed. Branch `goal/18-generation-polish` off `origin/main`
