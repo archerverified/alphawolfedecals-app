@@ -109,12 +109,13 @@ function round4(n: number): number {
 
 function estimateRunCostUsd(modelKey: AiModelKey, kind: GenerationRunKind, views: number): number {
   const dims = kind === 'final' ? AI_CONFIG.finalImage : AI_CONFIG.draftImage;
-  // Goal 17 cross-view coherence: a FINAL view conditions on its approved-draft
-  // donor → 2 input images, which the metered final model (flux2_pro) bills per
-  // input MP. The pre-orchestration estimate must count both so the daily spend
-  // cap stays a true upper bound (a per-image draft model ignores input count, so
-  // the draft estimate is unchanged). trueUpRunCost replaces this with actuals.
-  const inputImages = kind === 'final' ? 2 : 1;
+  // A FINAL view conditions on up to 3 input images, which the metered final
+  // model (flux2_pro) bills per input MP: the structure render, the approved-draft
+  // donor (Goal 17 coherence), AND the directional gradient guide (Goal 18). The
+  // pre-orchestration estimate counts the worst case so the daily spend cap stays a
+  // true upper bound (a per-image draft model ignores input count, so the draft
+  // estimate is unchanged). trueUpRunCost replaces this with actuals.
+  const inputImages = kind === 'final' ? 3 : 1;
   const perImage = estimateImageCostUsd(
     AI_MODELS[modelKey].pricing,
     dims.width,

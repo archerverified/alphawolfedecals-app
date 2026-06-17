@@ -43,7 +43,8 @@ import {
 
 import { parseBriefData, type BriefData } from '../brief/schema';
 import { captureServerEvent } from '../notifications/posthog-server';
-import { compileBrief, compileIteration } from './orchestrator';
+import { buildGradientGuide, normalizeHex, type GuidePanel } from './gradient-guide';
+import { compileBrief, compileIteration, type GradientDescriptor } from './orchestrator';
 import { getImageProvider } from './provider';
 import { watermarkPreview } from './watermark';
 
@@ -79,6 +80,9 @@ export type RunDirectionsJson = {
     key: string;
     title: string;
     summary: string;
+    /** Goal 18: structured front→rear gradient for the deterministic guide.
+     *  Optional so rows persisted before v5 still parse. */
+    gradient?: GradientDescriptor;
     viewPrompts: Record<string, string>;
   }>;
 };
@@ -106,7 +110,25 @@ export function parseRunDirections(value: unknown): RunDirectionsJson | null {
       if (typeof prompt !== 'string') return null;
       viewPrompts[view] = prompt;
     }
-    directions.push({ key: dir.key, title: dir.title, summary: dir.summary, viewPrompts });
+    // Goal 18: tolerate rows written before v5 (gradient absent) — a malformed
+    // gradient is dropped, never fails the parse (the final then falls back).
+    let gradient: GradientDescriptor | undefined;
+    const g = dir.gradient as Record<string, unknown> | undefined;
+    if (
+      g &&
+      typeof g.directional === 'boolean' &&
+      typeof g.frontHex === 'string' &&
+      typeof g.rearHex === 'string'
+    ) {
+      gradient = { directional: g.directional, frontHex: g.frontHex, rearHex: g.rearHex };
+    }
+    directions.push({
+      key: dir.key,
+      title: dir.title,
+      summary: dir.summary,
+      gradient,
+      viewPrompts,
+    });
   }
   const orchestratorCostUsd =
     typeof v.orchestratorCostUsd === 'number' && Number.isFinite(v.orchestratorCostUsd)
@@ -171,6 +193,40 @@ export function coherenceDirective(kind: GenerationRunKind): string {
     'so every view reads as one cohesive design. Keep THIS view’s vehicle shape, camera angle, panel',
     'layout, and geometry EXACTLY as in the structural render — do NOT copy the reference’s camera angle',
     'or panel layout. Render NO text, letters, numbers, logos, emblems, or badges of any kind.',
+  ].join(' ');
+}
+
+/**
+ * Render-time directive for the FINAL stage when a deterministic gradient GUIDE
+ * image is supplied (Goal 18). The image model ignores directional TEXT (proven
+ * real-fal) but flux2_pro_edit reliably reproduces a conditioning image's
+ * left-to-right colour layout, so the guide PINS the gradient direction the brief
+ * asked for. Two shapes:
+ *  - withApproved=true  → [@image1 structure, @image2 approved design, @image3 guide]:
+ *      take the look from @image2 but the colour PLACEMENT from @image3 (guide wins
+ *      any front/rear disagreement) — preserves the Goal-17 approved-draft fidelity.
+ *  - withApproved=false → [@image1 structure, @image2 guide]: no approved donor, so
+ *      the guide is the design + direction reference directly.
+ */
+export function gradientGuideDirective(withApproved: boolean): string {
+  if (withApproved) {
+    return [
+      'DIRECTION LOCK: reproduce the SECOND image’s EXACT colours, accents, and gloss finish',
+      '(the SECOND image is the authority on WHICH colours to use). The THIRD image is a',
+      'left-to-right ORIENTATION map: it shows which END of the vehicle is the gradient’s dark/start',
+      'end and which is the light/finish end. Orient the wrap’s gradient to match the THIRD image’s',
+      'dark-to-light direction. If the SECOND image’s gradient runs the OPPOSITE direction, flip it',
+      "to match the THIRD image while keeping the SECOND image's actual colours. Use the FIRST image",
+      'only for vehicle shape, panels, camera angle. Keep windows, lights, wheels, and background',
+      'unchanged. Render NO text, letters, numbers, logos, emblems, or badges of any kind.',
+    ].join(' ');
+  }
+  return [
+    'DIRECTION LOCK: the SECOND image is the required left-to-right COLOUR MAP for the wrap;',
+    'paint the body so its colour at each horizontal position matches the second image exactly.',
+    "Use the FIRST image only for the vehicle's shape, panels, camera angle, windows, wheels,",
+    'and background. High-shine gloss finish. Render NO text, letters, numbers, logos, emblems,',
+    'or badges of any kind.',
   ].join(' ');
 }
 
@@ -363,6 +419,9 @@ async function orchestrateSlice(userId: string, run: GenerationRunRow): Promise<
             key: concept.key,
             title: result.title,
             summary: concept.summary,
+            // Carry the concept's gradient descriptor forward (Goal 18): an
+            // iteration edits the look, not the front→rear direction.
+            gradient: concept.gradient,
             // Carry the FULL prompt map forward (affected views updated) so a
             // later iteration/final on this run still covers every view.
             viewPrompts: {
@@ -554,6 +613,35 @@ async function renderSlice(userId: string, run: GenerationRunRow): Promise<void>
     }
     const donorByView =
       run.kind === 'final' ? await resolveApprovedDonors(userId, run) : new Map<string, string>();
+
+    // Cross-view DIRECTION (Goal 18): for a directional-gradient concept, the FINAL
+    // export is conditioned on a deterministic per-view gradient GUIDE image whose
+    // left-to-right colour layout flux2_pro_edit reproduces (the model ignores
+    // directional TEXT — proven real-fal). Orientation comes from the template's
+    // panel geometry. Resolved once per slice; null ⇒ keep the Goal-17 conditioning.
+    let gradientGuide: {
+      frontHex: string;
+      rearHex: string;
+      panelsByView: Map<string, GuidePanel[]>;
+    } | null = null;
+    if (run.kind === 'final') {
+      const dirs = parseRunDirections(run.directions);
+      const concept = dirs?.directions.find((d) => d.key === run.conceptKey) ?? dirs?.directions[0];
+      const g = concept?.gradient;
+      if (g?.directional && normalizeHex(g.frontHex) && normalizeHex(g.rearHex)) {
+        const vehicle = await vehicles.getPublishedDetail(project.vehicleId);
+        if (vehicle) {
+          const byView = new Map<string, GuidePanel[]>();
+          for (const p of vehicle.panels) {
+            const arr = byView.get(p.view) ?? [];
+            arr.push({ name: p.name, view: p.view, svgPath: p.svgPath });
+            byView.set(p.view, arr);
+          }
+          gradientGuide = { frontHex: g.frontHex, rearHex: g.rearHex, panelsByView: byView };
+        }
+      }
+    }
+
     // Shared per-concept seed: every view of a concept renders from one seed
     // (reinforces coherence; deterministic + resubmit-safe like the per-job seed).
     const seedForConcept = (conceptKey: string) => seedFor(`${run.id}:${conceptKey}`);
@@ -607,16 +695,42 @@ async function renderSlice(userId: string, run: GenerationRunRow): Promise<void>
             prompt = `${job.prompt}\n\n${coherenceDirective('initial')}`;
           } else if (run.kind === 'final') {
             const donor = donorByView.get(job.view);
-            if (donor) {
-              imageUrls = [
-                structureUrl,
-                await storage.signedAssetReadUrl(donor, COHERENCE_URL_TTL_S),
-              ];
+            // Build + upload the directional gradient guide for this view (Goal 18).
+            // A null guide (non-directional brief, unknown orientation, bad hex)
+            // falls straight back to the Goal-17 approved-draft conditioning below.
+            let guideUrl: string | null = null;
+            if (gradientGuide) {
+              const guideBytes = await buildGradientGuide({
+                panels: gradientGuide.panelsByView.get(job.view) ?? [],
+                frontHex: gradientGuide.frontHex,
+                rearHex: gradientGuide.rearHex,
+                width: dims.width,
+                height: dims.height,
+              });
+              if (guideBytes) {
+                const guidePath = `generations/${run.projectId}/${run.id}/_guide-${job.conceptKey}-${job.view}.png`;
+                await storage.uploadAssetObject(guidePath, guideBytes, 'image/png');
+                guideUrl = await storage.signedAssetReadUrl(guidePath, COHERENCE_URL_TTL_S);
+              }
+            }
+            const donorUrl = donor
+              ? await storage.signedAssetReadUrl(donor, COHERENCE_URL_TTL_S)
+              : null;
+            if (donorUrl && guideUrl) {
+              // Approved look from @image2, briefed DIRECTION pinned by @image3.
+              imageUrls = [structureUrl, donorUrl, guideUrl];
+              prompt = `${job.prompt}\n\n${gradientGuideDirective(true)}`;
+            } else if (guideUrl) {
+              // No approved donor, but the guide pins design + direction directly.
+              imageUrls = [structureUrl, guideUrl];
+              prompt = `${job.prompt}\n\n${gradientGuideDirective(false)}`;
+            } else if (donorUrl) {
+              imageUrls = [structureUrl, donorUrl];
               prompt = `${job.prompt}\n\n${coherenceDirective('final')}`;
             } else {
-              // No approved-draft donor: graceful structure-only fallback — but a
-              // final view re-rolling independently is the Goal-16 divergence risk,
-              // so flag it (emitted by the claim winner below) for observability.
+              // No approved-draft donor AND no guide: graceful structure-only
+              // fallback — a final view re-rolling independently is the Goal-16
+              // divergence risk, so flag it (emitted by the claim winner) for obs.
               finalDonorMissing = true;
             }
           }

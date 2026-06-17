@@ -106,17 +106,18 @@ export const AI_CONFIG = {
     final: 'flux2_pro_edit' as AiModelKey,
     upscale: 'recraft_crisp_upscale' as AiModelKey,
   },
-  // Haiku 4.5 orchestrator (PRD §10): brief → per-view generation instructions.
+  // Orchestrator (brief → per-view generation instructions). The MODEL and its
+  // $/MTok pricing are resolved at runtime by resolveOrchestratorModel() from
+  // ANTHROPIC_ORCHESTRATOR_MODEL (default claude-sonnet-4-6, the PRD §10 spec),
+  // so they live there, not here — ONE source of truth.
   orchestrator: {
-    model: 'claude-haiku-4-5',
-    // $/MTok, for the spend ledger + cost tracking (verified 2026-06-12).
-    inputUsdPerMTok: 1.0,
-    outputUsdPerMTok: 5.0,
     // OUTPUT ceiling (a cap, not a spend): a 5-view brief is ~1.8-2.5K output
     // tokens (3 directions × 5 prompts; measured 737 for 2 views), and a
     // max_tokens truncation mid-JSON fails the run permanently after the one
-    // repair retry — so keep generous headroom. Haiku 4.5 allows up to 64K.
-    maxTokens: 8192,
+    // repair retry. Sonnet 4.6 writes richer per-view prose than Haiku and
+    // intermittently overran 8192 (truncated the 3rd direction → "must contain 3"),
+    // so the ceiling is 16384 for headroom. All allowlisted models allow ≥64K.
+    maxTokens: 16384,
   },
   // Draft render geometry. ~1 MP keeps per-MP models at their floor price.
   draftImage: { width: 1024, height: 768 },
@@ -139,6 +140,60 @@ export const AI_CONFIG = {
     maxTotalUsd: 2.5,
   },
 } as const;
+
+// ---------------------------------------------------------------------------
+// Orchestrator MODEL selection (PRD §10 spec: Claude Sonnet 4.6). Configurable
+// via ANTHROPIC_ORCHESTRATOR_MODEL, validated against an explicit allowlist —
+// fail fast on anything else, NEVER silently fall back. The orchestrator is text
+// only (cents/run; fal dominates run cost), so a stronger model is negligible
+// spend. Each entry carries the model's $/MTok pricing so the spend ledger and
+// the daily cap stay accurate regardless of which model is selected.
+// ---------------------------------------------------------------------------
+// $/MTok input+output, verified against the Claude model catalog 2026-06-16.
+export const ORCHESTRATOR_MODELS = {
+  'claude-sonnet-4-6': { inputUsdPerMTok: 3.0, outputUsdPerMTok: 15.0 },
+  'claude-opus-4-8': { inputUsdPerMTok: 5.0, outputUsdPerMTok: 25.0 },
+  'claude-haiku-4-5': { inputUsdPerMTok: 1.0, outputUsdPerMTok: 5.0 },
+} as const;
+
+export type OrchestratorModelId = keyof typeof ORCHESTRATOR_MODELS;
+
+/** PRD §10 default — claude-sonnet-4-6 (NOT Haiku; the code had drifted off spec). */
+export const DEFAULT_ORCHESTRATOR_MODEL: OrchestratorModelId = 'claude-sonnet-4-6';
+
+export interface ResolvedOrchestratorModel {
+  model: OrchestratorModelId;
+  inputUsdPerMTok: number;
+  outputUsdPerMTok: number;
+  maxTokens: number;
+}
+
+/**
+ * Resolve the orchestrator model + its pricing from ANTHROPIC_ORCHESTRATOR_MODEL.
+ * Unset → the PRD default (Sonnet 4.6). Any value outside the allowlist throws a
+ * clear error (fail fast, no silent fallback) — a typo must surface loudly, not
+ * silently downgrade the orchestrator. Resolved at USE time so a bad env fails the
+ * generation run with a clear message, not every import of this widely-used module.
+ */
+export function resolveOrchestratorModel(): ResolvedOrchestratorModel {
+  const raw = process.env.ANTHROPIC_ORCHESTRATOR_MODEL?.trim();
+  const model = raw && raw.length > 0 ? raw : DEFAULT_ORCHESTRATOR_MODEL;
+  const pricing = (
+    ORCHESTRATOR_MODELS as Record<string, { inputUsdPerMTok: number; outputUsdPerMTok: number }>
+  )[model];
+  if (!pricing) {
+    throw new Error(
+      `[ai-config] ANTHROPIC_ORCHESTRATOR_MODEL="${model}" is not allowed. ` +
+        `Use one of: ${Object.keys(ORCHESTRATOR_MODELS).join(', ')}.`,
+    );
+  }
+  return {
+    model: model as OrchestratorModelId,
+    inputUsdPerMTok: pricing.inputUsdPerMTok,
+    outputUsdPerMTok: pricing.outputUsdPerMTok,
+    maxTokens: AI_CONFIG.orchestrator.maxTokens,
+  };
+}
 
 /**
  * Estimated USD cost of one output at the given pixel dimensions.

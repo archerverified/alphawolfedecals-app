@@ -310,11 +310,12 @@ describe('startFinalAction', () => {
         kind: 'final',
         creditCost: 0,
         model: AI_CONFIG.defaults.final,
-        // Goal 17: every final view conditions on the approved-draft donor → 2 input
-        // images. flux2_pro_metered at 1600×1200 (2MP) + 2 inputs: 0.03 + 0.015×(2-1+2)
-        // = 0.075 × 2 views = 0.15. The pre-estimate must count both so the daily
-        // spend cap stays a true upper bound (it under-counted at 1 input).
-        estimatedCostUsd: 0.15,
+        // Goal 18: every final view conditions on up to 3 input images — the
+        // structure render, the Goal-17 approved-draft donor, AND the directional
+        // gradient guide. flux2_pro_metered at 1600×1200 (2MP) + 3 inputs:
+        // 0.03 + 0.015×(2-1+3) = 0.09 × 2 views = 0.18. The pre-estimate counts the
+        // worst case so the daily spend cap stays a true upper bound.
+        estimatedCostUsd: 0.18,
       }),
     );
     expect(h.captureMock).toHaveBeenCalledWith(

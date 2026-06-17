@@ -24,13 +24,21 @@ import { MATERIAL_TIERS } from '@/lib/brief/schema';
 //     must render in the SAME visual style and level of photographic realism —
 //     never mix a photoreal render with a flat/cel-shaded one across views.
 // v4 (Goal 17): the SUPPORTING half of the cross-view coherence fix (the primary
-//   half is architectural — derived views are now conditioned on a shared anchor
+//   half is architectural, derived views are now conditioned on a shared anchor
 //   render in run-pipeline.ts). The prompt layer pins ONE design signature that
 //   every view restates verbatim, and maps a directional gradient to a single
 //   front→rear flow so each view renders its correct end of the gradient instead
 //   of drifting to a flat or reversed color. Bump THIS version + the hash-pin test
 //   whenever the prompt text below changes.
-export const ORCHESTRATOR_PROMPT_VERSION = 'v4';
+// v5 (Goal 18): the gradient DIRECTION was still model-variable. Goal-18 proved
+//   (real-fal) that the image model ignores BOTH anatomical and image-space
+//   direction TEXT and paints the gradient by its own prior, so prose alone can
+//   never pin it. The fix is a deterministic gradient GUIDE image composited into
+//   the FINAL render conditioning (run-pipeline.ts). For that, each direction now
+//   ALSO emits a STRUCTURED `gradient` descriptor ({ directional, frontHex,
+//   rearHex }, front = the vehicle's front end) so the pipeline can build the
+//   guide deterministically. The prose direction stays for the draft preview.
+export const ORCHESTRATOR_PROMPT_VERSION = 'v5';
 
 // ---------------------------------------------------------------------------
 // Inputs (shared with index.ts — defined here because they are exactly what
@@ -99,6 +107,11 @@ Every concept must read at a glance as a vehicle FULLY WRAPPED in the base color
 
 Before writing any view prompt, fix the direction's DESIGN SIGNATURE in a single sentence: its base color, its accent colors, and its finish — plus, when the design is directional (a gradient, fade, ombré, or color-to-color flow), the direction of that flow. Then RESTATE that same signature, in the same concrete words and hex codes, inside EVERY view prompt. All views of a direction must describe ONE identical design, never three independent interpretations: the renderer derives the other views from a shared reference render, so any drift between prompts shows up as views that disagree on base color or finish.
 
+For EVERY direction you ALSO output a structured "gradient" descriptor that captures this directional flow as data (a deterministic post-process uses it to pin the rendered direction, since the renderer cannot be trusted to read direction from prose):
+- If the design is a directional gradient, fade, ombré, or any color-to-color flow along the vehicle: set "directional": true, "frontHex": the exact hex of the color at the FRONT of the vehicle (grille/hood/front bumper), and "rearHex": the exact hex of the color at the REAR (tailgate/rear bumper). These MUST match the front→rear flow you describe in the prose prompts.
+- If the design is NOT directional (a single solid base color, or non-directional graphics): set "directional": false and repeat the single base color hex in both "frontHex" and "rearHex".
+- Use the brief's exact hex codes. Never invent a color for this descriptor that is not in the design.
+
 GRADIENT / DIRECTIONAL designs — map the ONE flow onto each view (this is what keeps the views coherent):
 - Default direction: the FRONT of the vehicle is one gradient endpoint and the REAR is the other (e.g. gloss black at the front flowing to bright cyan at the rear). State the exact gradient endpoints (hex codes) and the front→rear direction in EVERY view prompt.
 - "front": render the FRONT END of the gradient (its start color) across the hood and front fascia.
@@ -136,7 +149,7 @@ Keep the design CONTINUOUS across views: same palette, same motif, same finish s
 
 # Output
 
-Return ONLY JSON matching the provided schema: { "directions": [ { "key", "title", "summary", "viewPrompts" } ] } with keys exactly "literal", "bolder", "minimal" in that order, and viewPrompts containing exactly the requested views.`;
+Return ONLY JSON matching the provided schema: { "directions": [ { "key", "title", "summary", "gradient", "viewPrompts" } ] } with keys exactly "literal", "bolder", "minimal" in that order, gradient = { "directional", "frontHex", "rearHex" }, and viewPrompts containing exactly the requested views.`;
 
 // ---------------------------------------------------------------------------
 // System prompt — iteration parsing
