@@ -153,7 +153,8 @@ argon2`, `svgo`, `bullmq`/`ioredis`/`replicate`, `@sentry/profiling-node`) still
 - /docs/adr/0013-deploy-infrastructure-contract.md (Invariant 2 + Invariant 3b — the
   webpack `extensionAlias` + server externals this bridge keeps active)
 - /docs/adr/0014-mvp-locked-invariants-and-review-protocol.md (§9 CSP — unchanged on 16)
-- /apps/web/next.config.ts (the `webpack()` function `--webpack` keeps in force)
+- /apps/web/next.config.mjs (the `webpack()` function `--webpack` keeps in force; authored
+  as `.mjs` to avoid the Next 16 `.ts`-config CJS-in-ESM loader crash)
 - /apps/web/package.json (`build`/`dev` scripts pinned to `--webpack`)
 - PR #200 (next 16 + the `--webpack` bridge); Dependabot #181
 - https://nextjs.org/docs/app/guides/upgrading/version-16 (Turbopack-default + `--webpack`)
