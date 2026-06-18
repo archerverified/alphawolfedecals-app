@@ -8,6 +8,71 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 
 
+## 2026-06-17 - Goal 19 Dependency Triage - CLOSEOUT (11/12 PRs landed, Prisma 7 held, sharp prod incident fixed)
+
+**Status:** DONE. The 12 open Dependabot PRs triaged + cleared: **11 landed** across 5 consolidated PRs (#196-#200), **1 held** (Prisma 7 #180) with a documented plan, **+1 hotfix** (#201). Diagram: [`docs/vault/diagrams/goal-19-dependency-triage.md`](docs/vault/diagrams/goal-19-dependency-triage.md). Net-zero on prod data (deps + config + docs only); no locked invariant silently changed; no secret values emitted. Dependency launch-gate **cleared** for 11/12.
+
+**What landed:**
+- **Tier A (#196, merged):** #112 commitlint-config 19->21, #113 lint-staged 15->17, #176 checkout 4->6, #177 gitleaks-action 2->3 (secret-scan VERIFIED still running: "individual user, no license; 1 commit scanned; no leaks"), #187 minor-and-patch x9. Batched (strict-up-to-date branch protection). Superseded the 5 Dependabot PRs.
+- **Tier B (#197 + #198, merged):** #197 = eslint 9->10 (added @eslint/js@^10 + fixed 5 real new-rule findings: no-useless-assignment x4, preserve-caught-error x1) + @types/node 22->25 + @vercel/analytics 1->2. #198 = vitest 2->4 + vite 7 (**SECURITY: clears the CRITICAL vitest UI-server RCE advisory + vite/esbuild**; the as-opened #184 cleared NOTHING -- it bumped only coverage-v8 and left vitest@2 pinned). Migrated packages/db vitest.workspace.ts -> vitest.config.ts test.projects; re-baselined canvas coverage to vitest-4's AST measurement (follow-up: add bbox.ts/path-parse.ts tests).
+- **Tier C:** #108 resend 4->6 (#199, merged; no code change; **real OTP delivery verified on the v6 SDK -> Resend status=delivered**; domain 1stimpression.co verified). #181 next 15->16 (#200, merged) -- see below. #180 prisma 5->7 **HELD** ([`docs/deps/prisma-7-upgrade-plan.md`](docs/deps/prisma-7-upgrade-plan.md)).
+
+**Next 16 (#200) -- two blockers, both fixed, ADR-0015 written:**
+1. Turbopack-default hard-fails on the load-bearing webpack config -> `next build --webpack` bridge (preserves ADR-0013 Inv2 extensionAlias + Inv3b externals verbatim).
+2. Next 16 config-loader crashes on a `.ts` config (compiles to CJS, evals as ESM: "exports is not defined") -> `next.config.ts` -> `next.config.mjs` (+ eslint Node-globals block for the .mjs). Reproduced locally + fixed; local + Vercel preview builds green. **ADR-0015** amends ADR-0013. §3 review APPROVE + **advisor() MERGE** (deploy-config change). Clears **9 Next.js GHSAs (7 High)**. Prod-verified: Edge middleware intact (CSP/HSTS/X-Frame/CSRF/rate-limiter all fire), homepage + routes 200.
+
+**SHARP PROD INCIDENT (caused this session, fixed this session):** Tier A's #187 bumped `sharp` 0.34.5 -> 0.35.1. On the Vercel linux-x64 lambda, sharp 0.35.1 fails to load (`Could not load the "sharp" module using the linux-x64 runtime` -- Sentry NODE-E, first-seen at the Tier A deploy), 500-ing every sharp-dependent server route (/vehicles, /signup, /signin, /find-a-shop) for ~1h. The lockfile carried BOTH 0.34.5 + 0.35.1 sharp with mismatched libvips (1.2.4 vs 1.3.0). **Hotfix #201 reverts sharp to 0.34.5** (lockfile now sharp-0.34.5-only). Prod re-verified: all routes 200/307, Sentry sharp error STOPPED (no new events post-fix). Root cause: the homepage (200, no sharp) masked it, and my post-Tier-A Sentry check was too early (before requests hit the sharp path) + the MVP smoke is broken (smoke-golden-path-stale). **Lesson: a green build + homepage-200 is not a green runtime for native externals; check Sentry AFTER real traffic, or repair the smoke.**
+
+**DECISIONS:**
+1. **Batched Tier A + the Tier B clean subset** (vs per-PR) because strict-up-to-date branch protection turns N sequential Dependabot merges into a lockfile-conflict cascade; "merge in a batch" is the Tier A instruction. Each batch: full local verify + fresh-context §3 review before merge.
+2. **#184 completed, not merged as-opened** (security correctness -- as-opened it cleared no advisory). vitest core ^4 across all 9 manifests + vite ^7 override + direct devDep (pnpm's auto-install-peers kept the stale out-of-range vite@5).
+3. **#181 next 16 ATTEMPTED + merged** (7 High CVEs; both blockers had clean, invariant-preserving fixes) rather than pre-held. The advisor's post-merge prod checklist substituted for the broken MVP smoke.
+4. **#180 prisma 7 HELD** -- a Rust-free driver-adapter rewrite of the ADR-0014 DB split + retiring ADR-0013 Inv3c (binaryTargets); not a security fix (no advisory on 5.22). Out of proportion to a dependency-triage goal; documented plan + scheduled as its own goal.
+5. **advisor() second opinion = an independent fresh-context review subagent** (no literal advisor tool in this session), per the Goal 7 precedent.
+
+**Security outcome:** CRITICAL vitest + vite/esbuild advisories cleared (#198); 9 Next GHSAs incl 7 High cleared (#200). **Residuals (dev-only, NOT in the prod bundle):** `ws` + `form-data` are sole-pathed through `jsdom@25` (a test devDep); no open PR bumps jsdom. Documented, not actioned (no prod/launch exposure). Recipe when wanted: pnpm `overrides` `"ws": ">=8.21.0"`, `"form-data": ">=4.0.6"` (both in-range for jsdom@25). `js-yaml` clears via the lockfile refresh.
+
+**Follow-ups for Archer:** (1) sharp 0.35 lambda packaging (@img/sharp-libvips-linux-x64@1.3.0 nft tracing) if a sharp bump is wanted later; (2) repair the MVP smoke (smoke-golden-path-stale) -- it would have caught the sharp 500s; (3) Prisma 7 migration goal; (4) canvas coverage tests (bbox.ts/path-parse.ts); (5) ws/form-data dev-only overrides if desired; (6) Sentry NODE-E/NODE-9 will auto-resolve (fixed by #201). Remaining HUMAN launch gates (unchanged by this goal): legal copy, domain migration, indexing flip.
+
+## 2026-06-17 - Goal 19 Dependency Triage - D1 audit + security rank (triage table)
+
+**Context:** Goal 19 (`prompts/21-goal-19-dependency-triage.md`), executor Claude Code, worktree `goal/19-dependency-triage` off `origin/main@f1951a9` (Goal 17 #194/#195 + Goal 18 merged). Audit-first per CLAUDE.md s1/s8. The 12 open Dependabot PRs confirmed live (`gh pr list --author app/dependabot`). Branch protection on main is `strict_up_to_date=true`; required checks = Node, Python(ai), Python(paneling), Vercel Preview Comments (the Vercel build itself + gitleaks are NOT required, but honored anyway); review count 0 + CODEOWNERS soft-gate, so the agent merges after its own s3 review.
+
+**SECURITY BASELINE (pnpm audit vs lockfile):** 12 vulns (2 critical / 4 high / 6 moderate). EVERY advisory is dev/CI/test-toolchain only - NONE reachable from the deployed prod runtime (so none is a launch blocker), but the currency matters.
+- `vitest <3.2.6` CRITICAL (UI-server arbitrary file read/exec) - current 2.1.9 is vulnerable -> the vitest 2->4 bump is a SECURITY FIX.
+- `vite` (high+2 mod), `esbuild` (mod) - transitive via the vitest toolchain; clear only when vitest CORE goes to 4 (vite 6.4.3+/esbuild 0.25+).
+- `next 15.5.18` - the next-16 bump clears 9 GHSAs (7 High) per PR #181 body -> next 16 is ALSO a security fix.
+- `ws` (high) + `form-data` (high) - sole-pathed through `jsdom@25` (direct apps/web devDep); NO open PR bumps jsdom -> RESIDUAL, dev-only. Clearable via pnpm `overrides` (both fix versions in-range for jsdom).
+- `js-yaml` (mod) - in-range 4.2.0; clears on any lockfile refresh (#182/#112).
+
+**CRITICAL CATCH (security-xref agent):** PR #184 as-opened bumps ONLY `@vitest/coverage-v8` 2->4 and leaves `vitest@2.1.9`/`vite@5.4.21`/`esbuild@0.21.5` PINNED in its lockfile. coverage-v8 4 peers on vitest 4, so the PR is internally inconsistent and as-merged would clear NONE of the 5 vitest/vite/esbuild advisories. It MUST be completed: bump vitest CORE to ^4 across all 9 manifests + regen lockfile (matches the prompt's "bump together" warning).
+
+**TRIAGE TABLE (D1 deliverable):**
+
+| Tier | PR | Bump | CI (stale base) | Security | Disposition |
+|---|---|---|---|---|---|
+| A | #112 | @commitlint/config-conventional 19->21 (dev) | green | low (js-yaml refresh) | merge |
+| A | #113 | lint-staged 15->17 (dev) | green | none | merge |
+| A | #176 | actions/checkout 4->6 (CI; only gitleaks.yml/smoke.yml still on v4) | green | low (CI hygiene) | merge |
+| A | #177 | gitleaks/gitleaks-action 2->3 (CI, secret guard) | green (ran v3 on itself) | low | merge + confirm scanner still runs post-merge |
+| A | #187 | minor-and-patch x9 (sharp 0.34.5->0.35.1 SYNCED across apps/web+packages/db, @sentry 10.57->10.58, supabase, anthropic-sdk, posthog, playwright 1.49->1.61) | green | none (no listed adv) | merge (sharp = ADR-0013 Inv3b external, verified consistent) |
+| B | #183 | @types/node 22->25 (dev, 8 manifests) | green (no type errors) | none | merge-clean (skipLibCheck=true neutralizes; runtime stays Node 22, engines unchanged) |
+| B | #179 | @vercel/analytics 1->2 (apps/web) | green | none | merge-clean (single propless `<Analytics/>` from `/react`, unchanged; target 2.0.1 not 2.0.0) |
+| B | #184 | @vitest/coverage-v8 2->4 (+ vitest CORE 2->4) | green-but-INCONSISTENT | HIGH (clears critical) | merge-AFTER-FIX: complete vitest core ^4 in 9 manifests + 2 coverage; migrate packages/db `vitest.workspace.ts`->`vitest.config.ts` `test.projects`; re-baseline coverage thresholds; full suite run (v4 spy/mock + AST-coverage). No ADR. |
+| B | #182 | eslint 9->10 (root+apps/web dev) | RED (Node) | low (js-yaml) | merge-AFTER-FIX: add `@eslint/js@^10` devDep (eslint 10 dropped it from its deps -> the flat-config bare import throws ERR_MODULE_NOT_FOUND = the exact failure). Keep typescript-eslint ^8.61 (already eslint-10 compatible). No ADR. |
+| C | #108 | resend 4->6 (packages/auth, 2 majors) | GREEN incl Vercel | none | merge-after-VERIFY: no code change (html+text-only sends, no react opt, no inline-CID, `{data,error}` shape unchanged); do ONE real OTP delivery check (RESEND_FROM_EMAIL=wraps@1stimpression.co) before/after merge. Lowest-risk Tier C. |
+| C | #181 | next 15.5->16.2 (apps/web + packages/auth peer) | RED (Vercel build) | HIGH (9 GHSA, 7 High) | ATTEMPT merge-after-fix: Vercel fail = Turbopack-default build hard-fails on the load-bearing webpack config; fix = `next build --webpack` bridge (preserves ADR-0013 Inv2 extensionAlias + Inv3b externals verbatim) + bump packages/auth `next` peer to allow ^16 + ADR-0013 amendment (Inv2 already anticipates this) + Vercel preview deploy verify + smoke + advisor() review. HOLD-with-plan if preview reveals deeper breakage. React 19 already in place; async-request-APIs already migrated. |
+| C | #180 | @prisma/client 5->7 (+ prisma CLI; packages/db + apps/web hoist) | RED (Node+Vercel) | none | HOLD-WITH-PLAN. Prisma 7 = Rust-free driver-adapter rewrite of the ADR-0014 two-connection client (PrismaPg), REQUIRED generator `output`, binaryTargets RETIRED (ADR-0013 Inv3c moot), prisma.config.ts; Prisma 6 flips encrypted-PII Bytes Buffer->Uint8Array (breaks crypto.ts/users.ts typecheck = Node fail). Touches BOTH ADRs + DB split + RLS + Render+Vercel deploy. Not a security fix. Too large/risky to land safely in this goal; documented upgrade plan at closeout. |
+
+**DECISIONS (no-questions policy):**
+1. **Tier A merges individually via `@dependabot rebase` + sequential merge** (strict-up-to-date forces re-rebase + lockfile regen per merge; keeps Dependabot attribution). gitleaks (#177) special-cased: confirm the scanner still executes on a subsequent PR after it lands.
+2. **#184 completed, not merged as-opened** (security correctness: as-opened it clears no advisory). vitest core ^4 across all 9 manifests.
+3. **#181 next 16 ATTEMPTED** (not pre-held) because it clears 7 High CVEs and the fix is a one-line `--webpack` bridge + ADR amendment; React 19 + async-APIs already done. Held-with-plan only if the preview deploy reveals deeper breakage.
+4. **#180 prisma 7 HELD-WITH-PLAN** - the only genuine hold: a driver-adapter rewrite of the locked DB split is out of proportion to a dependency-triage goal and not a security fix.
+5. **2 residual highs (ws, form-data via jsdom)** - dev-only; will clear via pnpm `overrides` as a small security-hardening commit (both fix versions in-range for jsdom), or document as residual if it risks the test env.
+
+Research evidence (8-agent workflow, official migration guides + repo-specific impact + security cross-ref): full structured output retained this session. Proceeding to D2 (Tier A).
+
 ## 2026-06-17 - Cowork session - branch cleanup + Goal 19 finalized
 
 - Deleted merged remote feature branches `goal/17-cross-view-coherence` and `goal/18-generation-polish` (PRs #194/#195 merged; squash-merge leaves them diverged, so safe to delete). Confirmed 404. Many older merged branches remain (goal/7-*, feat/*, plus the 12 dependabot/* that Goal 19 will triage); left for a future sweep.
