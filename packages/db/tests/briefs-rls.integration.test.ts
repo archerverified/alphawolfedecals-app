@@ -123,7 +123,7 @@ describe('design briefs RLS — project-anchored ownership + append-only snapsho
   });
 
   test('brief cannot be re-pointed at a foreign project (WITH CHECK)', async () => {
-    let blocked = false;
+    let blocked: boolean;
     try {
       const res = await withUser(aId, (db) =>
         db.designBrief.updateMany({
