@@ -61,6 +61,7 @@ export async function loadLedger(store: LedgerStore): Promise<BakeoffLedger> {
     if (isNotFoundError(err)) return { totalImages: 0, totalUsd: 0, calls: [] };
     throw new Error(
       `bake-off ledger unreadable — refusing to run (fail closed): ${err instanceof Error ? err.message : 'unknown'}`,
+      { cause: err },
     );
   }
   const ledger = JSON.parse(buf.toString('utf8')) as BakeoffLedger;
@@ -84,11 +85,17 @@ export function checkCaps(ledger: BakeoffLedger, plannedCostsUsd: number[]): Cap
     return { allowed: false, reason: `max ${caps.maxImagesPerInvocation} images per invocation` };
   }
   if (ledger.totalImages + plannedCostsUsd.length > caps.maxTotalImages) {
-    return { allowed: false, reason: `cumulative image cap (${caps.maxTotalImages}) would be exceeded` };
+    return {
+      allowed: false,
+      reason: `cumulative image cap (${caps.maxTotalImages}) would be exceeded`,
+    };
   }
   const projected = ledger.totalUsd + plannedCostsUsd.reduce((a, b) => a + b, 0);
   if (projected > caps.maxTotalUsd) {
-    return { allowed: false, reason: `cumulative USD cap ($${caps.maxTotalUsd}) would be exceeded` };
+    return {
+      allowed: false,
+      reason: `cumulative USD cap ($${caps.maxTotalUsd}) would be exceeded`,
+    };
   }
   return { allowed: true };
 }

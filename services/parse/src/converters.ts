@@ -116,7 +116,7 @@ export async function rasterToPng(input: Buffer, opts: { rembg: boolean }): Prom
   // still opaque; a post-rembg PNG is not. sharp's stats().isOpaque is a full
   // pixel scan — runs on every raster upload (incl. large vehicle photos), an
   // accepted cost for a single decode-speed pass.
-  let opaque: boolean | null = null;
+  let opaque: boolean | null;
   try {
     const stats = await sharp(png).stats();
     opaque = stats.isOpaque;
@@ -124,7 +124,7 @@ export async function rasterToPng(input: Buffer, opts: { rembg: boolean }): Prom
     opaque = null;
   }
 
-  let contentBbox: RasterResult['metadata']['contentBbox'] = null;
+  let contentBbox: RasterResult['metadata']['contentBbox'];
   try {
     const { info } = await sharp(png).trim({ threshold: 10 }).toBuffer({ resolveWithObject: true });
     const offLeft = (info as { trimOffsetLeft?: number }).trimOffsetLeft ?? 0;

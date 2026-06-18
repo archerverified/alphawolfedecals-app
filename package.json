@@ -5,7 +5,7 @@
   "description": "Alpha Wolf Wrap Studio monorepo",
   "packageManager": "pnpm@9.12.3",
   "engines": {
-    "node": ">=22.0.0",
+    "node": ">=22.13.0",
     "pnpm": ">=9.0.0"
   },
   "pnpm": {
@@ -32,9 +32,10 @@
     "@alphawolf/db": "workspace:*",
     "@commitlint/cli": "^19.5.0",
     "@commitlint/config-conventional": "^21.0.2",
-    "@types/node": "^22.9.0",
+    "@eslint/js": "^10.0.0",
+    "@types/node": "^25.9.3",
     "dotenv-cli": "^11.0.0",
-    "eslint": "^9.15.0",
+    "eslint": "^10.5.0",
     "husky": "^9.1.7",
     "lint-staged": "^17.0.7",
     "prettier": "^3.8.4",
