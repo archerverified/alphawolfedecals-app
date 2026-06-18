@@ -1,19 +1,21 @@
 # PRD: Alpha Wolf Wrap Studio
 
+> **Truth-up note (2026-06-17, v1.2).** This revision aligns the PRD with what is actually shipped and the decisions logged in `activities.md`. Key reconciliations: the live product is B2C-first (the guided design flow in `prd-b2c-guided-design-flow.md`); the customer deliverable is a portable export pack, and in-platform print paneling / RIP is deferred to post-launch v2 (Goal 8 deferred); image generation runs on fal.ai (nano-banana-edit draft, flux2_pro_edit export final) with a Claude Sonnet 4.6 orchestrator configurable via `ANTHROPIC_ORCHESTRATOR_MODEL`; the brand is cyan #00AEEF on zinc-neutral and black (the red/lime direction in the old section 5.4 is retired). See `activities.md` for the full per-goal decision history.
+
 ## 1. Product overview
 
 ### 1.1 Document title and version
 - PRD: Alpha Wolf Wrap Studio
-- Version: 1.1
-- Last updated: 2026-05-18
+- Version: 1.2
+- Last updated: 2026-06-17
 
 ### 1.2 Product summary
 
-Alpha Wolf Wrap Studio is an AI-assisted vehicle wrap design and production platform. End customers describe what they want, pick their vehicle, upload a logo, and get a photorealistic full-vehicle mockup in minutes. Wrap shops receive that same project, refine it, and export production-ready print panels with full metadata — sized, paneled, bled, and labelled for their specific printer and media.
+Alpha Wolf Wrap Studio is an AI-assisted vehicle wrap design platform. End customers describe what they want, pick their vehicle, upload a logo, and get a believable full-vehicle mockup on their own vehicle in minutes, then a portable export pack (every view, zones, sizes, materials) they hand to an installing shop. The receiving shop panels that pack in its own RIP. In-platform print paneling is a post-launch v2 capability, deferred per section 2.3.
 
-The platform is two-sided. Customers come in through alpha-wolf-decals.vercel.app to design something for their own vehicle or fleet. Shops come in to service their existing book of business faster and to receive customer-initiated projects as warm inbound. Both sides operate against the same proprietary vehicle template database, the same AI design pipeline, and the same export format — so a design started by a customer drops into a shop's queue with zero translation loss.
+The platform is two-sided. Customers come in through alpha-wolf-decals.vercel.app to design something for their own vehicle or fleet. Shops come in to service their existing book of business faster and to receive customer-initiated projects as warm inbound. Both sides operate against the same proprietary vehicle template database, the same AI design pipeline, and the same export format - so a design started by a customer drops into a shop's queue with zero translation loss.
 
-Today's competitive baseline (ProVehicleOutlines, EasySIGN, Onyx SmartApps Vehicle Wraps, WrapStyle 3D Changer, Spyne, WrapWizzard) splits into two camps: photo-only visualizers with no production data, and production tools that demand expert Illustrator skill. The Wrap Studio collapses the two — the customer-facing mockup and the shop-facing print package come out of the same project, every time.
+Today's competitive baseline (ProVehicleOutlines, EasySIGN, Onyx SmartApps Vehicle Wraps, WrapStyle 3D Changer, Spyne, WrapWizzard) splits into two camps: photo-only visualizers with no production data, and production tools that demand expert Illustrator skill. The Wrap Studio collapses the two - the customer-facing mockup and the shop-facing print package come out of the same project, every time.
 
 ## 2. Goals
 
@@ -22,18 +24,19 @@ Today's competitive baseline (ProVehicleOutlines, EasySIGN, Onyx SmartApps Vehic
 - Cut Alpha Wolf's internal design-to-print cycle time by 60% on standard vehicle wraps (baseline: measure first two weeks of v1 usage).
 - Establish a defensible moat through proprietary vehicle template database (start with top 50 most-wrapped vehicles in North America).
 - Validate Core MVP feature set on Alpha Wolf's own production floor before opening to external shops.
-- Position for tiered SaaS monetization in v2 (Customer free / Shop Pro / Shop Studio) — billing infrastructure deferred but data model accommodates it from day one.
+- Position for tiered SaaS monetization in v2 (Customer free / Shop Pro / Shop Studio) - billing infrastructure deferred but data model accommodates it from day one.
 
 ### 2.2 User goals
 - **Customers**: get a believable, on-brand mockup of their vehicle wrapped without learning Illustrator or paying upfront for design work.
-- **Shops**: receive print-ready files with correct bleed, overlap, panel labels, and material estimates — eliminating the "blunder one could make on a full wrap" risk documented across signs101.com threads.
+- **Shops**: receive print-ready files with correct bleed, overlap, panel labels, and material estimates - eliminating the "blunder one could make on a full wrap" risk documented across signs101.com threads.
 - **Both**: own a single source of truth for the project (versions, approvals, comments, exports) instead of scattered email attachments.
 
 ### 2.3 Non-goals
-- Not building a printer driver or RIP software — we generate print-ready PDFs and hand off to existing RIPs (Onyx, Caldera, VersaWorks).
-- Not building a generic Illustrator competitor — the editor is wrap-specific and intentionally constrained.
+- Not building a printer driver or RIP software: we generate a print-ready export pack and hand off to existing RIPs (Onyx, Caldera, VersaWorks).
+- **In-platform print paneling is deferred to post-launch v2** (Goal 8 deferred, 2026-06-13). The live B2C product delivers the portable export pack; the receiving shop panels it in its own RIP. Shop-side paneling/production only matters once Alpha Wolf prints in-house or onboards partner shops.
+- Not building a generic Illustrator competitor - the editor is wrap-specific and intentionally constrained.
 - Not building installation training content, paint matching, or material e-commerce in v1.
-- Not building a customer marketplace (shop discovery, booking, payments to shops) in v1 — projects transfer via token, not transactional matching.
+- Not building a customer marketplace (shop discovery, booking, payments to shops) in v1 - projects transfer via token, not transactional matching.
 - Not building mobile in v1. Desktop web first; React Native client follows once v1 is validated.
 
 ## 3. User personas
@@ -42,7 +45,7 @@ Today's competitive baseline (ProVehicleOutlines, EasySIGN, Onyx SmartApps Vehic
 - End customer (vehicle owner, small-business owner, fleet manager)
 - Shop owner / lead designer
 - Shop staff designer
-- Shop installer (read-only on print packages, in v1 only via shared export — installer mode is v2)
+- Shop installer (read-only on print packages, in v1 only via shared export - installer mode is v2)
 - Internal Alpha Wolf admin (template curator, support)
 
 ### 3.2 Basic persona details
@@ -65,7 +68,7 @@ Today's competitive baseline (ProVehicleOutlines, EasySIGN, Onyx SmartApps Vehic
 - Optional fields: business address, website, social links (URLs, no OAuth in v1).
 - Password reset via emailed magic link.
 - Session tokens in httpOnly SameSite=strict cookies; 30-day refresh.
-- Account type is permanent — switching requires support intervention.
+- Account type is permanent - switching requires support intervention.
 
 ### 4.2 Vehicle selection (P0)
 - Cascade selector: Year → Make → Model → Trim/Submodel.
@@ -80,33 +83,35 @@ Today's competitive baseline (ProVehicleOutlines, EasySIGN, Onyx SmartApps Vehic
 - Accepts: AI, EPS, PDF, SVG, PNG, JPG, HEIC. Max 50MB per file.
 - AI/EPS/PDF parsed server-side to extract vector paths; preview rendered as PNG.
 - Logo bounding-box detection runs on upload; user can adjust crop and remove background (rembg model server-side).
-- Inspiration photos kept separate from brand assets — surface to AI prompt as "style reference" not "asset to apply."
+- Inspiration photos kept separate from brand assets - surface to AI prompt as "style reference" not "asset to apply."
 - Asset library per project; reusable across project versions.
-- PII check: warn if uploaded photo contains a recognizable face (basic detection only — informational, not blocking).
+- PII check: warn if uploaded photo contains a recognizable face (basic detection only - informational, not blocking).
 
 ### 4.4 AI-powered design generation (P0)
-- **Hybrid model architecture**: Claude Sonnet 4.6 handles prompt orchestration, design reasoning, and natural-language tweaks. Image generation routes to Flux-pro or Higgsfield via OpenRouter/Replicate, depending on cost/quality benchmarks (selected per generation by the orchestrator).
+- **Hybrid model architecture**: a Claude orchestrator handles prompt orchestration, design reasoning, and natural-language tweaks (model configurable via `ANTHROPIC_ORCHESTRATOR_MODEL`, default Claude Sonnet 4.6). Image generation runs on fal.ai: nano-banana-edit for the draft (it edits the template's own view render, so the customer sees their actual vehicle), flux2_pro_edit for the export-quality final, with the model catalog swappable by config (`packages/db/src/ai-config.ts`).
 - Initial generation requires: selected vehicle, at least one brand asset, a style preset (Clean / Aggressive / Luxury / Construction / Racing / Minimalist), and optional free-text prompt.
-- Output: 4 mockup variants (one per style or four variants of selected style — user toggleable).
-- Each variant is generated at view-fidelity for the chosen vehicle's 4 standard angles, NOT a single render.
+- Output: 3 concept directions for the brief, each rendered across the vehicle's standard views.
+- Each direction is generated at view-fidelity across the vehicle's standard views (front, driver side, rear, passenger side), NOT a single render. Views are kept coherent via canonical-anchor conditioning, and the export final is conditioned on the customer-approved draft (Goal 17).
 - Iterative tweaks via natural language ("make the wrap more aggressive", "add satin black accents to the driver-side doors", "use a cleaner contractor look"). Each tweak preserves layer structure where possible; full regenerations are flagged.
 - Color palette extraction: user can pin a color from any variant and propagate it.
-- Generation cost is tracked per project, per shop, per month — exposed in shop admin dashboard.
+- Generation cost is tracked per project, per shop, per month - exposed in shop admin dashboard.
 - Hard rate limit: 30 generations per customer account per day; 500 per shop seat per day. Configurable per plan in v2.
 - All AI outputs include a non-removable provenance signature in the PDF metadata (per Anthropic AUP).
+- **Shipped learnings (Goals 15 to 18).** The real logo is composited deterministically, never AI-rendered. Pixel-level properties cannot be steered by prompt text: gradient DIRECTION is pinned with a per-view directional guide image conditioned on the export model (Goal 18). Open carryover: the draft model renders gradient briefs as accent linework rather than a smooth ombre, so a true smooth-gradient export is still in progress (tracked as Goal 19 rider R2 / Goal 20).
 
 ### 4.5 Wrap editor (P0)
-- Canvas-based editor (Konva.js or Fabric.js — engineering choice during spike).
+- Canvas-based editor (Konva.js or Fabric.js - engineering choice during spike).
 - Vehicle SVG renders as multi-layer base; each body panel is a discrete editable region.
 - Tools: text, shape, image, color fill, gradient, opacity, finish swatch (gloss/satin/matte/chrome/carbon).
 - Snap-to: body line, panel edge, vehicle centerline, other element.
-- Per-panel "wrap mask" enforced — user cannot place artwork outside the printable area.
+- Per-panel "wrap mask" enforced - user cannot place artwork outside the printable area.
 - Undo/redo with 50-step history.
 - Layer panel with show/hide/lock.
 - Real-time co-editing in v1 is NOT in scope (Phase 2). Single-editor lock with last-write-wins on conflicts.
 - Keyboard shortcuts match Figma defaults where possible (V/T/R/etc.) for designer muscle memory.
 
-### 4.6 Automatic print paneling (P0)
+### 4.6 Automatic print paneling (DEFERRED to post-launch v2, shop-side)
+> Deferred 2026-06-13 (Goal 8). The B2C product hands the receiving shop a portable export pack; the shop panels it in its own RIP. The spec below is retained for the future shop-side production surface.
 - Shop configures once: printer model, media width (inches), laminate width, preferred overlap (default 0.5"), panel direction (horizontal/vertical), gutter, and finish.
 - On export, the panel engine:
   - Slices the wrap into print panels based on media width minus overlap.
@@ -118,7 +123,7 @@ Today's competitive baseline (ProVehicleOutlines, EasySIGN, Onyx SmartApps Vehic
 - Validates pre-export: warns on bleed underflow, panel exceeding media width, missing wrap-safe data, low-res raster assets (<150 DPI at final size).
 - v2 will add per-printer ICC profile embedding; v1 ships printer profiles as out-of-band PDF only.
 
-### 4.7 Vehicle template system (P0 — backend)
+### 4.7 Vehicle template system (P0 - backend)
 - Each template record: vehicle metadata (year/make/model/trim/variant), dimensions, body panel definitions (SVG path + wrap-safe zone + finish suggestion), 4-view outline SVG, source of authority (proprietary measurement / manufacturer spec / licensed), version, last verified date.
 - Internal admin UI to upload, edit, and version templates.
 - Public read API exposes the template at design time; the canvas editor consumes panels as discrete layers.
@@ -154,7 +159,7 @@ Today's competitive baseline (ProVehicleOutlines, EasySIGN, Onyx SmartApps Vehic
 ### 4.11 Approval flow (P1)
 - Shop or customer can mark a version "Pending Approval"; counterparty gets an email + in-app notification.
 - Approver can leave comment, approve, or request changes.
-- Approval state locks the version from edits — new edits create a new version.
+- Approval state locks the version from edits - new edits create a new version.
 
 ### 4.12 Installer mode (P2)
 - Read-only mobile-friendly view of the panel map with install order, squeegee direction arrows, and panel overlap callouts.
@@ -179,7 +184,7 @@ Today's competitive baseline (ProVehicleOutlines, EasySIGN, Onyx SmartApps Vehic
 - **Pick your vehicle**: cascade selector that surfaces the right facets per body type. Confidence-building because the system knows the difference between a Transit 250 148"WB High Roof and a Transit 350 EL High Roof.
 - **Upload your assets**: drag-and-drop, smart logo cropping, preview of detected vector paths. Customer sees value before they've done any "design" work.
 - **Describe the vibe**: style preset chips ("Clean / Aggressive / Luxury / Construction / Racing / Minimalist") plus optional prompt. Lowest-friction generation trigger in the category.
-- **Get four mockups**: 4-up grid of believable photoreal vehicle renders in 60-90 seconds. This is the magic moment — measure it as the activation event.
+- **Get four mockups**: 4-up grid of believable photoreal vehicle renders in 60-90 seconds. This is the magic moment - measure it as the activation event.
 - **Iterate via chat**: natural-language tweak field below each variant. "More aggressive." "Add satin black accents to the doors." User feels in control without learning a tool.
 - **Send to a shop OR keep iterating**: customer hits "Send to Shop" → either picks Alpha Wolf or pastes a shop's project-receive code. Hand-off is the conversion event.
 - **Shop refines + exports**: shop opens the project, makes pro-level adjustments, hits Export → choose Visual or Production Package → PDF lands with full metadata.
@@ -192,23 +197,23 @@ Today's competitive baseline (ProVehicleOutlines, EasySIGN, Onyx SmartApps Vehic
 - Slow network: AI generations move to background job and notify on completion via in-app + email.
 - Permission denied (customer tries to export production PDF): explain why; offer to transfer project to a shop.
 - Rate-limited: hard-block with countdown timer and explanation; for shops, link to upgrade path (v2).
-- Partial data on vehicle (e.g., template missing trim variant): use closest match, flag in the UI with "approximate match — verify before printing."
+- Partial data on vehicle (e.g., template missing trim variant): use closest match, flag in the UI with "approximate match - verify before printing."
 - Large asset upload failure: client-side retry with chunked upload; resumable to 95%.
 
 ### 5.4 UI/UX highlights
-- Editor styled as a focused workspace — dark surface, neutral chrome — so brand colors in the design remain visually accurate. (Anti-pattern to learn from: bright-white tools shift color perception.)
+- Editor styled as a focused workspace - dark surface, neutral chrome - so brand colors in the design remain visually accurate. (Anti-pattern to learn from: bright-white tools shift color perception.)
 - Vehicle SVGs are the hero element on every screen they appear. Outline weight, stroke style, and proportions match the photographic reference at first glance.
-- Buttons follow a three-tier hierarchy: primary (filled, Alpha Wolf red), secondary (outlined), tertiary (text only). Never more than one primary per screen.
-- Typography: Inter for UI; Geist Mono for code/IDs/SKUs; vehicle-section labels in uppercase.
+- Buttons follow a three-tier hierarchy: primary (filled black, zinc-900), secondary (outlined), tertiary (text only). Never more than one primary per screen. Cyan is an accent, never a button fill.
+- Typography: Geist Sans for UI; Geist Mono for code/IDs/SKUs; vehicle-section labels in uppercase with wide tracking (the brand eyebrow device).
 - All interactive elements meet WCAG 2.2 AA (4.5:1 contrast min, 44px touch targets where mobile-relevant).
 - Keyboard shortcuts displayed in tooltips; full shortcut sheet available via `?`.
 - Real-time generation progress shown with sub-step labels ("Resolving prompt → routing to image model → rendering 4 views → composing 4-up") rather than a generic spinner.
 - Empty AI prompt field shows a rotating set of high-quality examples drawn from real designs.
-- Brand: Alpha Wolf red (#E41E26 — pull from the Vercel site), deep black surfaces, lime-green accent reserved for confirmation/success states only.
+- Brand (canonical, 2026-06-17): cyan #00AEEF accent on zinc-neutral chrome and black surfaces, sampled from the Alpha Wolf Decals logo. Primary action is black (zinc-900); cyan is used sparingly (the wolf mark, accent borders on hover/focus, the AI-thinking progress bar, links on dark). The earlier red #E41E26 / lime-green direction is retired.
 
 ## 6. Narrative
 
-Casey runs HVAC at her family's company and just bought their twelfth van. She lands on alpha-wolf-decals.vercel.app, sees "Design your wrap in 3 minutes," and clicks. She signs up, picks "2024 Ford Transit 250, 148" wheelbase, High Roof," and drags in the company logo. She picks "Construction" as the style, types "use red and black, make the side prominent," and ninety seconds later she's looking at four photoreal mockups of her van wrapped in her colors. She tweaks one — "make the lime-green accent black instead" — and on the third iteration she has the design. She clicks "Send to Alpha Wolf Decals," approves the design in the chat thread the next morning, and gets a calendar invite to drop the van off. The shop opens her project, makes the AI-generated wrap production-clean, configures their HP Latex 700 with 54" media, hits Export → Production Package, and walks to the printer with a 7-page PDF containing every panel, labelled and laid out, plus a spec sheet showing 142 linear feet of vinyl, 4.5 hours of estimated install, and the full project history. The job that used to take three days of back-and-forth and four hours of Illustrator paneling shipped in a day.
+Casey runs HVAC at her family's company and just bought their twelfth van. She lands on alpha-wolf-decals.vercel.app, sees "Design your wrap in 3 minutes," and clicks. She signs up, picks "2024 Ford Transit 250, 148" wheelbase, High Roof," and drags in the company logo. She picks "Construction" as the style, types "use red and black, make the side prominent," and ninety seconds later she's looking at four photoreal mockups of her van wrapped in her colors. She tweaks one - "make the lime-green accent black instead" - and on the third iteration she has the design. She clicks "Send to Alpha Wolf Decals," approves the design in the chat thread the next morning, and gets a calendar invite to drop the van off. The shop opens her project, makes the AI-generated wrap production-clean, configures their HP Latex 700 with 54" media, hits Export → Production Package, and walks to the printer with a 7-page PDF containing every panel, labelled and laid out, plus a spec sheet showing 142 linear feet of vinyl, 4.5 hours of estimated install, and the full project history. The job that used to take three days of back-and-forth and four hours of Illustrator paneling shipped in a day.
 
 ## 7. Success metrics
 
@@ -238,7 +243,7 @@ Casey runs HVAC at her family's company and just bought their twelfth van. She l
 ### 8.1 Integration points
 - Auth: Auth.js (NextAuth) with credentials provider + email OTP via Resend.
 - Email: Resend for transactional; SES as fallback.
-- File storage: AWS S3 (or Cloudflare R2 for egress savings) — separate buckets for raw uploads, processed assets, generated outputs, exports.
+- File storage: AWS S3 (or Cloudflare R2 for egress savings) - separate buckets for raw uploads, processed assets, generated outputs, exports.
 - Vector parsing: server-side via Inkscape (CLI) + svgo + pdf2svg.
 - Logo background removal: rembg or Replicate-hosted equivalent.
 - Image generation: OpenRouter as primary gateway (model-agnostic), Replicate as fallback. Models considered: Flux.1-pro, Higgsfield, SDXL fine-tunes. Routing logic in the Python AI service.
@@ -246,7 +251,7 @@ Casey runs HVAC at her family's company and just bought their twelfth van. She l
 - PDF generation: ReportLab (Python) for the production package, react-pdf (Node) for the visual mockup pages.
 - Search/typeahead on vehicles: Postgres trigram + Typesense if scale demands.
 - Analytics: PostHog for product analytics; Sentry for error tracking; OpenTelemetry for distributed tracing.
-- Future billing (v2): Stripe — data model includes `subscription_status` and `plan_tier` from day one.
+- Future billing (v2): Stripe - data model includes `subscription_status` and `plan_tier` from day one.
 
 ### 8.2 Data storage & privacy
 - Postgres (Supabase or Neon) as primary store. Schema highlights:
@@ -276,21 +281,21 @@ Casey runs HVAC at her family's company and just bought their twelfth van. She l
 - **Print panel correctness**: getting bleeds and seams right is the difference between a $5k reprint and a happy customer. Mitigation: extensive pre-export validation, ship with an "expert review" optional step in v1, instrument heavily.
 - **Vehicle template accuracy**: real-world vehicle dimensions vary by trim and year. Mitigation: source from multiple authorities (manufacturer specs, real-world tape measurements), version templates, surface "verified" badge.
 - **AI cost run-up**: hybrid model routing decisions need a clear cost-vs-quality framework. Mitigation: cost-tracking dashboard from day one; monthly p50/p95 reports; daily quota guards.
-- **Color fidelity from screen to print**: monitor ≠ printer. Mitigation: surface "approximate match — final color depends on print/laminate combo" disclaimer; v2 ships ICC profile embedding and soft-proofing.
-- **Two-sided cold start**: shops need customer-initiated projects; customers need shop options. Mitigation: Alpha Wolf operates as the default shop at launch — every customer project routes to them by default unless the customer enters another shop's code.
+- **Color fidelity from screen to print**: monitor ≠ printer. Mitigation: surface "approximate match - final color depends on print/laminate combo" disclaimer; v2 ships ICC profile embedding and soft-proofing.
+- **Two-sided cold start**: shops need customer-initiated projects; customers need shop options. Mitigation: Alpha Wolf operates as the default shop at launch - every customer project routes to them by default unless the customer enters another shop's code.
 
 ### 8.5 Stack recommendation
 - **Frontend**: Next.js 15 (App Router) with React 19. SSR for marketing surfaces, client components for the editor. TypeScript across the board. Tailwind v4 + shadcn/ui for chrome; Konva.js for the canvas editor.
-- **Backend**: Node.js (Express or Hono) for the main API — auth, projects, assets, exports, billing. Python (FastAPI) for the AI orchestration service and the print paneling engine (heavy geometry + PDF generation).
+- **Backend**: Node.js (Express or Hono) for the main API - auth, projects, assets, exports, billing. Python (FastAPI) for the AI orchestration service and the print paneling engine (heavy geometry + PDF generation).
 - **Database**: Postgres on Supabase (auth, file storage, row-level security baked in) or Neon (pure DB with branch-per-PR ergonomics). Supabase recommended unless team prefers stricter DB-only separation.
 - **Hosting**: Vercel for the Next.js app, Fly.io or Google Cloud Run for the Python services, S3/R2 for assets. Cloudflare in front of everything for CDN + WAF + rate limiting.
 - **Auth**: Auth.js with credentials + email OTP. Stytch as an upgrade path if SSO becomes a shop ask.
-- **Mobile (Phase 4)**: React Native via Expo — shares ~70% of TypeScript with the web client.
+- **Mobile (Phase 4)**: React Native via Expo - shares ~70% of TypeScript with the web client.
 
 ## 9. Milestones & sequencing
 
 ### 9.1 Project estimate
-- Core MVP: 14–18 weeks (3.5–4.5 months) for v1 desktop launch.
+- Core MVP: 14-18 weeks (3.5-4.5 months) for v1 desktop launch.
 
 ### 9.2 Team size & composition
 - 1 product lead (Archer)
@@ -301,12 +306,12 @@ Casey runs HVAC at her family's company and just bought their twelfth van. She l
 - 0.5 DevOps (shared / fractional)
 
 ### 9.3 Suggested phases
-- **Phase 1 — Foundation** (weeks 1–4): Auth, account model, vehicle template schema + admin UI, top 10 vehicle templates shipped, base canvas editor (no AI yet), asset upload pipeline, project model. Internal demo at week 4.
-- **Phase 2 — AI design generation** (weeks 5–9): Claude orchestrator, image-gen routing, 4-variant generation, iterative natural-language tweaks, generation cost tracking, top 30 vehicle templates shipped.
-- **Phase 3 — Print paneling + export** (weeks 10–13): Printer/media setup, automatic paneling engine, validation, visual mockup PDF, production package PDF, full metadata block, project activities log. Top 50 vehicle templates shipped.
-- **Phase 4 — Two-sided + launch hardening** (weeks 14–18): Project transfer flow, comment threads, approval state, shop dashboard, customer dashboard, public marketing site integration, observability, security review, beta with 3 external shops, public launch.
-- **Phase 5 — Post-launch (v1.1)** (weeks 19–24): Customer approval portal, material estimator, installer mode (mobile-web), template request loop automation, ICC profile embedding, real-time co-editing spike.
-- **Phase 6 — Mobile** (weeks 25–32): React Native client (read + light-edit + approve flows).
+- **Phase 1 - Foundation** (weeks 1-4): Auth, account model, vehicle template schema + admin UI, top 10 vehicle templates shipped, base canvas editor (no AI yet), asset upload pipeline, project model. Internal demo at week 4.
+- **Phase 2 - AI design generation** (weeks 5-9): Claude orchestrator, image-gen routing, 4-variant generation, iterative natural-language tweaks, generation cost tracking, top 30 vehicle templates shipped.
+- **Phase 3 - Print paneling + export** (weeks 10-13): Printer/media setup, automatic paneling engine, validation, visual mockup PDF, production package PDF, full metadata block, project activities log. Top 50 vehicle templates shipped.
+- **Phase 4 - Two-sided + launch hardening** (weeks 14-18): Project transfer flow, comment threads, approval state, shop dashboard, customer dashboard, public marketing site integration, observability, security review, beta with 3 external shops, public launch.
+- **Phase 5 - Post-launch (v1.1)** (weeks 19-24): Customer approval portal, material estimator, installer mode (mobile-web), template request loop automation, ICC profile embedding, real-time co-editing spike.
+- **Phase 6 - Mobile** (weeks 25-32): React Native client (read + light-edit + approve flows).
 
 ## 10. User stories
 
@@ -339,7 +344,7 @@ Casey runs HVAC at her family's company and just bought their twelfth van. She l
 - **ID**: GH-003
 - **Description**: As any user, I want to pick my exact vehicle from a year/make/model selector with body-type-specific facets so that the design starts on an accurate outline.
 - **Acceptance criteria**:
-  - Cascade selector: Year (1990–current year) → Make → Model → Trim. Each level loads in under 200ms on cached data.
+  - Cascade selector: Year (1990-current year) → Make → Model → Trim. Each level loads in under 200ms on cached data.
   - Free-text search box matches across all fields with typo tolerance ("transt 250" → Transit 250).
   - Selecting a truck reveals cab size + bed size facets; selecting a van reveals wheelbase + roof height + length.
   - Each match displays the 4-view outline preview, dimensions, and "use this template" CTA.
@@ -395,7 +400,7 @@ Casey runs HVAC at her family's company and just bought their twelfth van. She l
 - **Acceptance criteria**:
   - Tweak field is enabled on any generated variant; max 500 chars per tweak.
   - Submitting routes the variant + tweak through Claude for prompt enrichment, then to the image model.
-  - Tweak preserves layer structure where possible; full regenerations are flagged in the result with "this was a full regeneration — your prior edits may not have carried through."
+  - Tweak preserves layer structure where possible; full regenerations are flagged in the result with "this was a full regeneration - your prior edits may not have carried through."
   - Each tweak counts against the user's daily generation quota.
   - Tweak history is shown as a vertical thread under the variant.
 - **Dependencies**: GH-006
@@ -408,7 +413,7 @@ Casey runs HVAC at her family's company and just bought their twelfth van. She l
   - Vehicle SVG renders with each body panel as a discrete layer.
   - Tools: text, shape, image (raster + vector), color fill, gradient, opacity, finish swatch.
   - Snap to body line, panel edge, vehicle centerline, and other elements; toggleable.
-  - Per-panel wrap mask is enforced — artwork dragged outside the printable area shows a hard visual cue and clips on render.
+  - Per-panel wrap mask is enforced - artwork dragged outside the printable area shows a hard visual cue and clips on render.
   - Undo/redo with 50-step history; persisted across page reloads.
   - Canvas maintains 60fps with up to 200 layers on a 2021 M1 MacBook baseline.
 - **Dependencies**: GH-003
@@ -445,7 +450,7 @@ Casey runs HVAC at her family's company and just bought their twelfth van. She l
 - **ID**: GH-011
 - **Description**: As any user, I want the exported PDF to include a comprehensive metadata block on the cover sheet so that the document is a self-contained record of the job.
 - **Acceptance criteria**:
-  - Cover sheet contains four labelled sections: Vehicle, Design, Print Production, Project Tracking — with the fields enumerated in section 4.8.
+  - Cover sheet contains four labelled sections: Vehicle, Design, Print Production, Project Tracking - with the fields enumerated in section 4.8.
   - All metadata also embedded as PDF/X structured data (machine-readable).
   - Color palette section shows HEX, RGB, and closest Pantone match (PMS) for every brand color used.
   - Wrap coverage % is calculated from total wrap surface area / total vehicle surface area, rounded to nearest whole percent.
@@ -591,46 +596,46 @@ npx claude-code-templates@latest --skill creative-design/mobile-design,productiv
 ```
 
 ### 11.1 Discovery & planning
-- `business-marketing/product-strategist` — sharpen positioning before each phase gate.
-- `business-marketing/product-manager-toolkit` — backlog grooming, story splitting, prioritization.
-- `creative-design/ux-researcher-designer` — pre-Phase 1 user research with both Alpha Wolf shop staff and a panel of fleet managers.
+- `business-marketing/product-strategist` - sharpen positioning before each phase gate.
+- `business-marketing/product-manager-toolkit` - backlog grooming, story splitting, prioritization.
+- `creative-design/ux-researcher-designer` - pre-Phase 1 user research with both Alpha Wolf shop staff and a panel of fleet managers.
 
 ### 11.2 Architecture & engineering
-- `development/senior-architect` and `development/software-architecture` — invoked at the start of Phase 1 to validate stack and at every phase gate to review topology drift.
-- `development/senior-data-engineer` — Phase 1 data model design; Phase 3 print paneling data pipeline.
-- `development/senior-prompt-engineer` — Phase 2, owns the Claude orchestrator prompts and the prompt-tweak parser.
-- `development/python-patterns` — Phase 2 + 3, AI service and print paneling engine.
-- `web-development/react-best-practices` — Phase 1, codifies component patterns for the editor.
+- `development/senior-architect` and `development/software-architecture` - invoked at the start of Phase 1 to validate stack and at every phase gate to review topology drift.
+- `development/senior-data-engineer` - Phase 1 data model design; Phase 3 print paneling data pipeline.
+- `development/senior-prompt-engineer` - Phase 2, owns the Claude orchestrator prompts and the prompt-tweak parser.
+- `development/python-patterns` - Phase 2 + 3, AI service and print paneling engine.
+- `web-development/react-best-practices` - Phase 1, codifies component patterns for the editor.
 
 ### 11.3 Design & UX
-- `creative-design/frontend-design` — Phase 1, establishes design language and component library.
-- `creative-design/ui-ux-pro-max` and `creative-design/ui-design-system` — Phase 1, ships the Tailwind/shadcn design tokens and Figma-aligned components.
-- `creative-design/web-design-guidelines` — ongoing reference for marketing site + in-app surfaces.
-- `creative-design/mobile-design` — Phase 6 (React Native client).
+- `creative-design/frontend-design` - Phase 1, establishes design language and component library.
+- `creative-design/ui-ux-pro-max` and `creative-design/ui-design-system` - Phase 1, ships the Tailwind/shadcn design tokens and Figma-aligned components.
+- `creative-design/web-design-guidelines` - ongoing reference for marketing site + in-app surfaces.
+- `creative-design/mobile-design` - Phase 6 (React Native client).
 
 ### 11.4 Quality, security, performance
-- `development/code-reviewer` — every PR.
-- `development/webapp-testing` — Playwright suite, runs in CI from Phase 2 onward.
-- `security/api-security-best-practices` — Phase 4 hardening + pre-launch review.
-- `web-development/web-performance-optimization` — Phase 4 hardening; runs Lighthouse audits and Core Web Vitals checks.
+- `development/code-reviewer` - every PR.
+- `development/webapp-testing` - Playwright suite, runs in CI from Phase 2 onward.
+- `security/api-security-best-practices` - Phase 4 hardening + pre-launch review.
+- `web-development/web-performance-optimization` - Phase 4 hardening; runs Lighthouse audits and Core Web Vitals checks.
 
 ### 11.5 Operations & launch
-- `workflow-automation/workflow-automation` — Phase 4, automates daily backups, alert routing, error-budget reports.
-- `productivity/file-organizer` — keeps the project repo structure clean as it grows.
-- `business-marketing/seo-optimizer` — Phase 4, marketing site SEO before public launch.
-- `development/clean-code` — ongoing standard for every contributing engineer.
+- `workflow-automation/workflow-automation` - Phase 4, automates daily backups, alert routing, error-budget reports.
+- `productivity/file-organizer` - keeps the project repo structure clean as it grows.
+- `business-marketing/seo-optimizer` - Phase 4, marketing site SEO before public launch.
+- `development/clean-code` - ongoing standard for every contributing engineer.
 
 ### 11.6 Visual + research tooling (per Archer's request)
-- **Obsidian** — primary memory system for the build. Project-wide vault at `/docs/vault/`. Each major decision logged as a discrete note. Daily notes capture standups and decisions; the `activities.md` requirement (below) is the source of truth for project-level events.
-- **Excalidraw** — embedded into Obsidian for architecture diagrams, customer journey maps, and sprint planning. Each diagram exported as both `.excalidraw` (editable) and `.svg` (viewable).
-- **Firecrawl** — used during template DB build to scrape vehicle dimensions from manufacturer spec pages and competitor outline databases (license terms permitting). Configured with custom extraction schemas.
-- **Claude in Chrome** — used to navigate templates.provehicleoutlines.com during the initial template library bootstrap; captures structure and serves as a manual comparator for accuracy QA on our proprietary templates.
+- **Obsidian** - primary memory system for the build. Project-wide vault at `/docs/vault/`. Each major decision logged as a discrete note. Daily notes capture standups and decisions; the `activities.md` requirement (below) is the source of truth for project-level events.
+- **Excalidraw** - embedded into Obsidian for architecture diagrams, customer journey maps, and sprint planning. Each diagram exported as both `.excalidraw` (editable) and `.svg` (viewable).
+- **Firecrawl** - used during template DB build to scrape vehicle dimensions from manufacturer spec pages and competitor outline databases (license terms permitting). Configured with custom extraction schemas.
+- **Claude in Chrome** - used to navigate templates.provehicleoutlines.com during the initial template library bootstrap; captures structure and serves as a manual comparator for accuracy QA on our proprietary templates.
 
 ### 11.7 `activities.md` requirement (mandatory)
 Every project repo (and every customer project inside the app) maintains an `activities.md` file. Repo-level captures development activity; in-app captures user-driven project activity (see GH-013). Both follow the same append-only event log format:
 
 ```
-## 2026-05-18 14:32 UTC — Archer
+## 2026-05-18 14:32 UTC - Archer
 - Decision: Adopted hybrid Claude + Flux image-gen architecture
 - Reason: Best balance of design reasoning + visual fidelity at projected cost p50 < $0.40/generation
 - Followups: Need cost-tracking dashboard in Phase 2 (GH-018)
@@ -642,8 +647,8 @@ Updated at the close of every working session, every architectural decision, eve
 - Should Alpha Wolf operate as the default routing shop for all customer-initiated handoffs, or should the system surface a list of opt-in shops once we have more than 5 onboarded? (Recommend default-to-Alpha-Wolf for v1 to avoid two-sided cold start.)
 - Do we want to surface AI cost to customers, or absorb it as a customer-acquisition cost while we determine pricing? (Recommend absorb in v1.)
 - What's the policy on customer-uploaded copyrighted assets (logos they don't own)? (Recommend a ToS acknowledgement at upload + AUP-aligned takedown process; revisit with counsel before public launch.)
-- Should the production package PDF be downloadable by the customer who initiated the project (it's their design, after all)? (Recommend no — the production package is the shop's IP and revenue moat. Customer gets the visual mockup only.)
+- Should the production package PDF be downloadable by the customer who initiated the project (it's their design, after all)? (Recommend no - the production package is the shop's IP and revenue moat. Customer gets the visual mockup only.)
 
 ## 13. Appendix: reference exports
 
-The two uploaded sample PDFs (Artboard 2.pdf, Van Wrap Back Print.pdf) demonstrate the *current* state of ProVehicleOutlines exports: a single page of visual mockup with no metadata. Our v1 baseline equivalent (Customer Visual Mockup PDF) ships the same visual fidelity *plus* the full metadata block on a cover sheet — closing the production-data gap that today's tools leave open.
+The two uploaded sample PDFs (Artboard 2.pdf, Van Wrap Back Print.pdf) demonstrate the *current* state of ProVehicleOutlines exports: a single page of visual mockup with no metadata. Our v1 baseline equivalent (Customer Visual Mockup PDF) ships the same visual fidelity *plus* the full metadata block on a cover sheet - closing the production-data gap that today's tools leave open.
