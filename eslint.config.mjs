@@ -39,6 +39,30 @@ export default tseslint.config(
       '@typescript-eslint/consistent-type-imports': 'warn',
     },
   },
+  // Plain JS/MJS/CJS files in this repo are Node-side (configs + build scripts,
+  // e.g. apps/web/next.config.mjs). typescript-eslint disables `no-undef` for
+  // .ts via type info, but JS files need Node globals declared so references
+  // like `process.env` don't trip no-undef.
+  {
+    files: ['**/*.{js,cjs,mjs}'],
+    languageOptions: {
+      globals: {
+        process: 'readonly',
+        console: 'readonly',
+        Buffer: 'readonly',
+        URL: 'readonly',
+        __dirname: 'readonly',
+        __filename: 'readonly',
+        module: 'writable',
+        require: 'readonly',
+        exports: 'writable',
+        setTimeout: 'readonly',
+        clearTimeout: 'readonly',
+        setInterval: 'readonly',
+        clearInterval: 'readonly',
+      },
+    },
+  },
   // ADR-0002 follow-up: only @alphawolf/db may import @prisma/client. Bare
   // imports elsewhere bypass the RLS session-variable middleware and become
   // a security bug.

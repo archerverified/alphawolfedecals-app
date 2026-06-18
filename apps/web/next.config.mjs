@@ -1,6 +1,5 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import type { NextConfig } from 'next';
 import { withSentryConfig } from '@sentry/nextjs';
 
 // ESM equivalent of __dirname — needed for an absolute outputFileTracingRoot,
@@ -8,7 +7,13 @@ import { withSentryConfig } from '@sentry/nextjs';
 // import.meta.url derived) so nft can resolve the monorepo workspace correctly.
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-const nextConfig: NextConfig = {
+// Authored as next.config.mjs (not .ts) for Next 16: Next 16 compiles a .ts
+// config to a CJS `next.config.compiled.js` and then evaluates it in ESM scope,
+// throwing `ReferenceError: exports is not defined`. A native .mjs config is
+// loaded directly as ESM with no compile step. Type-checked via the JSDoc
+// `@type` annotation below. See ADR-0015.
+/** @type {import('next').NextConfig} */
+const nextConfig = {
   reactStrictMode: true,
 
   images: {
@@ -47,7 +52,7 @@ const nextConfig: NextConfig = {
   // as server-side externals so they're loaded via Node's native require()
   // at runtime instead of being bundled.
   //
-  // `serverExternalPackages` is the documented Next.js 15 setting, but it
+  // `serverExternalPackages` is the documented Next.js setting, but it
   // does not reach the (action-browser) bundling context that Next.js uses
   // to prepare Server Actions. So we ALSO mark the same packages as webpack
   // externals on the server below. Belt + suspenders.
