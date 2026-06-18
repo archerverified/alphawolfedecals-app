@@ -136,7 +136,7 @@ export async function finalizeFinalRunAction(
   const alreadyDone = registered === 0;
 
   // ---- (b) canvas insertion — best-effort, never blocks completion ---------
-  let canvasUpdated = false;
+  let canvasUpdated: boolean;
   try {
     canvasUpdated = await insertIntoCanvas(user.id, project, images, assetIdByImage);
   } catch {

@@ -222,7 +222,7 @@ describe('orders RLS — shop dashboard read + cross-shop isolation', () => {
     // Drive-by fix (Goal 5): the original expectation asserted count === 0,
     // which is not how WITH CHECK violations present; CI never runs the
     // integration project, so the drift surfaced on the next local run.
-    let blocked = false;
+    let blocked: boolean;
     try {
       const res = await withUser(aMemberId, (db) =>
         db.order.updateMany({ where: { id: orderId }, data: { ownerShopId: shopBId } }),

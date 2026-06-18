@@ -43,7 +43,7 @@ test('editor sustains ~60fps dragging with 200 elements', async ({ page, request
   const stats = await page.evaluate(async () => {
     const deltas: number[] = [];
     let last = performance.now();
-    let raf = 0;
+    let raf: number;
     const loop = () => {
       const t = performance.now();
       deltas.push(t - last);

@@ -5,13 +5,14 @@
   "description": "Alpha Wolf Wrap Studio monorepo",
   "packageManager": "pnpm@9.12.3",
   "engines": {
-    "node": ">=22.0.0",
+    "node": ">=22.13.0",
     "pnpm": ">=9.0.0"
   },
   "pnpm": {
     "overrides": {
       "postcss@<8.5.10": "8.5.14",
-      "ioredis": "5.11.1"
+      "ioredis": "5.11.1",
+      "vite": "^7.0.0"
     }
   },
   "scripts": {
@@ -31,12 +32,13 @@
     "@alphawolf/auth": "workspace:*",
     "@alphawolf/db": "workspace:*",
     "@commitlint/cli": "^19.5.0",
-    "@commitlint/config-conventional": "^19.5.0",
-    "@types/node": "^22.9.0",
+    "@commitlint/config-conventional": "^21.0.2",
+    "@eslint/js": "^10.0.0",
+    "@types/node": "^25.9.3",
     "dotenv-cli": "^11.0.0",
-    "eslint": "^9.15.0",
+    "eslint": "^10.5.0",
     "husky": "^9.1.7",
-    "lint-staged": "^15.2.10",
+    "lint-staged": "^17.0.7",
     "prettier": "^3.8.4",
     "turbo": "^2.9.18",
     "typescript": "^5.6.3",
