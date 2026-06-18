@@ -8,6 +8,32 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 
 
+## 2026-06-17 - Goal 19 Dependency Triage - CLOSEOUT (11/12 PRs landed, Prisma 7 held, sharp prod incident fixed)
+
+**Status:** DONE. The 12 open Dependabot PRs triaged + cleared: **11 landed** across 5 consolidated PRs (#196-#200), **1 held** (Prisma 7 #180) with a documented plan, **+1 hotfix** (#201). Diagram: [`docs/vault/diagrams/goal-19-dependency-triage.md`](docs/vault/diagrams/goal-19-dependency-triage.md). Net-zero on prod data (deps + config + docs only); no locked invariant silently changed; no secret values emitted. Dependency launch-gate **cleared** for 11/12.
+
+**What landed:**
+- **Tier A (#196, merged):** #112 commitlint-config 19->21, #113 lint-staged 15->17, #176 checkout 4->6, #177 gitleaks-action 2->3 (secret-scan VERIFIED still running: "individual user, no license; 1 commit scanned; no leaks"), #187 minor-and-patch x9. Batched (strict-up-to-date branch protection). Superseded the 5 Dependabot PRs.
+- **Tier B (#197 + #198, merged):** #197 = eslint 9->10 (added @eslint/js@^10 + fixed 5 real new-rule findings: no-useless-assignment x4, preserve-caught-error x1) + @types/node 22->25 + @vercel/analytics 1->2. #198 = vitest 2->4 + vite 7 (**SECURITY: clears the CRITICAL vitest UI-server RCE advisory + vite/esbuild**; the as-opened #184 cleared NOTHING -- it bumped only coverage-v8 and left vitest@2 pinned). Migrated packages/db vitest.workspace.ts -> vitest.config.ts test.projects; re-baselined canvas coverage to vitest-4's AST measurement (follow-up: add bbox.ts/path-parse.ts tests).
+- **Tier C:** #108 resend 4->6 (#199, merged; no code change; **real OTP delivery verified on the v6 SDK -> Resend status=delivered**; domain 1stimpression.co verified). #181 next 15->16 (#200, merged) -- see below. #180 prisma 5->7 **HELD** ([`docs/deps/prisma-7-upgrade-plan.md`](docs/deps/prisma-7-upgrade-plan.md)).
+
+**Next 16 (#200) -- two blockers, both fixed, ADR-0015 written:**
+1. Turbopack-default hard-fails on the load-bearing webpack config -> `next build --webpack` bridge (preserves ADR-0013 Inv2 extensionAlias + Inv3b externals verbatim).
+2. Next 16 config-loader crashes on a `.ts` config (compiles to CJS, evals as ESM: "exports is not defined") -> `next.config.ts` -> `next.config.mjs` (+ eslint Node-globals block for the .mjs). Reproduced locally + fixed; local + Vercel preview builds green. **ADR-0015** amends ADR-0013. §3 review APPROVE + **advisor() MERGE** (deploy-config change). Clears **9 Next.js GHSAs (7 High)**. Prod-verified: Edge middleware intact (CSP/HSTS/X-Frame/CSRF/rate-limiter all fire), homepage + routes 200.
+
+**SHARP PROD INCIDENT (caused this session, fixed this session):** Tier A's #187 bumped `sharp` 0.34.5 -> 0.35.1. On the Vercel linux-x64 lambda, sharp 0.35.1 fails to load (`Could not load the "sharp" module using the linux-x64 runtime` -- Sentry NODE-E, first-seen at the Tier A deploy), 500-ing every sharp-dependent server route (/vehicles, /signup, /signin, /find-a-shop) for ~1h. The lockfile carried BOTH 0.34.5 + 0.35.1 sharp with mismatched libvips (1.2.4 vs 1.3.0). **Hotfix #201 reverts sharp to 0.34.5** (lockfile now sharp-0.34.5-only). Prod re-verified: all routes 200/307, Sentry sharp error STOPPED (no new events post-fix). Root cause: the homepage (200, no sharp) masked it, and my post-Tier-A Sentry check was too early (before requests hit the sharp path) + the MVP smoke is broken (smoke-golden-path-stale). **Lesson: a green build + homepage-200 is not a green runtime for native externals; check Sentry AFTER real traffic, or repair the smoke.**
+
+**DECISIONS:**
+1. **Batched Tier A + the Tier B clean subset** (vs per-PR) because strict-up-to-date branch protection turns N sequential Dependabot merges into a lockfile-conflict cascade; "merge in a batch" is the Tier A instruction. Each batch: full local verify + fresh-context §3 review before merge.
+2. **#184 completed, not merged as-opened** (security correctness -- as-opened it cleared no advisory). vitest core ^4 across all 9 manifests + vite ^7 override + direct devDep (pnpm's auto-install-peers kept the stale out-of-range vite@5).
+3. **#181 next 16 ATTEMPTED + merged** (7 High CVEs; both blockers had clean, invariant-preserving fixes) rather than pre-held. The advisor's post-merge prod checklist substituted for the broken MVP smoke.
+4. **#180 prisma 7 HELD** -- a Rust-free driver-adapter rewrite of the ADR-0014 DB split + retiring ADR-0013 Inv3c (binaryTargets); not a security fix (no advisory on 5.22). Out of proportion to a dependency-triage goal; documented plan + scheduled as its own goal.
+5. **advisor() second opinion = an independent fresh-context review subagent** (no literal advisor tool in this session), per the Goal 7 precedent.
+
+**Security outcome:** CRITICAL vitest + vite/esbuild advisories cleared (#198); 9 Next GHSAs incl 7 High cleared (#200). **Residuals (dev-only, NOT in the prod bundle):** `ws` + `form-data` are sole-pathed through `jsdom@25` (a test devDep); no open PR bumps jsdom. Documented, not actioned (no prod/launch exposure). Recipe when wanted: pnpm `overrides` `"ws": ">=8.21.0"`, `"form-data": ">=4.0.6"` (both in-range for jsdom@25). `js-yaml` clears via the lockfile refresh.
+
+**Follow-ups for Archer:** (1) sharp 0.35 lambda packaging (@img/sharp-libvips-linux-x64@1.3.0 nft tracing) if a sharp bump is wanted later; (2) repair the MVP smoke (smoke-golden-path-stale) -- it would have caught the sharp 500s; (3) Prisma 7 migration goal; (4) canvas coverage tests (bbox.ts/path-parse.ts); (5) ws/form-data dev-only overrides if desired; (6) Sentry NODE-E/NODE-9 will auto-resolve (fixed by #201). Remaining HUMAN launch gates (unchanged by this goal): legal copy, domain migration, indexing flip.
+
 ## 2026-06-17 - Goal 19 Dependency Triage - D1 audit + security rank (triage table)
 
 **Context:** Goal 19 (`prompts/21-goal-19-dependency-triage.md`), executor Claude Code, worktree `goal/19-dependency-triage` off `origin/main@f1951a9` (Goal 17 #194/#195 + Goal 18 merged). Audit-first per CLAUDE.md s1/s8. The 12 open Dependabot PRs confirmed live (`gh pr list --author app/dependabot`). Branch protection on main is `strict_up_to_date=true`; required checks = Node, Python(ai), Python(paneling), Vercel Preview Comments (the Vercel build itself + gitleaks are NOT required, but honored anyway); review count 0 + CODEOWNERS soft-gate, so the agent merges after its own s3 review.
