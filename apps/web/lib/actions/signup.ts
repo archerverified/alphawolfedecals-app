@@ -3,9 +3,12 @@
 import { cookies, headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import {
+  AuthError,
   CSRF_COOKIE_NAME,
   CSRF_FIELD_NAME,
+  issueVerificationTicket,
   resendVerificationOtp,
+  signIn,
   signupCustomer,
   signupShop,
   verifyCsrf,
@@ -263,6 +266,34 @@ export async function verifyOtpAction(_prev: ActionState, form: FormData): Promi
       }
     }
     const dest = result.accountType === 'shop_user' ? '/welcome/shop' : '/welcome';
+    // Goal 20 D1 — establish the session as part of a successful verification so
+    // the new customer/shop is signed in immediately and does NOT bounce to
+    // /signin on the first auth-gated action (finding F3, and a driver of the
+    // NODE-G "unexpected response" /signin error). A single-use, server-minted
+    // ticket (never sent to the browser) drives the otp-verified provider,
+    // reusing the exact JWT session path. signIn with redirectTo both sets the
+    // session cookie and performs the redirect (throws NEXT_REDIRECT), mirroring
+    // signInAction.
+    try {
+      await signIn('otp-verified', {
+        email,
+        ticket: issueVerificationTicket(result.userId, email),
+        redirectTo: dest,
+      });
+    } catch (err) {
+      if (err instanceof AuthError) {
+        // Session establishment failed (should be rare). Never lose the verified
+        // account: send them to /welcome to sign in manually, and surface it.
+        Sentry.captureException(err, { tags: { feature: 'session-on-verify' } });
+        redirect(dest);
+      }
+      // NEXT_REDIRECT (the success path) must propagate.
+      throw err;
+    }
+    // signIn(..., { redirectTo }) throws on both success (NEXT_REDIRECT) and
+    // failure (AuthError, handled above), so this is unreachable in practice —
+    // but it makes the success branch terminal for control-flow narrowing and is
+    // a safety net if a future next-auth returns instead of redirecting.
     redirect(dest);
   }
   const messages: Record<string, string> = {

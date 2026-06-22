@@ -54,6 +54,17 @@ export {
 
 export { login, type LoginResult } from './login.js';
 
+// Session-on-verify (Goal 20 D1). issueVerificationTicket is called by
+// verifyOtpAction right after a successful OTP verify; the otp-verified
+// Credentials provider consumes it via authorizeVerifiedSession.
+export {
+  issueVerificationTicket,
+  verifyVerificationTicket,
+  VERIFICATION_TICKET_TTL_MS,
+  type VerifiedTicket,
+} from './verification-ticket.js';
+export { authorizeVerifiedSession, type VerifiedSessionUser } from './verified-session.js';
+
 export {
   checkLoginGuards,
   recordLoginFailure,

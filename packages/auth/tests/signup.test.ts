@@ -12,6 +12,7 @@ type StoredUser = {
   passwordHash: string;
   accountType: 'customer' | 'shop_user';
   status: 'pending_verification' | 'active' | 'locked' | 'deleted';
+  lastLoginAt: Date | null;
 };
 type StoredOtp = {
   id: string;
@@ -60,6 +61,7 @@ vi.mock('@alphawolf/db', () => ({
         passwordHash: input.passwordHash,
         accountType: input.accountType,
         status: 'pending_verification',
+        lastLoginAt: null,
       };
       users.set(id, user);
       return user;
@@ -73,6 +75,13 @@ vi.mock('@alphawolf/db', () => ({
     async markUserActive(userId: string) {
       const u = users.get(userId);
       if (u) u.status = 'active';
+    },
+    // Mirrors the real repo: clears lockout counters AND stamps lastLoginAt.
+    // verifySignupOtp calls this so a just-verified account is treated as
+    // signed in (Goal 20 D1 — fixes the shop last_login_at=null finding).
+    async resetFailedLogin(userId: string) {
+      const u = users.get(userId);
+      if (u) u.lastLoginAt = new Date();
     },
     isUniqueViolation(err: unknown) {
       return Boolean(err && typeof err === 'object' && (err as { code?: string }).code === 'P2002');
@@ -328,6 +337,32 @@ describe('verifySignupOtp', () => {
     expect(verify.ok).toBe(false);
     if (verify.ok) return;
     expect(verify.reason).toBe('not_found');
+  });
+
+  // Goal 20 D1: a just-verified account must be treated as logged in, so
+  // lastLoginAt is stamped at verify time (it was previously only set on a
+  // password sign-in via login()).
+  it('stamps lastLoginAt on a verified customer', async () => {
+    const signup = await signupCustomer(goodCustomerInput);
+    expect(signup.ok).toBe(true);
+    if (!signup.ok) return;
+    expect(users.get(signup.userId)?.lastLoginAt).toBeNull();
+    const code = _getDevOtp(goodCustomerInput.email)!;
+
+    await verifySignupOtp({ email: goodCustomerInput.email, code });
+    expect(users.get(signup.userId)?.lastLoginAt).toBeInstanceOf(Date);
+  });
+
+  // The exact F3 finding: "shop reached /welcome/shop yet its last_login_at
+  // stayed null".
+  it('stamps lastLoginAt on a verified shop (fixes the F3 shop null)', async () => {
+    const signup = await signupShop(goodShopInput);
+    expect(signup.ok).toBe(true);
+    if (!signup.ok) return;
+    const code = _getDevOtp(goodShopInput.email)!;
+
+    await verifySignupOtp({ email: goodShopInput.email, code });
+    expect(users.get(signup.userId)?.lastLoginAt).toBeInstanceOf(Date);
   });
 });
 

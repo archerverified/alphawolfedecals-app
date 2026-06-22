@@ -17,6 +17,7 @@
 import type { NextAuthConfig } from 'next-auth';
 import Credentials from 'next-auth/providers/credentials';
 import { login } from './login.js';
+import { authorizeVerifiedSession } from './verified-session.js';
 
 const THIRTY_DAYS_SEC = 60 * 60 * 24 * 30;
 
@@ -77,6 +78,33 @@ export const authConfig: NextAuthConfig = {
           id: result.userId,
           email,
           accountType: result.accountType,
+        } as unknown as { id: string; email: string };
+      },
+    }),
+    // Goal 20 D1 — session on verify. After a successful signup OTP verification
+    // the server mints a single-use, HMAC-signed verification ticket (never sent
+    // to the browser) and calls signIn('otp-verified', { email, ticket }). This
+    // establishes the JWT session WITHOUT a password (none exists in plaintext at
+    // verify time), so a new customer/shop is signed in immediately instead of
+    // bouncing to /signin on the first auth-gated action (finding F3). All of the
+    // ticket validation + active-account checks live in authorizeVerifiedSession.
+    Credentials({
+      id: 'otp-verified',
+      name: 'Verified session',
+      credentials: {
+        email: { label: 'Email', type: 'email' },
+        ticket: { label: 'Ticket', type: 'text' },
+      },
+      async authorize(creds) {
+        const email = typeof creds?.email === 'string' ? creds.email : '';
+        const ticket = typeof creds?.ticket === 'string' ? creds.ticket : '';
+        if (!email || !ticket) return null;
+        const user = await authorizeVerifiedSession(email, ticket);
+        if (!user) return null;
+        return {
+          id: user.id,
+          email: user.email,
+          accountType: user.accountType,
         } as unknown as { id: string; email: string };
       },
     }),
