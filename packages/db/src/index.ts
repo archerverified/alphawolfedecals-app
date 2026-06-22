@@ -82,6 +82,7 @@ export type {
   GenerationRunKind,
   GenerationRunStatus,
   GenerationJobStatus,
+  RenderTarget,
   GenerationRunRow,
   GenerationJobRow,
   GenerationImageRow,
@@ -105,6 +106,7 @@ export {
   ORCHESTRATOR_MODELS,
   DEFAULT_ORCHESTRATOR_MODEL,
   resolveOrchestratorModel,
+  PHOTO_VIEW,
 } from './ai-config.js';
 export type {
   AiModelKey,

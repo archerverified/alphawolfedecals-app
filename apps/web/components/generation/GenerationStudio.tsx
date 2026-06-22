@@ -12,7 +12,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { toast } from 'sonner';
-import { ArrowLeft, BadgeCheck, Coins, Loader2, Sparkles, Wand2 } from 'lucide-react';
+import {
+  ArrowLeft,
+  BadgeCheck,
+  Camera,
+  Coins,
+  Images,
+  Loader2,
+  Sparkles,
+  Wand2,
+} from 'lucide-react';
 import { Button } from '@alphawolf/ui/components/ui/button';
 import { Card } from '@alphawolf/ui/components/ui/card';
 import {
@@ -33,6 +42,8 @@ import {
   type GenerationContextResult,
 } from '@/lib/actions/generation';
 import { finalizeFinalRunAction } from '@/lib/actions/generation-finalize';
+import { addProjectPhotoAction } from '@/lib/actions/brief';
+import { buildShowcaseAction } from '@/lib/actions/showcase';
 import type { RunSnapshot } from '@/lib/ai/run-pipeline';
 import {
   deriveConcepts,
@@ -41,10 +52,14 @@ import {
   viewLabel,
   type ConceptCard,
 } from '@/lib/generation/gallery';
+import { useAssetUpload, PHOTO_MIME } from '../brief/useAssetUpload';
 import { BeforeAfterSlider } from './BeforeAfterSlider';
 import { GenerateButton } from './GenerateButton';
 import { ShareForFeedback } from './ShareForFeedback';
 import { WaitlistSheet } from './WaitlistSheet';
+
+// Goal 21 brand accent for the on-photo + showcase chrome (cyan on black).
+const BRAND_CYAN = '#00AEEF';
 
 type GenerationContext = Extract<GenerationContextResult, { ok: true }>;
 
@@ -93,6 +108,11 @@ interface Props {
   /** view → public stock template render URL (the before image). */
   stockViews: Record<string, string>;
   initialContext: GenerationContext;
+  /**
+   * Goal 21 T7: the first uploaded vehicle photo (signed URL), if the brief
+   * already has one. Seeds the in-studio uploader's "current photo" state.
+   */
+  initialPhoto: { assetId: string; url: string } | null;
 }
 
 export function GenerationStudio({
@@ -101,6 +121,7 @@ export function GenerationStudio({
   initialRunId,
   stockViews,
   initialContext,
+  initialPhoto,
 }: Props) {
   const [ctx, setCtx] = useState<GenerationContext>(initialContext);
   const [activeRunId, setActiveRunId] = useState<string | null>(
@@ -112,6 +133,22 @@ export function GenerationStudio({
   const [confirmConcept, setConfirmConcept] = useState<ConceptCard | null>(null);
   const [confirmBusy, setConfirmBusy] = useState(false);
   const [drafts, setDrafts] = useState<Record<string, string>>({});
+  // Goal 21 T7: in-studio vehicle photo (optional). Seeded from the brief, can
+  // be added/replaced here so a customer who skipped the brief photo step still
+  // gets the on-photo render path.
+  const [photo, setPhoto] = useState<{ assetId: string; url: string } | null>(initialPhoto);
+  const { phase: photoPhase, upload: uploadPhoto } = useAssetUpload(projectId);
+  const photoInputRef = useRef<HTMLInputElement | null>(null);
+  // Goal 21 T7: the multi-view marketing showcase modal.
+  const [showcaseConcept, setShowcaseConcept] = useState<ConceptCard | null>(null);
+  const [showcaseState, setShowcaseState] = useState<
+    | { status: 'loading' }
+    | { status: 'ready'; url: string }
+    | { status: 'error'; message: string }
+    | null
+  >(null);
+  // photo_concept_viewed fires once per concept that surfaces an on-photo render.
+  const photoViewedRef = useRef<Set<string>>(new Set());
   // Final runs whose editor/export handoff already ran (or is running) this
   // session — the sweep effect below retries on failure and on every visit.
   const finalizedRef = useRef<Set<string>>(new Set());
@@ -324,6 +361,73 @@ export function GenerationStudio({
     }
   }, [confirmConcept, projectId, refreshContext]);
 
+  // Goal 21 T7: add (or replace) the vehicle photo from the studio. Persists to
+  // the brief so the next run's orchestrator fans out the on-photo jobs.
+  const addPhoto = useCallback(
+    async (file: File) => {
+      const result = await uploadPhoto(file, PHOTO_MIME);
+      if (!result.ok) {
+        toast.error(result.message);
+        return;
+      }
+      const { view } = result.asset;
+      const res = await addProjectPhotoAction({ projectId, assetId: view.assetId });
+      if (!res.ok) {
+        toast.error(
+          res.reason === 'full'
+            ? 'You already have the maximum number of photos.'
+            : "We couldn't save that photo. Try again.",
+        );
+        return;
+      }
+      if (view.url) setPhoto({ assetId: view.assetId, url: view.url });
+      toast.success("Photo saved. Your next design run will also render on your vehicle's photo.");
+    },
+    [uploadPhoto, projectId],
+  );
+
+  // Goal 21 T7: open the on-brand multi-view showcase for a concept.
+  const openShowcase = useCallback(
+    async (card: ConceptCard) => {
+      setShowcaseConcept(card);
+      setShowcaseState({ status: 'loading' });
+      capture('showcase_opened', { projectId, conceptKey: card.key });
+      try {
+        const runId = card.finalRunId ?? card.latestRunId;
+        const res = await buildShowcaseAction(projectId, runId, card.key);
+        if (res.ok) {
+          setShowcaseState({ status: 'ready', url: res.url });
+        } else {
+          setShowcaseState({
+            status: 'error',
+            message:
+              res.code === 'not_ready'
+                ? "Your showcase isn't ready yet. Pick a final, then try again."
+                : "We couldn't build your showcase just now. Try again in a moment.",
+          });
+        }
+      } catch {
+        setShowcaseState({
+          status: 'error',
+          message: "We couldn't build your showcase just now. Try again in a moment.",
+        });
+      }
+    },
+    [projectId],
+  );
+
+  // photo_concept_viewed: fire once per concept whose on-photo preview surfaces.
+  useEffect(() => {
+    for (const c of concepts) {
+      if (!(c.finalPhotoView ?? c.photoView)) continue;
+      if (photoViewedRef.current.has(c.key)) continue;
+      photoViewedRef.current.add(c.key);
+      capture('photo_concept_viewed', { projectId, conceptKey: c.key });
+    }
+  }, [concepts, projectId]);
+
+  const photoBusy = photoPhase !== 'idle';
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 pb-16" data-testid="generation-studio">
       {/* Credit balance header — ALWAYS visible (PRD §5 hard rule). */}
@@ -381,7 +485,11 @@ export function GenerationStudio({
       {runBusy && snapshot?.kind === 'initial' && snapshot.directions?.length ? (
         <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           {snapshot.directions.map((d) => {
-            const imgs = (snapshot.images ?? []).filter((i) => i.conceptKey === d.key);
+            // Template renders only: the on-photo preview has its own captioned
+            // figure on the concept card, never an uncaptioned live thumbnail.
+            const imgs = (snapshot.images ?? []).filter(
+              (i) => i.conceptKey === d.key && i.renderTarget !== 'photo' && i.view !== 'photo',
+            );
             const first = imgs[0];
             return (
               <div key={d.key} className="rounded-xl border border-zinc-200 bg-white p-3">
@@ -390,7 +498,7 @@ export function GenerationStudio({
                 {first ? (
                   <img
                     src={stableLiveUrl(snapshot.runId, d.key, first.view, first.previewUrl)}
-                    alt={`${d.title} — first preview`}
+                    alt={`${d.title}, first preview`}
                     className="w-full rounded-md"
                   />
                 ) : (
@@ -415,6 +523,75 @@ export function GenerationStudio({
             </p>
           </div>
           <GenerateButton projectId={projectId} creditBalance={ctx.balance} />
+
+          {/* Goal 21 T7: optional vehicle-photo uploader. With a photo, each
+              concept also renders ON the customer's vehicle. Without one, the
+              template-only flow is unchanged. */}
+          <div
+            data-testid="studio-photo-uploader"
+            className="mt-2 w-full max-w-md rounded-lg border border-zinc-200 bg-zinc-50 p-4 text-left"
+          >
+            <input
+              ref={photoInputRef}
+              data-testid="studio-photo-input"
+              type="file"
+              accept="image/png,image/jpeg,image/webp,image/heic,image/heif"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = '';
+                if (file) void addPhoto(file);
+              }}
+            />
+            <div className="flex items-start gap-3">
+              {photo ? (
+                <img
+                  src={photo.url}
+                  alt="Your vehicle"
+                  className="size-16 shrink-0 rounded object-cover"
+                />
+              ) : (
+                <span
+                  className="flex size-16 shrink-0 items-center justify-center rounded bg-zinc-200 text-zinc-500"
+                  aria-hidden
+                >
+                  <Camera className="size-6" />
+                </span>
+              )}
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium">
+                  {photo ? 'Photo added' : 'See it on your actual vehicle (optional)'}
+                </p>
+                <p className="mt-0.5 text-xs text-zinc-500">
+                  {photo
+                    ? "We'll also render each concept on your vehicle's photo, a preview only, not the print file."
+                    : 'Add one photo of your vehicle and each concept also renders on it. Skip this for the template-only flow.'}
+                </p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 gap-2"
+                  disabled={photoBusy}
+                  onClick={() => photoInputRef.current?.click()}
+                  data-testid="studio-photo-add"
+                >
+                  {photoBusy ? (
+                    <>
+                      <Loader2 className="size-4 animate-spin" aria-hidden />
+                      {photoPhase === 'uploading' ? 'Uploading…' : 'Processing…'}
+                    </>
+                  ) : (
+                    <>
+                      <Camera className="size-4" aria-hidden />
+                      {photo ? 'Replace photo' : 'Add a photo'}
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          </div>
+
           <Link
             href={`/projects/${projectId}/brief`}
             className="text-xs text-zinc-500 underline underline-offset-2"
@@ -525,6 +702,59 @@ export function GenerationStudio({
                       {busyHere ? 'Painting this view…' : "This view hasn't been rendered yet."}
                     </div>
                   )}
+
+                  {/* Goal 21 T7: on-photo concept preview (the design applied to
+                      the customer's vehicle photo). A final un-watermarked render
+                      wins over the watermarked initial preview. Marketing only. */}
+                  {(() => {
+                    const rawPhotoUrl = card.finalPhotoView ?? card.photoView;
+                    if (!rawPhotoUrl) return null;
+                    const photoUrl = stableLiveUrl(
+                      card.finalRunId ?? card.latestRunId,
+                      card.key,
+                      'photo',
+                      rawPhotoUrl,
+                    );
+                    return (
+                      <figure
+                        data-testid={`photo-concept-${card.key}`}
+                        className="overflow-hidden rounded-md border border-zinc-200"
+                      >
+                        <div className="flex items-center gap-1.5 bg-black px-2 py-1">
+                          <Camera className="size-3" style={{ color: BRAND_CYAN }} aria-hidden />
+                          <span className="text-[10px] font-medium uppercase tracking-wide text-white">
+                            On your vehicle
+                          </span>
+                        </div>
+                        {/* Signed URL: next/image's optimizer can't fetch it. */}
+                        <img
+                          src={photoUrl}
+                          alt={`${card.title} rendered on your vehicle (concept preview)`}
+                          className="block w-full"
+                          draggable={false}
+                        />
+                        <figcaption className="px-2 py-1 text-[11px] text-zinc-500">
+                          Concept preview, not the print file.
+                        </figcaption>
+                      </figure>
+                    );
+                  })()}
+
+                  {/* Goal 21 T7: multi-view marketing showcase. Available once a
+                      concept has a final (or is selected). */}
+                  {card.finalViews ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="gap-2 border-[#00AEEF] text-[#00AEEF] hover:bg-[#00AEEF]/10 hover:text-[#00AEEF]"
+                      onClick={() => void openShowcase(card)}
+                      data-testid={`showcase-open-${card.key}`}
+                    >
+                      <Images className="size-3.5" aria-hidden />
+                      See it across your vehicle
+                    </Button>
+                  ) : null}
 
                   {busyHere && snapshot ? (
                     <p className="flex items-center gap-2 text-xs text-zinc-500" aria-live="polite">
@@ -642,6 +872,65 @@ export function GenerationStudio({
               Render final design — free
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Goal 21 T7: multi-view marketing showcase modal. */}
+      <Dialog
+        open={showcaseConcept !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setShowcaseConcept(null);
+            setShowcaseState(null);
+          }
+        }}
+      >
+        <DialogContent data-testid="showcase-modal" className="max-w-2xl border-2 border-[#00AEEF]">
+          <DialogHeader>
+            <DialogTitle>
+              {showcaseConcept ? `“${showcaseConcept.title}” across your vehicle` : 'Your showcase'}
+            </DialogTitle>
+            <DialogDescription>
+              A marketing preview of this design across your vehicle. It is not the print
+              deliverable, your spec pack stays the source of truth for production.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="rounded-md bg-black p-3">
+            {showcaseState?.status === 'loading' ? (
+              <div
+                className="flex h-64 items-center justify-center gap-2 text-sm text-white"
+                aria-live="polite"
+              >
+                <Loader2
+                  className="size-5 animate-spin"
+                  style={{ color: BRAND_CYAN }}
+                  aria-hidden
+                />
+                Building your showcase…
+              </div>
+            ) : showcaseState?.status === 'ready' ? (
+              /* Signed URL: next/image's optimizer can't fetch it. */
+              <img
+                src={showcaseState.url}
+                alt={
+                  showcaseConcept
+                    ? `Marketing showcase of “${showcaseConcept.title}” across multiple vehicle views`
+                    : 'Marketing showcase across multiple vehicle views'
+                }
+                className="block w-full rounded"
+                draggable={false}
+                data-testid="showcase-image"
+              />
+            ) : showcaseState?.status === 'error' ? (
+              <p
+                className="flex h-32 items-center justify-center px-4 text-center text-sm text-white"
+                data-testid="showcase-error"
+                aria-live="polite"
+              >
+                {showcaseState.message}
+              </p>
+            ) : null}
+          </div>
         </DialogContent>
       </Dialog>
 

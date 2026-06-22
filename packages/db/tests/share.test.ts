@@ -4,7 +4,7 @@
 
 import { describe, expect, test } from 'vitest';
 
-import { assembleConcepts, parseShareDirections } from '../src/repos/share';
+import { assembleConcepts, parseShareDirections, previewByConceptFrom } from '../src/repos/share';
 
 describe('parseShareDirections', () => {
   test('extracts key/title/summary from a well-formed directions JSONB', () => {
@@ -95,5 +95,44 @@ describe('assembleConcepts — the public whitelist', () => {
       expect(asRecord.ownerUserId).toBeUndefined();
       expect(asRecord.voterToken).toBeUndefined();
     }
+  });
+});
+
+describe('previewByConceptFrom — on-photo renders never reach the public share', () => {
+  test('skips a render_target=photo image even when it sorts first', () => {
+    const map = previewByConceptFrom([
+      // view 'photo' sorts before 'driver'; without the guard this would win.
+      { conceptKey: 'a', view: 'photo', previewPath: 'gen/a-photo.png', renderTarget: 'photo' },
+      {
+        conceptKey: 'a',
+        view: 'driver',
+        previewPath: 'gen/a-driver.png',
+        renderTarget: 'template',
+      },
+    ]);
+    expect(map.get('a')).toBe('gen/a-driver.png');
+  });
+
+  test('a concept with ONLY a photo render yields no public preview', () => {
+    const map = previewByConceptFrom([
+      { conceptKey: 'b', view: 'photo', previewPath: 'gen/b-photo.png', renderTarget: 'photo' },
+    ]);
+    expect(map.has('b')).toBe(false);
+  });
+
+  test('the PHOTO_VIEW sentinel is excluded even without an explicit renderTarget', () => {
+    const map = previewByConceptFrom([
+      { conceptKey: 'c', view: 'photo', previewPath: 'gen/c-photo.png' },
+      { conceptKey: 'c', view: 'front', previewPath: 'gen/c-front.png' },
+    ]);
+    expect(map.get('c')).toBe('gen/c-front.png');
+  });
+
+  test('template renders pass through, first watermarked preview per concept wins', () => {
+    const map = previewByConceptFrom([
+      { conceptKey: 'd', view: 'back', previewPath: 'gen/d-back.png', renderTarget: 'template' },
+      { conceptKey: 'd', view: 'front', previewPath: 'gen/d-front.png', renderTarget: 'template' },
+    ]);
+    expect(map.get('d')).toBe('gen/d-back.png');
   });
 });

@@ -107,6 +107,69 @@ describe('deriveConcepts', () => {
     });
     expect(minimal.views.driver).toBe('u/min-driver-v1');
   });
+
+  it('routes an initial photo render to photoView, never into the view set', () => {
+    const initialWithPhoto = run({
+      ...INITIAL,
+      images: [
+        ...INITIAL.images,
+        {
+          conceptKey: 'literal',
+          view: 'photo',
+          previewUrl: 'u/lit-photo-v1',
+          renderTarget: 'photo',
+        },
+      ],
+    });
+    const cards = deriveConcepts([initialWithPhoto]);
+    const literal = cards.find((c) => c.key === 'literal')!;
+    expect(literal.photoView).toBe('u/lit-photo-v1');
+    expect(literal.finalPhotoView).toBeNull();
+    // The on-photo render must never leak into the 4-view switcher set.
+    expect(Object.keys(literal.views)).not.toContain('photo');
+    expect(literal.views).toEqual({ driver: 'u/lit-driver-v1', back: 'u/lit-back-v1' });
+    // Concepts without a photo job stay null.
+    expect(cards.find((c) => c.key === 'bolder')!.photoView).toBeNull();
+  });
+
+  it('routes a final photo render to finalPhotoView, never into finalViews', () => {
+    const final = run({
+      runId: 'r-final',
+      kind: 'final',
+      conceptKey: 'minimal',
+      createdAt: '2026-06-12T02:00:00.000Z',
+      images: [
+        { conceptKey: 'minimal', view: 'driver', previewUrl: 'u/min-driver-final' },
+        {
+          conceptKey: 'minimal',
+          view: 'photo',
+          previewUrl: 'u/min-photo-final',
+          renderTarget: 'photo',
+        },
+      ],
+    });
+    const cards = deriveConcepts([final, INITIAL]);
+    const minimal = cards.find((c) => c.key === 'minimal')!;
+    expect(minimal.finalPhotoView).toBe('u/min-photo-final');
+    expect(Object.keys(minimal.finalViews ?? {})).not.toContain('photo');
+    expect(minimal.finalViews).toEqual({ driver: 'u/min-driver-final' });
+  });
+
+  it('routes a photo render by view sentinel even without renderTarget', () => {
+    // Defensive fallback: a snapshot that predates the discriminator still
+    // partitions the on-photo image out of the view set via view==='photo'.
+    const initialWithPhoto = run({
+      ...INITIAL,
+      images: [
+        ...INITIAL.images,
+        { conceptKey: 'bolder', view: 'photo', previewUrl: 'u/bold-photo-v1' },
+      ],
+    });
+    const cards = deriveConcepts([initialWithPhoto]);
+    const bolder = cards.find((c) => c.key === 'bolder')!;
+    expect(bolder.photoView).toBe('u/bold-photo-v1');
+    expect(Object.keys(bolder.views)).not.toContain('photo');
+  });
 });
 
 describe('progressCopy', () => {

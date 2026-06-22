@@ -28,6 +28,10 @@ export type GenerationRunStatus = 'queued' | 'orchestrating' | 'rendering' | 'co
 // persisting the provider request id). Non-terminal — an orphaned claim is
 // reaped by the run deadline/sweeper.
 export type GenerationJobStatus = 'pending' | 'submitting' | 'submitted' | 'complete' | 'failed';
+// Discriminator for the two render modes (Goal 21 / T1):
+//   'template' - SVG overlay rendered on a vehicle outline template (existing mode)
+//   'photo'    - photo-realistic composite placed on a customer-supplied vehicle photo
+export type RenderTarget = 'template' | 'photo';
 
 export const NON_TERMINAL_RUN_STATUSES = ['queued', 'orchestrating', 'rendering'] as const;
 
@@ -63,6 +67,7 @@ export type GenerationJobRow = {
   prompt: string;
   costUsd: number;
   error: string | null;
+  renderTarget: RenderTarget;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -82,6 +87,7 @@ export type GenerationImageRow = {
   providerRequestId: string | null;
   costUsd: number;
   provenance: unknown;
+  renderTarget: RenderTarget;
   createdAt: Date;
 };
 
@@ -231,6 +237,7 @@ const JOB_SELECT = {
   prompt: true,
   costUsd: true,
   error: true,
+  renderTarget: true,
   createdAt: true,
   updatedAt: true,
 } as const;
@@ -250,6 +257,7 @@ const IMAGE_SELECT = {
   providerRequestId: true,
   costUsd: true,
   provenance: true,
+  renderTarget: true,
   createdAt: true,
 } as const;
 
@@ -267,11 +275,16 @@ function toRunRow(r: RunRecord): GenerationRunRow {
 }
 
 function toJobRow(j: JobRecord): GenerationJobRow {
-  return { ...j, status: j.status as GenerationJobStatus, costUsd: Number(j.costUsd) };
+  return {
+    ...j,
+    status: j.status as GenerationJobStatus,
+    costUsd: Number(j.costUsd),
+    renderTarget: j.renderTarget as RenderTarget,
+  };
 }
 
 function toImageRow(i: ImageRecord): GenerationImageRow {
-  return { ...i, costUsd: Number(i.costUsd) };
+  return { ...i, costUsd: Number(i.costUsd), renderTarget: i.renderTarget as RenderTarget };
 }
 
 // ---------------------------------------------------------------------------
@@ -563,7 +576,13 @@ export async function listRunsForProject(
 // Jobs (per-(run, concept, view) work units).
 // ---------------------------------------------------------------------------
 
-export type RecordJobInput = { conceptKey: string; view: string; prompt?: string };
+export type RecordJobInput = {
+  conceptKey: string;
+  view: string;
+  prompt?: string;
+  /** Defaults to 'template' when omitted. (Goal 21 / T1) */
+  renderTarget?: RenderTarget;
+};
 
 // Create the run's pending job rows. skipDuplicates makes a re-entered slice
 // (the advance loop re-running after a crash) a no-op for already-recorded
@@ -581,6 +600,7 @@ export async function recordJobs(
         conceptKey: j.conceptKey,
         view: j.view,
         prompt: j.prompt ?? '',
+        renderTarget: j.renderTarget ?? 'template',
       })),
       skipDuplicates: true,
     });
@@ -695,6 +715,8 @@ export type InsertImageInput = {
   providerRequestId?: string;
   costUsd: number;
   provenance?: Prisma.InputJsonValue;
+  /** Defaults to 'template' when omitted. (Goal 21 / T1) */
+  renderTarget?: RenderTarget;
 };
 
 export async function insertImage(
@@ -717,6 +739,7 @@ export async function insertImage(
         providerRequestId: input.providerRequestId ?? null,
         costUsd: input.costUsd,
         provenance: input.provenance,
+        renderTarget: input.renderTarget ?? 'template',
       },
       select: IMAGE_SELECT,
     });

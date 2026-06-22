@@ -6,24 +6,123 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-21 - Goal 21 BUILD COMPLETE (reviewed x2, tested) - photo-render concepts + multi-view showcase - deploy GATED to Archer
 
+**Status:** Feature built, double-reviewed, and fully unit/integration tested on branch
+`goal/21-photo-render-showcase` (worktree `../alphawolf-goal-21`, base `origin/main` f6e2215).
+Executed via subagent-driven-development (8 tasks, fresh implementer + task reviewer per task, then a
+whole-branch review + an independent security advisor). Plan + DECISIONS:
+`docs/product/goal-21-photo-render-plan.md`. Diagram:
+[`docs/vault/diagrams/goal-21-photo-render.md`](docs/vault/diagrams/goal-21-photo-render.md).
+
+**What shipped (additive only, the print path is untouched):**
+
+- On-photo concepts: when the brief has a vehicle photo, the 3 concept directions ALSO render ON that
+  photo (image-to-image, `nano_banana_edit`) as additive jobs (`render_target='photo'`, `view='photo'`)
+  on the existing initial run, plus 1 un-watermarked on the final. Fully isolated from the Goal-17/18
+  cross-view coherence machinery; template conditioning unchanged.
+- Multi-view showcase: a deterministic server-side `sharp` composite of the selected concept's
+  template per-view renders + the on-photo hero, on brand (cyan #00AEEF + black, AW wordmark overlay,
+  "Concept preview, not the print file" caption), via the owner-scoped `buildShowcaseAction`.
+- Studio UI: on-photo preview per concept, a "See it across your vehicle" showcase modal, an in-studio
+  photo uploader (`addProjectPhotoAction`), analytics events.
+- Print path PROTECTED: `loadFinalViews` (spec pack), `insertIntoCanvas` (editor), and the public share
+  read all filter `render_target='template'`; the photo render can never become the print deliverable.
+- DB: one additive migration adds `render_target text NOT NULL DEFAULT 'template'` + CHECK to
+  `generation_jobs` / `generation_images`. No new tables, buckets, or RLS policies.
+
+**Per-task commits (all reviewed clean):** T1 5c997db (render_target column), T2 e51e858 (photo model +
+`buildPhotoRenderPrompt`), T3 acc4aef (pipeline photo branch, opus review verified coherence
+isolation), T4 b427525+2fe2fa2 (cost estimate; review fix: final reads brief snapshot), build-fix
+39fee7e (extract `cost.ts`: a 'use server' file may only export async, broke `next build` - tsc/vitest
+missed it), T5 e1dcbd3+hardening (print+editor filters), T6 0c22008 (showcase compositor + action), T7
+77752f6+fix (studio UI), T8 c982fd6+fix (e2e spec + showcase action tests + verify recipe), final-review
+fix 10ce539 (public share excludes photo renders + 4 regression tests).
+
+**Reviews (CLAUDE.md §3):** whole-branch review = APPROVED with fixes (the one Important, a public
+share-path photo leak, is fixed in 10ce539). Independent security advisor on the RLS / DB-split / spend
+/ print surface = FULL SIGN-OFF (8/8 checks PASS: every photo/showcase/brief path is `withUser`/RLS,
+showcase ownership precedes any signed-URL mint with a projectId-namespaced key, photo jobs ride the
+single credit spend and are counted in the conservative estimate, the customer photo stays private
+short-TTL with no SSRF widening and no logo bytes to fal, the photo render is filtered out of export +
+editor, the migration is additive and deploy-safe).
+
+**Tests / build:** full web vitest 286 passed / 8 skipped; db unit vitest 142 passed; full
+`turbo run build` (all packages + the real `next build`) 8/8. Branch has zero em-dashes in any added
+line. The mock-provider e2e (`apps/web/e2e/goal-21-photo-render.spec.ts`) is recognized by
+`playwright test --list`; it green-skips on remote targets and never joins the prod smoke.
+
+**GATED to Archer (hold-with-plan per the prompt's decision policy; irreversible prod + real money):**
+
+1. Real-fal D5 verification on a throwaway local DB (recipe: `docs/deployment/goal-21-verify-recipe.md`)
+   within the $10 cap, then net-zero purge.
+2. PR review pass + CI green, then merge.
+3. Apply the migration to prod (Supabase MCP `apply_migration` + insert the `_prisma_migrations`
+   SHA-256 checksum row per CLAUDE.md §6) BEFORE the deploy reaches it.
+4. Vercel prod smoke + Sentry 0-new.
+   No new prod env vars are needed (FAL_KEY / AI_PROVIDER already live from Goal 7).
+
+## 2026-06-21 - Goal 21 KICKOFF - Photo-render concepts + multi-view marketing showcase (audit + plan + DECISIONS)
+
+**Context:** Feature build (prompt `prompts/23-goal-21-photo-render-multiview-showcase.md`). Runs in
+Claude Code via subagent-driven-development in worktree `../alphawolf-goal-21` (branch
+`goal/21-photo-render-showcase`, base `origin/main` f6e2215). Audit-first: a 7-reader workflow mapped
+the generation pipeline, fal+orchestrator, photo storage+RLS, editor+export, studio UI, schema+RLS, and
+the verify/deploy harness before any code. Plan: `docs/product/goal-21-photo-render-plan.md`.
+
+**Key audit findings:** the app already does ~80%. The provider adapter already supports image-to-image
+(`ProviderRequest.imageUrls`); `nano_banana_edit` is a true i2i edit. Today every concept conditions on
+the TEMPLATE-geometry render (`views/<vehicleId>/<view>.png`) at `imageUrls[0]`, and the print/export
+path keys off `kind='final'` runs (`loadFinalViews` hero + `panelPrintSizesIn` geometry). The customer
+photo is captured (`brief.data.photos[]` -> private `project-assets`) but its pixels never feed
+generation today (only the free-text note reaches the orchestrator). The pipeline is coherence-tuned
+(Goal 17 anchor view + Goal 18 gradient guide), all keyed off `view`.
+
+**DECISIONS (chosen per the prompt's never-ask policy; surfaced to Archer):**
+
+1. **Spend ceiling = $10** for build/verify fal (precedent: Goals 7/13/20 each landed under $1.20). The
+   in-code global rail `dailySpendCapUsd=5` also bounds every run. Feature marginal cost: +3 nano
+   renders on initial (~$0.117) + 1 on final (~$0.039); one full verify e2e ~= $0.85.
+2. **Photo i2i model = `nano_banana_edit`** (reuse the draft default; true i2i, $0.039 flat). Customer
+   photo passed as `imageUrls[0]` via a freshly-signed private read URL. No adapter change.
+3. **Multi-view showcase = deterministic `sharp` composite** of the selected concept's template-
+   conditioned (already-coherent) per-view renders + the on-photo hero, on-brand (cyan #00AEEF + black,
+   AW wordmark as an app overlay). One photo cannot yield accurate 4 sides via i2i; the template path
+   already gives coherent multi-views. $0 marginal fal; protects the print path.
+4. **Logo policy = real-asset composite everywhere; AI never redraws the logo** (existing invariant +
+   clear-space rule preserved). The on-photo render and showcase composite the real uploaded logo via
+   sharp.
+5. **Storage = `render_target` discriminator** (`template`|`photo`) on `generation_jobs`/`images`; photo
+   concepts are additive jobs on the existing `initial`+`final` runs (one credit spend, reused
+   CAS/credit/cap rails). No new tables/policies. Print reads filter `render_target='template'`.
+6. **Run integration:** photo jobs ride existing runs (not a new kind), use `view='photo'` sentinel, and
+   are partitioned OUT of the Goal-17/18 coherence machinery. Iteration does not re-render the photo.
+
+**HARD CONSTRAINT (locked):** the export spec pack + editor canvas keep deriving from template geometry;
+the photo render is an additive, clearly-labeled marketing/preview output, never the print deliverable.
+
+Per-PR/task results + closeout (review + advisor + real-fal verify + deploy + smoke + mermaid + graphify)
+appended at goal end.
 
 ## 2026-06-17 - Goal 19 Dependency Triage - CLOSEOUT (11/12 PRs landed, Prisma 7 held, sharp prod incident fixed)
 
 **Status:** DONE. The 12 open Dependabot PRs triaged + cleared: **11 landed** across 5 consolidated PRs (#196-#200), **1 held** (Prisma 7 #180) with a documented plan, **+1 hotfix** (#201). Diagram: [`docs/vault/diagrams/goal-19-dependency-triage.md`](docs/vault/diagrams/goal-19-dependency-triage.md). Net-zero on prod data (deps + config + docs only); no locked invariant silently changed; no secret values emitted. Dependency launch-gate **cleared** for 11/12.
 
 **What landed:**
+
 - **Tier A (#196, merged):** #112 commitlint-config 19->21, #113 lint-staged 15->17, #176 checkout 4->6, #177 gitleaks-action 2->3 (secret-scan VERIFIED still running: "individual user, no license; 1 commit scanned; no leaks"), #187 minor-and-patch x9. Batched (strict-up-to-date branch protection). Superseded the 5 Dependabot PRs.
 - **Tier B (#197 + #198, merged):** #197 = eslint 9->10 (added @eslint/js@^10 + fixed 5 real new-rule findings: no-useless-assignment x4, preserve-caught-error x1) + @types/node 22->25 + @vercel/analytics 1->2. #198 = vitest 2->4 + vite 7 (**SECURITY: clears the CRITICAL vitest UI-server RCE advisory + vite/esbuild**; the as-opened #184 cleared NOTHING -- it bumped only coverage-v8 and left vitest@2 pinned). Migrated packages/db vitest.workspace.ts -> vitest.config.ts test.projects; re-baselined canvas coverage to vitest-4's AST measurement (follow-up: add bbox.ts/path-parse.ts tests).
 - **Tier C:** #108 resend 4->6 (#199, merged; no code change; **real OTP delivery verified on the v6 SDK -> Resend status=delivered**; domain 1stimpression.co verified). #181 next 15->16 (#200, merged) -- see below. #180 prisma 5->7 **HELD** ([`docs/deps/prisma-7-upgrade-plan.md`](docs/deps/prisma-7-upgrade-plan.md)).
 
 **Next 16 (#200) -- two blockers, both fixed, ADR-0015 written:**
+
 1. Turbopack-default hard-fails on the load-bearing webpack config -> `next build --webpack` bridge (preserves ADR-0013 Inv2 extensionAlias + Inv3b externals verbatim).
 2. Next 16 config-loader crashes on a `.ts` config (compiles to CJS, evals as ESM: "exports is not defined") -> `next.config.ts` -> `next.config.mjs` (+ eslint Node-globals block for the .mjs). Reproduced locally + fixed; local + Vercel preview builds green. **ADR-0015** amends ADR-0013. §3 review APPROVE + **advisor() MERGE** (deploy-config change). Clears **9 Next.js GHSAs (7 High)**. Prod-verified: Edge middleware intact (CSP/HSTS/X-Frame/CSRF/rate-limiter all fire), homepage + routes 200.
 
 **SHARP PROD INCIDENT (caused this session, fixed this session):** Tier A's #187 bumped `sharp` 0.34.5 -> 0.35.1. On the Vercel linux-x64 lambda, sharp 0.35.1 fails to load (`Could not load the "sharp" module using the linux-x64 runtime` -- Sentry NODE-E, first-seen at the Tier A deploy), 500-ing every sharp-dependent server route (/vehicles, /signup, /signin, /find-a-shop) for ~1h. The lockfile carried BOTH 0.34.5 + 0.35.1 sharp with mismatched libvips (1.2.4 vs 1.3.0). **Hotfix #201 reverts sharp to 0.34.5** (lockfile now sharp-0.34.5-only). Prod re-verified: all routes 200/307, Sentry sharp error STOPPED (no new events post-fix). Root cause: the homepage (200, no sharp) masked it, and my post-Tier-A Sentry check was too early (before requests hit the sharp path) + the MVP smoke is broken (smoke-golden-path-stale). **Lesson: a green build + homepage-200 is not a green runtime for native externals; check Sentry AFTER real traffic, or repair the smoke.**
 
 **DECISIONS:**
+
 1. **Batched Tier A + the Tier B clean subset** (vs per-PR) because strict-up-to-date branch protection turns N sequential Dependabot merges into a lockfile-conflict cascade; "merge in a batch" is the Tier A instruction. Each batch: full local verify + fresh-context §3 review before merge.
 2. **#184 completed, not merged as-opened** (security correctness -- as-opened it cleared no advisory). vitest core ^4 across all 9 manifests + vite ^7 override + direct devDep (pnpm's auto-install-peers kept the stale out-of-range vite@5).
 3. **#181 next 16 ATTEMPTED + merged** (7 High CVEs; both blockers had clean, invariant-preserving fixes) rather than pre-held. The advisor's post-merge prod checklist substituted for the broken MVP smoke.
@@ -39,6 +138,7 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 **Context:** Goal 19 (`prompts/21-goal-19-dependency-triage.md`), executor Claude Code, worktree `goal/19-dependency-triage` off `origin/main@f1951a9` (Goal 17 #194/#195 + Goal 18 merged). Audit-first per CLAUDE.md s1/s8. The 12 open Dependabot PRs confirmed live (`gh pr list --author app/dependabot`). Branch protection on main is `strict_up_to_date=true`; required checks = Node, Python(ai), Python(paneling), Vercel Preview Comments (the Vercel build itself + gitleaks are NOT required, but honored anyway); review count 0 + CODEOWNERS soft-gate, so the agent merges after its own s3 review.
 
 **SECURITY BASELINE (pnpm audit vs lockfile):** 12 vulns (2 critical / 4 high / 6 moderate). EVERY advisory is dev/CI/test-toolchain only - NONE reachable from the deployed prod runtime (so none is a launch blocker), but the currency matters.
+
 - `vitest <3.2.6` CRITICAL (UI-server arbitrary file read/exec) - current 2.1.9 is vulnerable -> the vitest 2->4 bump is a SECURITY FIX.
 - `vite` (high+2 mod), `esbuild` (mod) - transitive via the vitest toolchain; clear only when vitest CORE goes to 4 (vite 6.4.3+/esbuild 0.25+).
 - `next 15.5.18` - the next-16 bump clears 9 GHSAs (7 High) per PR #181 body -> next 16 is ALSO a security fix.
@@ -49,22 +149,23 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 **TRIAGE TABLE (D1 deliverable):**
 
-| Tier | PR | Bump | CI (stale base) | Security | Disposition |
-|---|---|---|---|---|---|
-| A | #112 | @commitlint/config-conventional 19->21 (dev) | green | low (js-yaml refresh) | merge |
-| A | #113 | lint-staged 15->17 (dev) | green | none | merge |
-| A | #176 | actions/checkout 4->6 (CI; only gitleaks.yml/smoke.yml still on v4) | green | low (CI hygiene) | merge |
-| A | #177 | gitleaks/gitleaks-action 2->3 (CI, secret guard) | green (ran v3 on itself) | low | merge + confirm scanner still runs post-merge |
-| A | #187 | minor-and-patch x9 (sharp 0.34.5->0.35.1 SYNCED across apps/web+packages/db, @sentry 10.57->10.58, supabase, anthropic-sdk, posthog, playwright 1.49->1.61) | green | none (no listed adv) | merge (sharp = ADR-0013 Inv3b external, verified consistent) |
-| B | #183 | @types/node 22->25 (dev, 8 manifests) | green (no type errors) | none | merge-clean (skipLibCheck=true neutralizes; runtime stays Node 22, engines unchanged) |
-| B | #179 | @vercel/analytics 1->2 (apps/web) | green | none | merge-clean (single propless `<Analytics/>` from `/react`, unchanged; target 2.0.1 not 2.0.0) |
-| B | #184 | @vitest/coverage-v8 2->4 (+ vitest CORE 2->4) | green-but-INCONSISTENT | HIGH (clears critical) | merge-AFTER-FIX: complete vitest core ^4 in 9 manifests + 2 coverage; migrate packages/db `vitest.workspace.ts`->`vitest.config.ts` `test.projects`; re-baseline coverage thresholds; full suite run (v4 spy/mock + AST-coverage). No ADR. |
-| B | #182 | eslint 9->10 (root+apps/web dev) | RED (Node) | low (js-yaml) | merge-AFTER-FIX: add `@eslint/js@^10` devDep (eslint 10 dropped it from its deps -> the flat-config bare import throws ERR_MODULE_NOT_FOUND = the exact failure). Keep typescript-eslint ^8.61 (already eslint-10 compatible). No ADR. |
-| C | #108 | resend 4->6 (packages/auth, 2 majors) | GREEN incl Vercel | none | merge-after-VERIFY: no code change (html+text-only sends, no react opt, no inline-CID, `{data,error}` shape unchanged); do ONE real OTP delivery check (RESEND_FROM_EMAIL=wraps@1stimpression.co) before/after merge. Lowest-risk Tier C. |
-| C | #181 | next 15.5->16.2 (apps/web + packages/auth peer) | RED (Vercel build) | HIGH (9 GHSA, 7 High) | ATTEMPT merge-after-fix: Vercel fail = Turbopack-default build hard-fails on the load-bearing webpack config; fix = `next build --webpack` bridge (preserves ADR-0013 Inv2 extensionAlias + Inv3b externals verbatim) + bump packages/auth `next` peer to allow ^16 + ADR-0013 amendment (Inv2 already anticipates this) + Vercel preview deploy verify + smoke + advisor() review. HOLD-with-plan if preview reveals deeper breakage. React 19 already in place; async-request-APIs already migrated. |
-| C | #180 | @prisma/client 5->7 (+ prisma CLI; packages/db + apps/web hoist) | RED (Node+Vercel) | none | HOLD-WITH-PLAN. Prisma 7 = Rust-free driver-adapter rewrite of the ADR-0014 two-connection client (PrismaPg), REQUIRED generator `output`, binaryTargets RETIRED (ADR-0013 Inv3c moot), prisma.config.ts; Prisma 6 flips encrypted-PII Bytes Buffer->Uint8Array (breaks crypto.ts/users.ts typecheck = Node fail). Touches BOTH ADRs + DB split + RLS + Render+Vercel deploy. Not a security fix. Too large/risky to land safely in this goal; documented upgrade plan at closeout. |
+| Tier | PR   | Bump                                                                                                                                                        | CI (stale base)          | Security               | Disposition                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| ---- | ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| A    | #112 | @commitlint/config-conventional 19->21 (dev)                                                                                                                | green                    | low (js-yaml refresh)  | merge                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| A    | #113 | lint-staged 15->17 (dev)                                                                                                                                    | green                    | none                   | merge                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| A    | #176 | actions/checkout 4->6 (CI; only gitleaks.yml/smoke.yml still on v4)                                                                                         | green                    | low (CI hygiene)       | merge                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| A    | #177 | gitleaks/gitleaks-action 2->3 (CI, secret guard)                                                                                                            | green (ran v3 on itself) | low                    | merge + confirm scanner still runs post-merge                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| A    | #187 | minor-and-patch x9 (sharp 0.34.5->0.35.1 SYNCED across apps/web+packages/db, @sentry 10.57->10.58, supabase, anthropic-sdk, posthog, playwright 1.49->1.61) | green                    | none (no listed adv)   | merge (sharp = ADR-0013 Inv3b external, verified consistent)                                                                                                                                                                                                                                                                                                                                                                                                                                           |
+| B    | #183 | @types/node 22->25 (dev, 8 manifests)                                                                                                                       | green (no type errors)   | none                   | merge-clean (skipLibCheck=true neutralizes; runtime stays Node 22, engines unchanged)                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| B    | #179 | @vercel/analytics 1->2 (apps/web)                                                                                                                           | green                    | none                   | merge-clean (single propless `<Analytics/>` from `/react`, unchanged; target 2.0.1 not 2.0.0)                                                                                                                                                                                                                                                                                                                                                                                                          |
+| B    | #184 | @vitest/coverage-v8 2->4 (+ vitest CORE 2->4)                                                                                                               | green-but-INCONSISTENT   | HIGH (clears critical) | merge-AFTER-FIX: complete vitest core ^4 in 9 manifests + 2 coverage; migrate packages/db `vitest.workspace.ts`->`vitest.config.ts` `test.projects`; re-baseline coverage thresholds; full suite run (v4 spy/mock + AST-coverage). No ADR.                                                                                                                                                                                                                                                             |
+| B    | #182 | eslint 9->10 (root+apps/web dev)                                                                                                                            | RED (Node)               | low (js-yaml)          | merge-AFTER-FIX: add `@eslint/js@^10` devDep (eslint 10 dropped it from its deps -> the flat-config bare import throws ERR_MODULE_NOT_FOUND = the exact failure). Keep typescript-eslint ^8.61 (already eslint-10 compatible). No ADR.                                                                                                                                                                                                                                                                 |
+| C    | #108 | resend 4->6 (packages/auth, 2 majors)                                                                                                                       | GREEN incl Vercel        | none                   | merge-after-VERIFY: no code change (html+text-only sends, no react opt, no inline-CID, `{data,error}` shape unchanged); do ONE real OTP delivery check (RESEND_FROM_EMAIL=wraps@1stimpression.co) before/after merge. Lowest-risk Tier C.                                                                                                                                                                                                                                                              |
+| C    | #181 | next 15.5->16.2 (apps/web + packages/auth peer)                                                                                                             | RED (Vercel build)       | HIGH (9 GHSA, 7 High)  | ATTEMPT merge-after-fix: Vercel fail = Turbopack-default build hard-fails on the load-bearing webpack config; fix = `next build --webpack` bridge (preserves ADR-0013 Inv2 extensionAlias + Inv3b externals verbatim) + bump packages/auth `next` peer to allow ^16 + ADR-0013 amendment (Inv2 already anticipates this) + Vercel preview deploy verify + smoke + advisor() review. HOLD-with-plan if preview reveals deeper breakage. React 19 already in place; async-request-APIs already migrated. |
+| C    | #180 | @prisma/client 5->7 (+ prisma CLI; packages/db + apps/web hoist)                                                                                            | RED (Node+Vercel)        | none                   | HOLD-WITH-PLAN. Prisma 7 = Rust-free driver-adapter rewrite of the ADR-0014 two-connection client (PrismaPg), REQUIRED generator `output`, binaryTargets RETIRED (ADR-0013 Inv3c moot), prisma.config.ts; Prisma 6 flips encrypted-PII Bytes Buffer->Uint8Array (breaks crypto.ts/users.ts typecheck = Node fail). Touches BOTH ADRs + DB split + RLS + Render+Vercel deploy. Not a security fix. Too large/risky to land safely in this goal; documented upgrade plan at closeout.                    |
 
 **DECISIONS (no-questions policy):**
+
 1. **Tier A merges individually via `@dependabot rebase` + sequential merge** (strict-up-to-date forces re-rebase + lockfile regen per merge; keeps Dependabot attribution). gitleaks (#177) special-cased: confirm the scanner still executes on a subsequent PR after it lands.
 2. **#184 completed, not merged as-opened** (security correctness: as-opened it clears no advisory). vitest core ^4 across all 9 manifests.
 3. **#181 next 16 ATTEMPTED** (not pre-held) because it clears 7 High CVEs and the fix is a one-line `--webpack` bridge + ADR amendment; React 19 + async-APIs already done. Held-with-plan only if the preview deploy reveals deeper breakage.
@@ -75,7 +176,7 @@ Research evidence (8-agent workflow, official migration guides + repo-specific i
 
 ## 2026-06-17 - Cowork session - branch cleanup + Goal 19 finalized
 
-- Deleted merged remote feature branches `goal/17-cross-view-coherence` and `goal/18-generation-polish` (PRs #194/#195 merged; squash-merge leaves them diverged, so safe to delete). Confirmed 404. Many older merged branches remain (goal/7-*, feat/*, plus the 12 dependabot/* that Goal 19 will triage); left for a future sweep.
+- Deleted merged remote feature branches `goal/17-cross-view-coherence` and `goal/18-generation-polish` (PRs #194/#195 merged; squash-merge leaves them diverged, so safe to delete). Confirmed 404. Many older merged branches remain (goal/7-_, feat/_, plus the 12 dependabot/\* that Goal 19 will triage); left for a future sweep.
 - Goal 19 prompt finalized via /prompt-engineer and committed to main (commit 63976af) at `prompts/21-goal-19-dependency-triage.md`. It had only ever been a local-only draft (never on remote); now on origin/main so the Goal 19 worktree picks it up. Stripped pre-ban em-dashes. Added D5 carryover riders from Goal 18: R1 Sentry truth-up (triage `node` to a documented 0-new baseline; retire the empty `sentry-awd` / `alphawolfdecals-1c` duplicate) and R2 draft-model smooth gradient (bounded ~$2 fal, with an explicit escape to its own Goal 20 if it grows). Close-out renumbered to D6; budget + DoD updated.
 - Showcase v3 delivered in the Cowork outputs scratchpad (NOT the repo): design-system rebuild on real brand tokens (Geist embedded, wolf logo, cyan glow, shadcn-style cards), real-work strip, honest gradient-direction proof, graphify graph embedded as a companion file. Deliverable export section pulled per Archer's standing rule.
 - NEXT: ultracode full-app test run with fresh per-page screenshots + a dedicated app-details HTML (Archer providing specifics). graphify update runs CC-side after further merges. REDIS_URL + GitHub PAT rotation pending (Archer).
@@ -85,6 +186,7 @@ Research evidence (8-agent workflow, official migration guides + repo-specific i
 **Context:** Cowork orchestration. Verified the Goal 18 report against ground truth (verify, do not trust) before accepting it, then merged.
 
 **VERIFICATION (against live connectors, not the report's word):**
+
 - PR #195: open, CI fully green on the head (Node lint/typecheck/test, both Python suites, gitleaks, license-guard all pass; Playwright + Supabase preview skipped). Branch was behind main by the docs-only em-dash-ban commit; updated via the GitHub API (no force-push), CI re-ran green, mergeable_state clean.
 - Direction proofs: both PNGs render dark at the front and cyan/purple at the rear, matching the briefed black-front-to-cyan-rear direction. No regression on grey-purple.
 - Export pack PDF: the Alpha Wolf logo is composited on both front doors, the hood, and the windshield, coherent across all four views. The D2 carryover is closed. HONEST GAP confirmed and accepted: the integrated wrap renders as cyan linework, not the smooth ombre the brief demands; the smooth gradient is proven only on the standalone export-model proofs. Logged as a draft-model carryover. Note: the test brief self-contradicts (Extras says "Pinstripe / accents" while Style says "NOT pinstripes").
@@ -94,11 +196,13 @@ Research evidence (8-agent workflow, official migration guides + repo-specific i
 **MERGE:** Squash-merged PR #195 to main (merge commit 44eef11), commit title kept em-dash-free per the ban. Branch update plus CI confirmation done first; admin bypass NOT used.
 
 **DECISIONS (Archer, this session):**
+
 1. Merge now; smooth-ombre-in-journey logged as a draft-model carryover for a future goal.
 2. Orchestrator model: keep the Sonnet 4.6 default on prod (env var left unset). Accepted tradeoff: Sonnet runs ~30s, tight against the 60s Hobby slice. WATCH Sentry/PostHog for orchestration timeouts after the prod deploy; pin Haiku (ANTHROPIC_ORCHESTRATOR_MODEL=claude-haiku-4-5) if it bites.
 3. Showcase: restore the deliverable section with the logo-on-coherent-vehicle export; hold the smooth-gradient headline until the draft-model carryover is fixed.
 
 **OPEN / NEXT:**
+
 - graphify update against merged main (CC side, where the user-scoped MCP runs).
 - Finalize and queue Goal 19 (prompts/21) with carryovers: draft-model smooth-gradient gap; Sentry node 95-error triage and retire the empty sentry-awd duplicate Sentry org; graphify-in-code-review instruction for CC.
 - Branch cleanup pending Archer's go: goal/18-generation-polish (merged) and goal/17-cross-view-coherence still on the remote; confirm the local worktrees were removed.

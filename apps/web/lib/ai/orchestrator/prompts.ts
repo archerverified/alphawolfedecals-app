@@ -330,6 +330,48 @@ export function buildCompileUserMessage(input: CompileBriefInput): string {
   return lines.join('\n');
 }
 
+// ---------------------------------------------------------------------------
+// Photo-render prompt (Goal 21 D2, plan D-B + D-D). Versioned independently
+// from ORCHESTRATOR_PROMPT_VERSION so changes here do not bump the template
+// orchestrator's provenance record. Editing the text below requires bumping
+// PHOTO_PROMPT_VERSION so rendered photos are traceable to their exact prompt.
+// ---------------------------------------------------------------------------
+
+/**
+ * Version string for the on-photo i2i render prompt. Recorded in run provenance
+ * (via the job record) so any photo render can be traced to the exact instruction
+ * that produced it. Decoupled from ORCHESTRATOR_PROMPT_VERSION: changes here do
+ * NOT require a bump there, and vice versa.
+ */
+export const PHOTO_PROMPT_VERSION = 'p1';
+
+/**
+ * Build the image-to-image instruction that applies a concept's design summary
+ * to the customer's REAL vehicle photo. The returned string is the "prompt"
+ * field submitted to the nano-banana edit model (fal-ai/nano-banana/edit) with
+ * the customer photo as imageUrls[0].
+ *
+ * Design rules enforced here (see plan D-B and D-D):
+ * - Applies the concept's design, not a new creative interpretation.
+ * - Preserves vehicle shape, perspective, lighting, and photo background exactly.
+ * - No text, letters, numbers, logos, emblems, or badges are rendered.
+ * - Clear space is reserved where a logo would sit; the real logo is composited
+ *   after rendering (never AI-generated).
+ * - Output stays photorealistic so the customer sees their actual vehicle wrapped.
+ */
+export function buildPhotoRenderPrompt(input: { summary: string }): string {
+  return (
+    `Apply this wrap design to the vehicle shown in the supplied photo: ${input.summary}. ` +
+    `Restyle only the painted body panels to match the described wrap design. ` +
+    `Preserve the vehicle's exact shape, body proportions, perspective, and all physical features. ` +
+    `Preserve the photo's background, lighting direction, and shadows exactly as they appear. ` +
+    `Leave windows, wheels, tires, headlights, taillights, mirrors, grille, and any non-body trim completely unchanged. ` +
+    `Render NO text, letters, words, numbers, logos, emblems, badges, or brandmarks of any kind anywhere on the vehicle. ` +
+    `Where a logo would sit (any large, calm, low-detail panel area), leave clean, uncluttered wrap-color space so a real logo can be composited afterward. ` +
+    `Keep the result photorealistic: the output must look like a photograph of a real wrapped vehicle, not an illustration or rendering.`
+  );
+}
+
 export function buildIterationUserMessage(input: CompileIterationInput): string {
   const views = orderViews(input.views);
   const lines: string[] = [];

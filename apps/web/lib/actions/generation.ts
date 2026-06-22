@@ -15,24 +15,23 @@
 
 import {
   AI_CONFIG,
-  AI_MODELS,
   CREDIT_CONFIG,
   PLAN_LIMITS,
   briefs,
   credits,
-  estimateImageCostUsd,
   generation,
   projects,
   rateLimit,
   storage,
   vehicles,
-  type AiModelKey,
   type GenerationRunKind,
   type GenerationRunStatus,
+  type RenderTarget,
   type StartRunResult,
 } from '@alphawolf/db';
 
 import { requireUser } from '../admin/guard';
+import { estimateRunCostUsd } from '../generation/cost';
 import {
   advanceRun,
   parseRunDirections,
@@ -103,29 +102,6 @@ function validToken(token: unknown): token is string {
   return typeof token === 'string' && token.trim().length >= 8 && token.length <= 100;
 }
 
-function round4(n: number): number {
-  return Math.round(n * 1e4) / 1e4;
-}
-
-function estimateRunCostUsd(modelKey: AiModelKey, kind: GenerationRunKind, views: number): number {
-  const dims = kind === 'final' ? AI_CONFIG.finalImage : AI_CONFIG.draftImage;
-  // A FINAL view conditions on up to 3 input images, which the metered final
-  // model (flux2_pro) bills per input MP: the structure render, the approved-draft
-  // donor (Goal 17 coherence), AND the directional gradient guide (Goal 18). The
-  // pre-orchestration estimate counts the worst case so the daily spend cap stays a
-  // true upper bound (a per-image draft model ignores input count, so the draft
-  // estimate is unchanged). trueUpRunCost replaces this with actuals.
-  const inputImages = kind === 'final' ? 3 : 1;
-  const perImage = estimateImageCostUsd(
-    AI_MODELS[modelKey].pricing,
-    dims.width,
-    dims.height,
-    inputImages,
-  );
-  const directions = kind === 'initial' ? 3 : 1;
-  return round4(perImage * directions * views);
-}
-
 // Gates 1+2, shared by all three start actions. Returns null when clear.
 async function checkSharedGates(
   userId: string,
@@ -183,7 +159,10 @@ export async function startGenerationRunAction(
   // Gates BEFORE the snapshot (review fix F8): a rate-limited or spend-capped
   // attempt must not accumulate orphan brief-snapshot versions.
   const modelKey = AI_CONFIG.defaults.draft;
-  const estimatedCostUsd = estimateRunCostUsd(modelKey, 'initial', views.length);
+  const hasPhoto = (parsed.data.photos?.length ?? 0) > 0;
+  const estimatedCostUsd = estimateRunCostUsd(modelKey, 'initial', views.length, {
+    photoRenders: hasPhoto ? 3 : 0,
+  });
   const gate = await checkSharedGates(user.id, projectId, estimatedCostUsd);
   if (gate) return gate;
 
@@ -297,8 +276,22 @@ export async function startFinalAction(
   const parent = await loadParentConcept(user.id, projectId, parentRunId, conceptKey);
   if (!parent.ok) return parent.result;
 
+  // Load the brief snapshot at the PARENT RUN's brief version to determine
+  // whether a photo render is expected. This mirrors orchestrate-final exactly
+  // (run-pipeline.ts orchestrateSlice, kind==='final'), so the spend-cap
+  // estimate agrees with the jobs actually rendered even when the user edits
+  // the brief between the initial run and clicking Final.
+  const brief = await briefs.getBrief(user.id, projectId);
+  const snapshot = brief
+    ? await briefs.getBriefSnapshot(user.id, brief.id, parent.run.briefVersion)
+    : null;
+  const parsedBrief = snapshot ? parseBriefData(snapshot.data) : null;
+  const hasFinalPhoto = parsedBrief?.ok ? (parsedBrief.data.photos?.length ?? 0) > 0 : false;
+
   const modelKey = AI_CONFIG.defaults.final;
-  const estimatedCostUsd = estimateRunCostUsd(modelKey, 'final', parent.views.length);
+  const estimatedCostUsd = estimateRunCostUsd(modelKey, 'final', parent.views.length, {
+    photoRenders: hasFinalPhoto ? 1 : 0,
+  });
   const gate = await checkSharedGates(user.id, projectId, estimatedCostUsd);
   if (gate) return gate;
 
@@ -387,7 +380,12 @@ export type GenerationRunSummary = {
   conceptKey: string | null;
   createdAt: string;
   directions: Array<{ key: string; title: string; summary: string }>;
-  images: Array<{ conceptKey: string; view: string; previewUrl: string }>;
+  images: Array<{
+    conceptKey: string;
+    view: string;
+    previewUrl: string;
+    renderTarget: RenderTarget;
+  }>;
 };
 
 export type GenerationContextResult =
@@ -423,7 +421,12 @@ export async function getGenerationContextAction(
             if (!img.previewPath) return null;
             try {
               const previewUrl = await storage.signedAssetReadUrl(img.previewPath);
-              return { conceptKey: img.conceptKey, view: img.view, previewUrl };
+              return {
+                conceptKey: img.conceptKey,
+                view: img.view,
+                previewUrl,
+                renderTarget: img.renderTarget,
+              };
             } catch {
               return null;
             }
