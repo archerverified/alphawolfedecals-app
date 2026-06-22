@@ -1,3 +1,5 @@
+> SUPERSEDED 2026-06-22: the product pivoted fully to B2B. The active product definition is prd-b2b-print-engine.md. This document is retained for history (the prior B2C-plus-shop framing).
+
 # PRD: Alpha Wolf Wrap Studio
 
 > **Truth-up note (2026-06-17, v1.2).** This revision aligns the PRD with what is actually shipped and the decisions logged in `activities.md`. Key reconciliations: the live product is B2C-first (the guided design flow in `prd-b2c-guided-design-flow.md`); the customer deliverable is a portable export pack, and in-platform print paneling / RIP is deferred to post-launch v2 (Goal 8 deferred); image generation runs on fal.ai (nano-banana-edit draft, flux2_pro_edit export final) with a Claude Sonnet 4.6 orchestrator configurable via `ANTHROPIC_ORCHESTRATOR_MODEL`; the brand is cyan #00AEEF on zinc-neutral and black (the red/lime direction in the old section 5.4 is retired). See `activities.md` for the full per-goal decision history.
