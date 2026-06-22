@@ -3,6 +3,7 @@
 // The wizard itself is GH-009 (separate PR) — this is the placeholder
 // destination that proves the verification + org creation flow completes.
 
+import Link from 'next/link';
 import { Eyebrow } from '@alphawolf/ui/components/ui/eyebrow';
 
 export const metadata = {
@@ -26,6 +27,24 @@ export default function ShopWelcomePage() {
         >
           Printer and media setup is coming next — we’ll walk you through profiles, media widths,
           and bleed so every export prints right the first time.
+        </div>
+
+        {/* Goal 20 D2: surface the orders dashboard from the shop's landing page.
+            Incoming customer orders already render at /dashboard, but a freshly
+            verified shop had no path to it (finding F5: orders looked email-only).
+            This CTA makes the in-app order view reachable. */}
+        <p className="mt-8 text-sm text-zinc-600">
+          Customer orders routed to your shop show up in your dashboard — you don’t have to wait on
+          email.
+        </p>
+        <div className="mt-3">
+          <Link
+            href="/dashboard"
+            data-testid="shop-dashboard-cta"
+            className="inline-flex items-center justify-center rounded-md bg-zinc-900 px-5 py-2.5 text-sm font-medium text-white shadow-sm transition hover:bg-zinc-800"
+          >
+            View your orders
+          </Link>
         </div>
       </div>
     </main>
