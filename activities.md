@@ -6,6 +6,29 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-22 - Cowork session - Goal 21 verified, scoped-subagents+gate codified (#204), prod test-data purged net-zero, B2B pivot recorded, next-build prep
+
+**Context:** New Cowork orchestrator session off the 2026-06-18 handoff. Verified the Claude Code Goal 21 report against ground truth (verify, do not trust), codified the build model, cleaned prod, and recorded the B2B pivot. All GitHub writes via the REST API (the sandbox cannot do local git).
+
+**B2B PIVOT (recorded, decided 2026-06-18):** The product pivoted fully to B2B: sell a print-ready wrap engine to wrap shops and freelance designers on subscription (owner floated $200 to $400/month). The consumer-facing design flow becomes the design-intake front end, not the business. Full rationale: docs/product/2026-06-18-pivot-decision-b2b.md (committed 1aa54609). This entry is the activities record the pivot was waiting on. PRD amended: new prd-b2b-print-engine.md is the active product definition; prd.md and prd-b2c-guided-design-flow.md marked superseded.
+
+**Goal 21 (photo-render + showcase) VERIFICATION (PR #203, merged to main 37259da):** Independently verified, not trusted. Confirmed: #203 merged, Vercel prod READY on 37259da, migration 20260621120000_generation_render_target applied (additive render_target column + CHECK, checksum row present), no new RLS gaps (Supabase security advisors unchanged: pre-existing INFO on _prisma_migrations / concept_votes / rate_limits plus the pg_trgm WARN). Section 3 gate run fresh: a fresh-context code review (APPROVE with nits) plus an independent advisor (SIGN-OFF). The claimed fix is real: the private-photo share-link leak is closed (the share read filters renderTarget='template' AND skips photo in previewByConceptFrom, the share is owner-gated via the lazily-minted transferToken, only the watermarked previewPath is exposed, 4 regression tests). Print and export still derive from template geometry; the showcase is a sharp composite of already-paid views (about $0.16/project), capped.
+
+**Report discrepancies found (this is why we verify):**
+1. "CI green including CodeRabbit" is a rule break: CodeRabbit is RETIRED (section 3) but is still installed and reviewed #203 (bot review plus a CodeRabbit commit status). Recommend uninstalling the CodeRabbit GitHub App. The .coderabbit.yaml file is already absent from main.
+2. "Sentry 0-new" is not currently true: a fresh issue NODE-G "unexpected response from server" on /signin (1 event, 0 users). Not from Goal 21 (no auth or signin files in the diff); folds into the Goal 20 fix-it.
+3. Net-zero was not done by the goal: see the purge below.
+4. Nit: one em-dash slipped into a new test string in packages/db/tests/share.test.ts (a section 4 violation); one-line follow-up.
+5. Closeout gaps the report owned: the graphify graph was not refreshed; the real-fal proof used a synthetic van, not the owner's real truck.
+
+**BUILD MODEL CODIFIED (PR #204, squash 9279805, merged):** Scoped subagents plus the section 3 gate is now the standing model for every prompt (CLAUDE.md section 4 bullet plus a section 3 cross-reference, header date 2026-06-21). Subagents only for narrow verifiable jobs (research, multi-connector verification, advisor reviews); no Loki-style autonomous mode, no --dangerously-skip-permissions, no auto-merge; every merge passes the gate with an explicit human go. Reviewed fresh-context (APPROVE), CI green.
+
+**PROD TEST-DATA PURGE - net-zero VERIFIED:** Goal 21 left general test traffic in prod (it never ran a purge). Preview-first scoping showed only 3 customer accounts created 2026-06-22 (2 pending_verification, 1 active) plus their 3 projects, 3 generation runs, 2 briefs, 4 assets, 4 ledger rows, 1 otp, 5 auth_events were clearly disposable; the other recent projects and orders belong to pre-existing accounts and were LEFT untouched. Deleted the 3-account cluster in FK-safe order (explicit ids), 0 storage objects pathed to them. Post-purge: users back to 4 (baseline), the 3 users 0, their runs and projects 0, no orphans, generation_images with render_target='photo' = 0 (the feature never wrote to prod). NOTE: prod is actively accumulating projects and orders under baseline accounts (23 projects, 4 orders observed), likely automated test traffic, flagged for follow-up.
+
+**NEXT-BUILD PREP:** Build order confirmed with Archer (2026-06-21): curvature spike (prompts/25, research-only) first, then the print engine (prompts/24), with the Goal 20 fix-it before the engine reaches real shops. Drafted prompts/26-goal-20-fixit-launch-blockers.md via /prompt-engineer (re-triaged the Goal 20 findings under the B2B lens: HIGH = session-on-verify, shop order email, e2e smoke, NODE-G; MEDIUM = PostHog CSP, support inbox; LOW = cosmetics). The spike prompt (prompts/25) is confirmed ready as-is.
+
+**Connectors live:** GitHub (PAT, REST API), Supabase MCP (dxwnzxlmggpdjyoxdybh), Vercel MCP (team_VWQt3..., project alphawolfedecals-app-web), Sentry MCP (alphawolfdecals/node), PostHog (433901), Resend, Composio (github, supabase, sentry, vercel, posthog, resend all active).
+
 ## 2026-06-21 - Goal 21 BUILD COMPLETE (reviewed x2, tested) - photo-render concepts + multi-view showcase - deploy GATED to Archer
 
 **Status:** Feature built, double-reviewed, and fully unit/integration tested on branch
