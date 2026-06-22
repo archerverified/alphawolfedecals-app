@@ -80,8 +80,14 @@ async function loadFinalViews(
       (r) => r.kind === 'final' && r.status === 'complete' && r.images.length > 0,
     );
     if (!finalRun) return null;
+    // Goal 21 T5: only template renders feed the spec pack. A photo render
+    // (render_target='photo', view='photo') is a marketing/preview output and
+    // must never become a print hero or per-view page. Filter it out here so
+    // bestByView, pickHeroView, and the view pages only ever see template renders.
     const renderable = finalRun.images.filter(
-      (i) => i.storagePath.endsWith('.png') || i.storagePath.endsWith('.jpg'),
+      (i) =>
+        i.renderTarget === 'template' &&
+        (i.storagePath.endsWith('.png') || i.storagePath.endsWith('.jpg')),
     );
     if (renderable.length === 0) return null;
 

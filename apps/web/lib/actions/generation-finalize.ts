@@ -86,7 +86,13 @@ export async function finalizeFinalRunAction(
   const project = await projects.getProject(user.id, projectId);
   if (!project) return { ok: false, message: "We couldn't find that project." };
 
-  const images = await generation.listImages(user.id, runId);
+  // Goal 21 T5: photo renders (render_target='photo') are marketing/preview
+  // outputs and must never become editor layers or registered print assets.
+  // Filter to template-only here so neither the asset-registration loop nor
+  // the canvas-insert loop ever sees a photo render.
+  const images = (await generation.listImages(user.id, runId)).filter(
+    (i) => i.renderTarget === 'template',
+  );
   if (images.length === 0) {
     return { ok: false, message: 'The final run has no renders yet.' };
   }
