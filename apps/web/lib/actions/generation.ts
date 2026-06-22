@@ -318,12 +318,17 @@ export async function startFinalAction(
   const parent = await loadParentConcept(user.id, projectId, parentRunId, conceptKey);
   if (!parent.ok) return parent.result;
 
-  // Load the current brief to determine whether a photo render is expected.
-  // Using the live brief (not the parent run's snapshot) matches what orchestrate
-  // checks at submit time, so the cap estimate stays consistent with actual jobs.
+  // Load the brief snapshot at the PARENT RUN's brief version to determine
+  // whether a photo render is expected. This mirrors orchestrate-final exactly
+  // (run-pipeline.ts orchestrateSlice, kind==='final'), so the spend-cap
+  // estimate agrees with the jobs actually rendered even when the user edits
+  // the brief between the initial run and clicking Final.
   const brief = await briefs.getBrief(user.id, projectId);
-  const parsedBrief = brief ? parseBriefData(brief.data ?? {}) : null;
-  const hasFinalPhoto = (parsedBrief?.ok ? (parsedBrief.data.photos?.length ?? 0) : 0) > 0;
+  const snapshot = brief
+    ? await briefs.getBriefSnapshot(user.id, brief.id, parent.run.briefVersion)
+    : null;
+  const parsedBrief = snapshot ? parseBriefData(snapshot.data) : null;
+  const hasFinalPhoto = parsedBrief?.ok ? (parsedBrief.data.photos?.length ?? 0) > 0 : false;
 
   const modelKey = AI_CONFIG.defaults.final;
   const estimatedCostUsd = estimateRunCostUsd(modelKey, 'final', parent.views.length, {

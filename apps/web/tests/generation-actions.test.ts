@@ -11,6 +11,7 @@ const h = vi.hoisted(() => ({
   requireUserMock: vi.fn(),
   getProjectMock: vi.fn(),
   getBriefMock: vi.fn(),
+  getBriefSnapshotMock: vi.fn(),
   snapshotBriefMock: vi.fn(),
   getPublishedDetailMock: vi.fn(),
   getPlanGateContextMock: vi.fn(),
@@ -35,7 +36,11 @@ vi.mock('@alphawolf/db', async (importOriginal) => {
   return {
     ...actual,
     projects: { getProject: h.getProjectMock },
-    briefs: { getBrief: h.getBriefMock, snapshotBrief: h.snapshotBriefMock },
+    briefs: {
+      getBrief: h.getBriefMock,
+      getBriefSnapshot: h.getBriefSnapshotMock,
+      snapshotBrief: h.snapshotBriefMock,
+    },
     vehicles: { getPublishedDetail: h.getPublishedDetailMock },
     credits: { getPlanGateContext: h.getPlanGateContextMock },
     rateLimit: { recordFailure: h.recordFailureMock },
@@ -112,6 +117,14 @@ beforeEach(() => {
   h.requireUserMock.mockResolvedValue({ id: 'user-1', email: 'a@b.co' });
   h.getProjectMock.mockResolvedValue({ id: 'proj-1', vehicleId: 'veh-1' });
   h.getBriefMock.mockResolvedValue({ id: 'brief-1', projectId: 'proj-1', data: {}, rev: 3 });
+  // Default snapshot: no photos (data: {}), matching the live-brief default above.
+  h.getBriefSnapshotMock.mockResolvedValue({
+    briefId: 'brief-1',
+    version: 4,
+    data: {},
+    label: null,
+    createdAt: new Date(),
+  });
   h.snapshotBriefMock.mockResolvedValue({ ok: true, version: 4 });
   h.getPublishedDetailMock.mockResolvedValue({
     id: 'veh-1',
@@ -489,12 +502,18 @@ describe('startGenerationRunAction - photo cost included in estimate (Goal 21 T4
 
 describe('startFinalAction - photo cost included in estimate (Goal 21 T4)', () => {
   it('brief with photos: estimate includes 1 photo render at final dims in the spend gate', async () => {
+    // Drive hasFinalPhoto through the SNAPSHOT path (matching orchestrate-final),
+    // not the live brief. getBriefMock returns a row with empty data so the live
+    // brief has NO photos; the snapshot at the parent run's briefVersion carries
+    // the photo, proving the action reads the snapshot, not the live brief.
+    h.getBriefMock.mockResolvedValue({ id: 'brief-1', projectId: 'proj-1', data: {}, rev: 3 });
     // assetId must be a UUID per the brief schema.
-    h.getBriefMock.mockResolvedValue({
-      id: 'brief-1',
-      projectId: 'proj-1',
+    h.getBriefSnapshotMock.mockResolvedValue({
+      briefId: 'brief-1',
+      version: 4,
       data: { photos: [{ assetId: '00000000-0000-0000-0000-000000000001' }] },
-      rev: 3,
+      label: null,
+      createdAt: new Date(),
     });
     h.startRunMock.mockResolvedValue({ ok: true, run: { id: 'final-1' }, deduped: false });
 
@@ -508,6 +527,9 @@ describe('startFinalAction - photo cost included in estimate (Goal 21 T4)', () =
     const expectedEstimate = Number((withoutPhoto + photoCost).toFixed(4));
 
     await startFinalAction('proj-1', 'parent-1', 'bolder', TOKEN);
+
+    // Confirm the snapshot was fetched at the parent run's briefVersion (4).
+    expect(h.getBriefSnapshotMock).toHaveBeenCalledWith('user-1', 'brief-1', 4);
     expect(h.startRunMock).toHaveBeenCalledWith(
       'user-1',
       expect.objectContaining({ estimatedCostUsd: expectedEstimate }),
@@ -515,11 +537,27 @@ describe('startFinalAction - photo cost included in estimate (Goal 21 T4)', () =
   });
 
   it('brief without photos: estimate equals template-only cost (no photo term)', async () => {
-    // Default brief mock has no photos (data: {}).
+    // Default snapshot mock has no photos (data: {}). Confirms that a snapshot
+    // with no photos does not add a photo cost term.
     h.startRunMock.mockResolvedValue({ ok: true, run: { id: 'final-1' }, deduped: false });
 
     // 0.18 is the existing fixture value (2 views, flux2_pro_edit, 3 input images).
     await startFinalAction('proj-1', 'parent-1', 'bolder', TOKEN);
+    expect(h.startRunMock).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ estimatedCostUsd: 0.18 }),
+    );
+  });
+
+  it('missing snapshot falls back to 0 photo renders (does not throw)', async () => {
+    // Simulates a snapshot that has been purged or was never written.
+    h.getBriefSnapshotMock.mockResolvedValue(null);
+    h.startRunMock.mockResolvedValue({ ok: true, run: { id: 'final-1' }, deduped: false });
+
+    const res = await startFinalAction('proj-1', 'parent-1', 'bolder', TOKEN);
+    expect(res).toEqual({ ok: true, runId: 'final-1', deduped: false });
+
+    // With no snapshot, hasFinalPhoto=false so estimate = template-only (0.18).
     expect(h.startRunMock).toHaveBeenCalledWith(
       'user-1',
       expect.objectContaining({ estimatedCostUsd: 0.18 }),
