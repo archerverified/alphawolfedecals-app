@@ -1,3 +1,5 @@
+> SUPERSEDED 2026-06-22: the product pivoted fully to B2B. The active product definition is prd-b2b-print-engine.md. This document is retained for history (the consumer guided-design flow).
+
 # PRD: B2C Guided Design Flow (Brief → AI → Export Pack)
 
 ## 1. Product overview
