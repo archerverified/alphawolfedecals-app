@@ -62,12 +62,12 @@ import { AI_CONFIG, AI_MODELS, CREDIT_CONFIG, estimateImageCostUsd } from '@alph
 
 import {
   advanceGenerationAction,
-  estimateRunCostUsd,
   getGenerationContextAction,
   startFinalAction,
   startGenerationRunAction,
   startIterationAction,
 } from '@/lib/actions/generation';
+import { estimateRunCostUsd } from '@/lib/generation/cost';
 
 const TOKEN = 'client-token-1234';
 
