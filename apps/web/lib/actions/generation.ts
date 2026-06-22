@@ -107,7 +107,12 @@ function round4(n: number): number {
   return Math.round(n * 1e4) / 1e4;
 }
 
-function estimateRunCostUsd(modelKey: AiModelKey, kind: GenerationRunKind, views: number): number {
+export function estimateRunCostUsd(
+  modelKey: AiModelKey,
+  kind: GenerationRunKind,
+  views: number,
+  opts?: { photoRenders?: number },
+): number {
   const dims = kind === 'final' ? AI_CONFIG.finalImage : AI_CONFIG.draftImage;
   // A FINAL view conditions on up to 3 input images, which the metered final
   // model (flux2_pro) bills per input MP: the structure render, the approved-draft
@@ -123,7 +128,20 @@ function estimateRunCostUsd(modelKey: AiModelKey, kind: GenerationRunKind, views
     inputImages,
   );
   const directions = kind === 'initial' ? 3 : 1;
-  return round4(perImage * directions * views);
+  const templateCost = perImage * directions * views;
+
+  // Photo renders (on-photo i2i, one per direction/concept) add a flat per-image
+  // cost at the photo model's pricing. The dims mirror the template dims selection
+  // (draft dims for initial/iteration, final dims for final) so the cap stays a
+  // conservative upper bound even when the photo model is per-image flat.
+  const photoCount = opts?.photoRenders ?? 0;
+  const photoCost =
+    photoCount > 0
+      ? photoCount *
+        estimateImageCostUsd(AI_MODELS[AI_CONFIG.defaults.photo].pricing, dims.width, dims.height)
+      : 0;
+
+  return round4(templateCost + photoCost);
 }
 
 // Gates 1+2, shared by all three start actions. Returns null when clear.
@@ -183,7 +201,10 @@ export async function startGenerationRunAction(
   // Gates BEFORE the snapshot (review fix F8): a rate-limited or spend-capped
   // attempt must not accumulate orphan brief-snapshot versions.
   const modelKey = AI_CONFIG.defaults.draft;
-  const estimatedCostUsd = estimateRunCostUsd(modelKey, 'initial', views.length);
+  const hasPhoto = (parsed.data.photos?.length ?? 0) > 0;
+  const estimatedCostUsd = estimateRunCostUsd(modelKey, 'initial', views.length, {
+    photoRenders: hasPhoto ? 3 : 0,
+  });
   const gate = await checkSharedGates(user.id, projectId, estimatedCostUsd);
   if (gate) return gate;
 
@@ -297,8 +318,17 @@ export async function startFinalAction(
   const parent = await loadParentConcept(user.id, projectId, parentRunId, conceptKey);
   if (!parent.ok) return parent.result;
 
+  // Load the current brief to determine whether a photo render is expected.
+  // Using the live brief (not the parent run's snapshot) matches what orchestrate
+  // checks at submit time, so the cap estimate stays consistent with actual jobs.
+  const brief = await briefs.getBrief(user.id, projectId);
+  const parsedBrief = brief ? parseBriefData(brief.data ?? {}) : null;
+  const hasFinalPhoto = (parsedBrief?.ok ? (parsedBrief.data.photos?.length ?? 0) : 0) > 0;
+
   const modelKey = AI_CONFIG.defaults.final;
-  const estimatedCostUsd = estimateRunCostUsd(modelKey, 'final', parent.views.length);
+  const estimatedCostUsd = estimateRunCostUsd(modelKey, 'final', parent.views.length, {
+    photoRenders: hasFinalPhoto ? 1 : 0,
+  });
   const gate = await checkSharedGates(user.id, projectId, estimatedCostUsd);
   if (gate) return gate;
 

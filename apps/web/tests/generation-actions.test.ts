@@ -57,6 +57,7 @@ import { AI_CONFIG, AI_MODELS, CREDIT_CONFIG, estimateImageCostUsd } from '@alph
 
 import {
   advanceGenerationAction,
+  estimateRunCostUsd,
   getGenerationContextAction,
   startFinalAction,
   startGenerationRunAction,
@@ -381,5 +382,147 @@ describe('advanceGenerationAction + getGenerationContextAction', () => {
       // Original storage paths never reach the client payload.
       expect(JSON.stringify(res)).not.toContain('bolder-front.png');
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Goal 21 T4: estimateRunCostUsd photo-render cost accounting
+// ---------------------------------------------------------------------------
+
+describe('estimateRunCostUsd - photo render cost terms (Goal 21 T4)', () => {
+  // Compute the per-image cost for one nano photo render at draft dims.
+  function nanoPhotoCostDraft(): number {
+    return estimateImageCostUsd(
+      AI_MODELS[AI_CONFIG.defaults.photo].pricing,
+      AI_CONFIG.draftImage.width,
+      AI_CONFIG.draftImage.height,
+    );
+  }
+
+  // Compute the per-image cost for one nano photo render at final dims.
+  function nanoPhotoCostFinal(): number {
+    return estimateImageCostUsd(
+      AI_MODELS[AI_CONFIG.defaults.photo].pricing,
+      AI_CONFIG.finalImage.width,
+      AI_CONFIG.finalImage.height,
+    );
+  }
+
+  it('initial estimate with photoRenders:3 equals no-photo estimate + 3 nano draft renders', () => {
+    const views = 1;
+    const withoutPhoto = estimateRunCostUsd(AI_CONFIG.defaults.draft, 'initial', views);
+    const withPhoto = estimateRunCostUsd(AI_CONFIG.defaults.draft, 'initial', views, {
+      photoRenders: 3,
+    });
+    const expected = Number((withoutPhoto + 3 * nanoPhotoCostDraft()).toFixed(4));
+    expect(withPhoto).toBeCloseTo(expected, 4);
+  });
+
+  it('initial estimate with photoRenders:0 equals no-photo estimate (unchanged behavior)', () => {
+    const views = 2;
+    const withoutPhoto = estimateRunCostUsd(AI_CONFIG.defaults.draft, 'initial', views);
+    const withZero = estimateRunCostUsd(AI_CONFIG.defaults.draft, 'initial', views, {
+      photoRenders: 0,
+    });
+    const withOmitted = estimateRunCostUsd(AI_CONFIG.defaults.draft, 'initial', views);
+    expect(withZero).toBe(withoutPhoto);
+    expect(withOmitted).toBe(withoutPhoto);
+  });
+
+  it('final estimate with photoRenders:1 adds exactly one nano render at final dims', () => {
+    const views = 2;
+    const withoutPhoto = estimateRunCostUsd(AI_CONFIG.defaults.final, 'final', views);
+    const withPhoto = estimateRunCostUsd(AI_CONFIG.defaults.final, 'final', views, {
+      photoRenders: 1,
+    });
+    const expected = Number((withoutPhoto + nanoPhotoCostFinal()).toFixed(4));
+    expect(withPhoto).toBeCloseTo(expected, 4);
+  });
+
+  it('final estimate with photoRenders:0 or omitted equals the no-photo estimate', () => {
+    const views = 1;
+    const baseline = estimateRunCostUsd(AI_CONFIG.defaults.final, 'final', views);
+    expect(estimateRunCostUsd(AI_CONFIG.defaults.final, 'final', views, { photoRenders: 0 })).toBe(
+      baseline,
+    );
+    expect(estimateRunCostUsd(AI_CONFIG.defaults.final, 'final', views, {})).toBe(baseline);
+  });
+});
+
+describe('startGenerationRunAction - photo cost included in estimate (Goal 21 T4)', () => {
+  it('brief with photos: estimate includes 3 photo renders in the spend gate', async () => {
+    // A brief that has one uploaded photo (assetId must be a UUID per the brief schema).
+    h.getBriefMock.mockResolvedValue({
+      id: 'brief-1',
+      projectId: 'proj-1',
+      data: { photos: [{ assetId: '00000000-0000-0000-0000-000000000001' }] },
+      rev: 3,
+    });
+
+    const withoutPhoto = estimateRunCostUsd(AI_CONFIG.defaults.draft, 'initial', 1);
+    const photoCost =
+      3 *
+      estimateImageCostUsd(
+        AI_MODELS[AI_CONFIG.defaults.photo].pricing,
+        AI_CONFIG.draftImage.width,
+        AI_CONFIG.draftImage.height,
+      );
+    const expectedEstimate = Number((withoutPhoto + photoCost).toFixed(4));
+
+    await startGenerationRunAction('proj-1', TOKEN);
+    expect(h.startRunMock).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ estimatedCostUsd: expectedEstimate }),
+    );
+  });
+
+  it('brief without photos: estimate equals template-only cost (no photo term)', async () => {
+    // Default brief mock has no photos (data: {}).
+    const expectedEstimate = INITIAL_ESTIMATE;
+    await startGenerationRunAction('proj-1', TOKEN);
+    expect(h.startRunMock).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ estimatedCostUsd: expectedEstimate }),
+    );
+  });
+});
+
+describe('startFinalAction - photo cost included in estimate (Goal 21 T4)', () => {
+  it('brief with photos: estimate includes 1 photo render at final dims in the spend gate', async () => {
+    // assetId must be a UUID per the brief schema.
+    h.getBriefMock.mockResolvedValue({
+      id: 'brief-1',
+      projectId: 'proj-1',
+      data: { photos: [{ assetId: '00000000-0000-0000-0000-000000000001' }] },
+      rev: 3,
+    });
+    h.startRunMock.mockResolvedValue({ ok: true, run: { id: 'final-1' }, deduped: false });
+
+    // Parent has 2 views (front + driver) to match the completedParent fixture.
+    const withoutPhoto = estimateRunCostUsd(AI_CONFIG.defaults.final, 'final', 2);
+    const photoCost = estimateImageCostUsd(
+      AI_MODELS[AI_CONFIG.defaults.photo].pricing,
+      AI_CONFIG.finalImage.width,
+      AI_CONFIG.finalImage.height,
+    );
+    const expectedEstimate = Number((withoutPhoto + photoCost).toFixed(4));
+
+    await startFinalAction('proj-1', 'parent-1', 'bolder', TOKEN);
+    expect(h.startRunMock).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ estimatedCostUsd: expectedEstimate }),
+    );
+  });
+
+  it('brief without photos: estimate equals template-only cost (no photo term)', async () => {
+    // Default brief mock has no photos (data: {}).
+    h.startRunMock.mockResolvedValue({ ok: true, run: { id: 'final-1' }, deduped: false });
+
+    // 0.18 is the existing fixture value (2 views, flux2_pro_edit, 3 input images).
+    await startFinalAction('proj-1', 'parent-1', 'bolder', TOKEN);
+    expect(h.startRunMock).toHaveBeenCalledWith(
+      'user-1',
+      expect.objectContaining({ estimatedCostUsd: 0.18 }),
+    );
   });
 });
