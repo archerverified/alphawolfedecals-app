@@ -52,7 +52,7 @@
     "@alphawolf/canvas": "workspace:^",
     "@prisma/client": "^5.22.0",
     "@supabase/supabase-js": "^2.108.2",
-    "prisma": "^5.22.0",
+    "prisma": "^7.8.0",
     "sharp": "0.34.5",
     "svgo": "^3.3.3",
     "svgson": "^5.3.1"
