@@ -105,6 +105,8 @@ export const AI_CONFIG = {
     iteration: 'kontext_dev' as AiModelKey,
     final: 'flux2_pro_edit' as AiModelKey,
     upscale: 'recraft_crisp_upscale' as AiModelKey,
+    // photo i2i reuses the nano-banana edit model - true image-to-image, $0.039 flat.
+    photo: 'nano_banana_edit' as AiModelKey,
   },
   // Orchestrator (brief → per-view generation instructions). The MODEL and its
   // $/MTok pricing are resolved at runtime by resolveOrchestratorModel() from
@@ -194,6 +196,16 @@ export function resolveOrchestratorModel(): ResolvedOrchestratorModel {
     maxTokens: AI_CONFIG.orchestrator.maxTokens,
   };
 }
+
+/**
+ * Sentinel view name used exclusively for on-photo i2i renders (Goal 21).
+ * This is NEVER a real template view: it does not appear in VIEW_ORDER, is
+ * filtered out of every print and editor read (load-spec-pack-data, insertIntoCanvas),
+ * and is excluded from the 4-view switcher in the generation gallery. Its only
+ * purpose is to give photo renders a distinct, queryable view key so they can
+ * be partitioned from template renders without a second discriminator column lookup.
+ */
+export const PHOTO_VIEW = 'photo';
 
 /**
  * Estimated USD cost of one output at the given pixel dimensions.
