@@ -26,6 +26,7 @@ import {
   vehicles,
   type GenerationRunKind,
   type GenerationRunStatus,
+  type RenderTarget,
   type StartRunResult,
 } from '@alphawolf/db';
 
@@ -379,7 +380,12 @@ export type GenerationRunSummary = {
   conceptKey: string | null;
   createdAt: string;
   directions: Array<{ key: string; title: string; summary: string }>;
-  images: Array<{ conceptKey: string; view: string; previewUrl: string }>;
+  images: Array<{
+    conceptKey: string;
+    view: string;
+    previewUrl: string;
+    renderTarget: RenderTarget;
+  }>;
 };
 
 export type GenerationContextResult =
@@ -415,7 +421,12 @@ export async function getGenerationContextAction(
             if (!img.previewPath) return null;
             try {
               const previewUrl = await storage.signedAssetReadUrl(img.previewPath);
-              return { conceptKey: img.conceptKey, view: img.view, previewUrl };
+              return {
+                conceptKey: img.conceptKey,
+                view: img.view,
+                previewUrl,
+                renderTarget: img.renderTarget,
+              };
             } catch {
               return null;
             }

@@ -70,7 +70,12 @@ export type RunSnapshot = {
   error: string | null;
   directions?: SnapshotDirection[];
   jobs: Array<{ conceptKey: string; view: string; status: GenerationJobStatus }>;
-  images?: Array<{ conceptKey: string; view: string; previewUrl: string }>;
+  images?: Array<{
+    conceptKey: string;
+    view: string;
+    previewUrl: string;
+    renderTarget: RenderTarget;
+  }>;
 };
 
 // Directions JSONB persisted on the run row. Type alias (not interface) so it
@@ -1100,7 +1105,12 @@ async function buildSnapshot(userId: string, run: GenerationRunRow): Promise<Run
         if (!img.previewPath) return null;
         const previewUrl = await signedPreviewUrl(img.previewPath);
         if (!previewUrl) return null;
-        return { conceptKey: img.conceptKey, view: img.view, previewUrl };
+        return {
+          conceptKey: img.conceptKey,
+          view: img.view,
+          previewUrl,
+          renderTarget: img.renderTarget,
+        };
       }),
     );
     const present = signed.filter((s): s is NonNullable<typeof s> => s !== null);

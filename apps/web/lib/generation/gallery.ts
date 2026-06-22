@@ -14,6 +14,12 @@ export const VIEW_LABELS: ReadonlyArray<{ key: string; label: string }> = [
   { key: 'top', label: 'Top' },
 ];
 
+// Sentinel for on-photo renders (mirrors PHOTO_VIEW in @alphawolf/db). Kept as
+// a local literal because this module ships client-side and must not import the
+// db package. Photo renders are routed to photoView/finalPhotoView, never into
+// the 4-view switcher set.
+export const PHOTO_VIEW = 'photo';
+
 export function viewLabel(view: string): string {
   return VIEW_LABELS.find((v) => v.key === view)?.label ?? view;
 }
@@ -36,7 +42,15 @@ export type GalleryRun = {
   conceptKey: string | null;
   createdAt: string; // ISO
   directions: Array<{ key: string; title: string; summary: string }>;
-  images: Array<{ conceptKey: string; view: string; previewUrl: string }>;
+  images: Array<{
+    conceptKey: string;
+    view: string;
+    previewUrl: string;
+    // Goal 21 T7: 'photo' = an on-vehicle marketing render (view='photo'),
+    // routed away from the 4-view switcher. Optional so older snapshots and
+    // tests that omit it default to template behavior.
+    renderTarget?: 'template' | 'photo';
+  }>;
 };
 
 export type ConceptCard = {
@@ -54,6 +68,15 @@ export type ConceptCard = {
   /** view → un-watermarked FINAL render URL (null until a final completes). */
   finalViews: Record<string, string> | null;
   finalRunId: string | null;
+  /**
+   * Goal 21 T7: watermarked on-photo concept preview (the design applied to the
+   * customer's uploaded vehicle photo), from the INITIAL run. null when the
+   * customer uploaded no photo. This is a marketing preview, never the print
+   * file, and is kept OUT of `views` so the view switcher never shows 'photo'.
+   */
+  photoView: string | null;
+  /** Un-watermarked on-photo render from a FINAL run (null until one exists). */
+  finalPhotoView: string | null;
 };
 
 /**
@@ -81,25 +104,42 @@ export function deriveConcepts(runs: GalleryRun[]): ConceptCard[] {
       views: {},
       finalViews: null,
       finalRunId: null,
+      photoView: null,
+      finalPhotoView: null,
     };
     for (const img of initial.images) {
-      if (img.conceptKey === d.key) card.views[img.view] = img.previewUrl;
+      if (img.conceptKey !== d.key) continue;
+      // Photo renders never enter `views` (the 4-view switcher set); they get
+      // their own marketing surface. Identify by renderTarget, with view as a
+      // defensive fallback for snapshots that predate the discriminator.
+      if (isPhotoImage(img)) card.photoView = img.previewUrl;
+      else card.views[img.view] = img.previewUrl;
     }
     for (const run of laterChrono) {
       if (run.conceptKey !== d.key) continue;
       if (run.kind === 'iteration') {
-        for (const img of run.images) card.views[img.view] = img.previewUrl;
+        for (const img of run.images) {
+          if (isPhotoImage(img)) continue; // iteration never re-renders the photo
+          card.views[img.view] = img.previewUrl;
+        }
         card.latestRunId = run.runId;
         const title = run.directions[0]?.title;
         if (title) card.title = title;
       } else if (run.kind === 'final') {
         card.finalViews = {};
-        for (const img of run.images) card.finalViews[img.view] = img.previewUrl;
+        for (const img of run.images) {
+          if (isPhotoImage(img)) card.finalPhotoView = img.previewUrl;
+          else card.finalViews[img.view] = img.previewUrl;
+        }
         card.finalRunId = run.runId;
       }
     }
     return card;
   });
+}
+
+function isPhotoImage(img: GalleryRun['images'][number]): boolean {
+  return img.renderTarget === 'photo' || img.view === PHOTO_VIEW;
 }
 
 // --- progress copy -----------------------------------------------------------
