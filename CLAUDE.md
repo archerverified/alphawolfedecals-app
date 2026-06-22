@@ -2,7 +2,7 @@
 
 NEVER ASSUME OR TRUST, ALWAYS VERIFY REAL FILES, REAL DEPLOYS, REAL WORK. You have GitHub + connector access: verify, don't guess. Invoke `/superpowers` at the start of every substantive task.
 
-These rules govern all work in this repo (Cowork and Claude Code sessions alike). They override default behavior. Updated 2026-06-09.
+These rules govern all work in this repo (Cowork and Claude Code sessions alike). They override default behavior. Updated 2026-06-21.
 
 ## 0. SKILL CHECK FIRST
 
@@ -23,6 +23,8 @@ Before any substantive response, check whether a skill applies and read its curr
 
 ## 3. REVIEW PROTOCOL (replaces CodeRabbit as of 2026-06-09)
 
+Every prompt runs under the scoped-subagents plus gate model (§4): subagents may parallelize research and verification, but this gate is mandatory and is never skipped or auto-merged.
+
 CodeRabbit is RETIRED. Greptile is obsolete. Never invoke either. Every PR, before merge:
 
 1. Run the repo's `/code-review` plugin command (or `code-reviewer` skill) against the full diff in a FRESH context, not the context that wrote the code.
@@ -33,6 +35,7 @@ CodeRabbit is RETIRED. Greptile is obsolete. Never invoke either. Every PR, befo
 
 ## 4. OPERATING RULES
 
+- **Scoped subagents plus the §3 gate is the standing build model for every prompt (decided 2026-06-21).** Use subagents to move faster, but only on narrow, verifiable jobs: parallel research, multi-connector verification (GitHub, Supabase, Sentry, Vercel), and the §3 advisor or second-opinion reviews. Subagents never bypass the §3 review gate, never auto-merge, and never run with `--dangerously-skip-permissions`. No fully autonomous or Loki-style, zero-human-in-the-loop mode in this repo. Every merge passes §3 (fresh `/code-review`, CI green, advisor on RLS/auth/DB-split/deploy/spend) with an explicit human go.
 - **NO EM-DASHES, EVER.** Never use the em-dash character in any output: copy, docs, code comments, commit messages, PR text, UI strings. It reads as AI slop and Archer hates it. Use a comma, colon, parentheses, or two sentences instead. Numeric ranges use "to" or a hyphen. Applies to the en-dash used as a dash too.
 - `activities.md` is append-only, newest entries at TOP. Never edit prior entries, corrections are new entries referencing the original.
 - Never delete files. Never force-push to main.
