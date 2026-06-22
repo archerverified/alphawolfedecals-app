@@ -6,6 +6,62 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-21 - Goal 21 BUILD COMPLETE (reviewed x2, tested) - photo-render concepts + multi-view showcase - deploy GATED to Archer
+
+**Status:** Feature built, double-reviewed, and fully unit/integration tested on branch
+`goal/21-photo-render-showcase` (worktree `../alphawolf-goal-21`, base `origin/main` f6e2215).
+Executed via subagent-driven-development (8 tasks, fresh implementer + task reviewer per task, then a
+whole-branch review + an independent security advisor). Plan + DECISIONS:
+`docs/product/goal-21-photo-render-plan.md`. Diagram:
+[`docs/vault/diagrams/goal-21-photo-render.md`](docs/vault/diagrams/goal-21-photo-render.md).
+
+**What shipped (additive only, the print path is untouched):**
+
+- On-photo concepts: when the brief has a vehicle photo, the 3 concept directions ALSO render ON that
+  photo (image-to-image, `nano_banana_edit`) as additive jobs (`render_target='photo'`, `view='photo'`)
+  on the existing initial run, plus 1 un-watermarked on the final. Fully isolated from the Goal-17/18
+  cross-view coherence machinery; template conditioning unchanged.
+- Multi-view showcase: a deterministic server-side `sharp` composite of the selected concept's
+  template per-view renders + the on-photo hero, on brand (cyan #00AEEF + black, AW wordmark overlay,
+  "Concept preview, not the print file" caption), via the owner-scoped `buildShowcaseAction`.
+- Studio UI: on-photo preview per concept, a "See it across your vehicle" showcase modal, an in-studio
+  photo uploader (`addProjectPhotoAction`), analytics events.
+- Print path PROTECTED: `loadFinalViews` (spec pack), `insertIntoCanvas` (editor), and the public share
+  read all filter `render_target='template'`; the photo render can never become the print deliverable.
+- DB: one additive migration adds `render_target text NOT NULL DEFAULT 'template'` + CHECK to
+  `generation_jobs` / `generation_images`. No new tables, buckets, or RLS policies.
+
+**Per-task commits (all reviewed clean):** T1 5c997db (render_target column), T2 e51e858 (photo model +
+`buildPhotoRenderPrompt`), T3 acc4aef (pipeline photo branch, opus review verified coherence
+isolation), T4 b427525+2fe2fa2 (cost estimate; review fix: final reads brief snapshot), build-fix
+39fee7e (extract `cost.ts`: a 'use server' file may only export async, broke `next build` - tsc/vitest
+missed it), T5 e1dcbd3+hardening (print+editor filters), T6 0c22008 (showcase compositor + action), T7
+77752f6+fix (studio UI), T8 c982fd6+fix (e2e spec + showcase action tests + verify recipe), final-review
+fix 10ce539 (public share excludes photo renders + 4 regression tests).
+
+**Reviews (CLAUDE.md §3):** whole-branch review = APPROVED with fixes (the one Important, a public
+share-path photo leak, is fixed in 10ce539). Independent security advisor on the RLS / DB-split / spend
+/ print surface = FULL SIGN-OFF (8/8 checks PASS: every photo/showcase/brief path is `withUser`/RLS,
+showcase ownership precedes any signed-URL mint with a projectId-namespaced key, photo jobs ride the
+single credit spend and are counted in the conservative estimate, the customer photo stays private
+short-TTL with no SSRF widening and no logo bytes to fal, the photo render is filtered out of export +
+editor, the migration is additive and deploy-safe).
+
+**Tests / build:** full web vitest 286 passed / 8 skipped; db unit vitest 142 passed; full
+`turbo run build` (all packages + the real `next build`) 8/8. Branch has zero em-dashes in any added
+line. The mock-provider e2e (`apps/web/e2e/goal-21-photo-render.spec.ts`) is recognized by
+`playwright test --list`; it green-skips on remote targets and never joins the prod smoke.
+
+**GATED to Archer (hold-with-plan per the prompt's decision policy; irreversible prod + real money):**
+
+1. Real-fal D5 verification on a throwaway local DB (recipe: `docs/deployment/goal-21-verify-recipe.md`)
+   within the $10 cap, then net-zero purge.
+2. PR review pass + CI green, then merge.
+3. Apply the migration to prod (Supabase MCP `apply_migration` + insert the `_prisma_migrations`
+   SHA-256 checksum row per CLAUDE.md §6) BEFORE the deploy reaches it.
+4. Vercel prod smoke + Sentry 0-new.
+   No new prod env vars are needed (FAL_KEY / AI_PROVIDER already live from Goal 7).
+
 ## 2026-06-21 - Goal 21 KICKOFF - Photo-render concepts + multi-view marketing showcase (audit + plan + DECISIONS)
 
 **Context:** Feature build (prompt `prompts/23-goal-21-photo-render-multiview-showcase.md`). Runs in
