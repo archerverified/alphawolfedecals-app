@@ -146,21 +146,44 @@ async function readShareSource(
     select: {
       directions: true,
       images: {
-        // Only the watermarked preview path — the unwatermarked storage_path is
+        // Only the watermarked preview path: the unwatermarked storage_path is
         // never selected, so it can never leak to the public page.
-        select: { conceptKey: true, view: true, previewPath: true },
+        // render_target='template' ONLY (Goal 21): on-photo renders are derived
+        // from the customer's PRIVATE uploaded vehicle photo and must never be
+        // published on an unauthenticated share link. The pure assembly below
+        // also skips them as a second guard.
+        where: { renderTarget: 'template' },
+        select: { conceptKey: true, view: true, previewPath: true, renderTarget: true },
         orderBy: { view: 'asc' },
       },
     },
   });
   const directions = parseShareDirections(run?.directions);
+  const previewByConcept = previewByConceptFrom(run?.images ?? []);
+  return { directions, previewByConcept };
+}
+
+// Pure: pick the first watermarked preview per concept for the public share,
+// excluding on-photo renders (Goal 21). Exported for unit testing. A photo
+// render (render_target='photo' or the PHOTO_VIEW sentinel) is derived from the
+// customer's private vehicle photo and must never reach the public share page,
+// even if it sorts before the template views.
+export function previewByConceptFrom(
+  images: Array<{
+    conceptKey: string;
+    view: string;
+    previewPath: string | null;
+    renderTarget?: string | null;
+  }>,
+): Map<string, string> {
   const previewByConcept = new Map<string, string>();
-  for (const img of run?.images ?? []) {
+  for (const img of images) {
+    if (img.renderTarget === 'photo' || img.view === 'photo') continue;
     if (img.previewPath && !previewByConcept.has(img.conceptKey)) {
       previewByConcept.set(img.conceptKey, img.previewPath);
     }
   }
-  return { directions, previewByConcept };
+  return previewByConcept;
 }
 
 // Vote count per concept_key for a project. System connection.
