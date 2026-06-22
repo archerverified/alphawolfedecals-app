@@ -1,9 +1,8 @@
 'use server';
 
 import { cookies, headers } from 'next/headers';
-import { redirect } from 'next/navigation';
+import { redirect, unstable_rethrow } from 'next/navigation';
 import {
-  AuthError,
   CSRF_COOKIE_NAME,
   CSRF_FIELD_NAME,
   issueVerificationTicket,
@@ -281,19 +280,22 @@ export async function verifyOtpAction(_prev: ActionState, form: FormData): Promi
         redirectTo: dest,
       });
     } catch (err) {
-      if (err instanceof AuthError) {
-        // Session establishment failed (should be rare). Never lose the verified
-        // account: send them to /welcome to sign in manually, and surface it.
-        Sentry.captureException(err, { tags: { feature: 'session-on-verify' } });
-        redirect(dest);
-      }
-      // NEXT_REDIRECT (the success path) must propagate.
-      throw err;
+      // The success path throws NEXT_REDIRECT; unstable_rethrow propagates Next's
+      // control-flow errors (redirect/notFound) first — the correct next-auth v5
+      // idiom (matches signInAction).
+      unstable_rethrow(err);
+      // Anything else (an AuthError from a refused ticket, or e.g. a missing
+      // AUTH_SECRET at ticket-issue time) means session establishment failed. The
+      // account is already verified + active, so NEVER crash the user into the
+      // NODE-G "unexpected response" screen: send them to /welcome to sign in
+      // manually, and surface it for triage.
+      Sentry.captureException(err, { tags: { feature: 'session-on-verify' } });
+      redirect(dest);
     }
-    // signIn(..., { redirectTo }) throws on both success (NEXT_REDIRECT) and
-    // failure (AuthError, handled above), so this is unreachable in practice —
-    // but it makes the success branch terminal for control-flow narrowing and is
-    // a safety net if a future next-auth returns instead of redirecting.
+    // signIn(..., { redirectTo }) throws on success (NEXT_REDIRECT) and on
+    // failure (handled above), so this is unreachable in practice — it keeps the
+    // success branch terminal for control-flow narrowing and is a safety net if a
+    // future next-auth returns instead of redirecting.
     redirect(dest);
   }
   const messages: Record<string, string> = {

@@ -76,10 +76,9 @@ vi.mock('@alphawolf/db', () => ({
       const u = users.get(userId);
       if (u) u.status = 'active';
     },
-    // Mirrors the real repo: clears lockout counters AND stamps lastLoginAt.
-    // verifySignupOtp calls this so a just-verified account is treated as
-    // signed in (Goal 20 D1 — fixes the shop last_login_at=null finding).
-    async resetFailedLogin(userId: string) {
+    // verifySignupOtp stamps lastLoginAt so a just-verified account is treated
+    // as signed in (Goal 20 D1 — fixes the shop last_login_at=null finding).
+    async stampLastLoginAt(userId: string) {
       const u = users.get(userId);
       if (u) u.lastLoginAt = new Date();
     },
