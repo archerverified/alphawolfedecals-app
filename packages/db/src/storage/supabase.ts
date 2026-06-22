@@ -64,11 +64,11 @@ export function isStorageConfigured(): boolean {
 // WRONG Supabase project (the parse worker hit this: uploads landed in the right
 // project but the worker's download 404'd the bucket, silently failing parses).
 // Returns an actionable hint for that case, or null for any other error (e.g. a
-// missing object, or a transient network failure — both of which mean the
+// missing object, or a transient network failure, both of which mean the
 // project/bucket config is fine).
 export function storageMisconfigHint(message: string): string | null {
   return /bucket not found/i.test(message)
-    ? `the "${PROJECT_ASSETS_BUCKET}" bucket was not found in the configured Supabase project — ` +
+    ? `the "${PROJECT_ASSETS_BUCKET}" bucket was not found in the configured Supabase project: ` +
         'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY likely point at the wrong project (Goal 20 D3)'
     : null;
 }

@@ -81,8 +81,8 @@ export const authConfig: NextAuthConfig = {
         } as unknown as { id: string; email: string };
       },
     }),
-    // Goal 20 D1 — session on verify. After a successful signup OTP verification
-    // the server mints a single-use, HMAC-signed verification ticket (never sent
+    // Goal 20 D1: session on verify. After a successful signup OTP verification
+    // the server mints a short-lived, HMAC-signed verification ticket (never sent
     // to the browser) and calls signIn('otp-verified', { email, ticket }). This
     // establishes the JWT session WITHOUT a password (none exists in plaintext at
     // verify time), so a new customer/shop is signed in immediately instead of

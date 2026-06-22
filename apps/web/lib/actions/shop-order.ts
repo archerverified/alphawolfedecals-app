@@ -49,7 +49,7 @@ export async function transitionOrderAction(input: {
         );
       }
     } catch {
-      // swallowed — dispatchOrderStatusEmail already reports inside; the
+      // swallowed: dispatchOrderStatusEmail already reports inside; the
       // transition already committed and must be returned regardless.
     }
   }

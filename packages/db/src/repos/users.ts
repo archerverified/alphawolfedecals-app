@@ -162,7 +162,7 @@ export async function resetFailedLogin(userId: string): Promise<void> {
   });
 }
 
-// Stamp lastLoginAt ONLY — marks a freshly OTP-verified account as signed in
+// Stamp lastLoginAt ONLY. Marks a freshly OTP-verified account as signed in
 // (Goal 20 D1) without touching the lockout counters (failedLoginCount /
 // lockedUntil) that resetFailedLogin also clears. Keeps the verify path from
 // silently resetting a lockout if login.ts ever records failures for a

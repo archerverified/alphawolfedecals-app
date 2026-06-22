@@ -3,7 +3,7 @@ import { checkAssetsBucketReachable, storageMisconfigHint } from '../src/storage
 
 // Goal 20 D3: a parse worker pointed at the WRONG Supabase project reports
 // "Bucket not found" on every download while uploads land in the correct
-// project — a silent partial outage. These helpers turn that opaque failure into
+// project, a silent partial outage. These helpers turn that opaque failure into
 // an actionable, self-diagnosing one and let the worker self-check at boot.
 
 describe('storageMisconfigHint', () => {

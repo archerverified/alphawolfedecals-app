@@ -1,6 +1,6 @@
 // Verification ticket: a short-lived, HMAC-signed proof that a user JUST passed
 // signup OTP verification. It lets the server establish that user's session
-// (D1, Goal 20 fix-it) WITHOUT a password — the password is set at signup time
+// (D1, Goal 20 fix-it) WITHOUT a password. The password is set at signup time
 // and never available in plaintext at verify time.
 //
 // SECURITY MODEL:
@@ -12,7 +12,7 @@
 //     it cannot be forged.
 //   * Short TTL (2 minutes), so even a leaked ticket expires almost immediately.
 //
-// SERVER ONLY — uses node:crypto. Mirrors the csrf.ts / otp.ts crypto pattern.
+// SERVER ONLY. Uses node:crypto, mirroring the csrf.ts / otp.ts crypto pattern.
 
 import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto';
 

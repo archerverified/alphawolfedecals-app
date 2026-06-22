@@ -56,7 +56,7 @@ if (process.env.NODE_ENV !== 'test') {
   // its configured Supabase project. A worker pointed at the wrong project (a
   // mismatched SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY) otherwise consumes parse
   // jobs and marks each one 'failed' with "Bucket not found" while uploads land
-  // fine in the correct project — a silent partial outage. Make that loud.
+  // fine in the correct project, a silent partial outage. Make that loud.
   void storage.checkAssetsBucketReachable().then((health) => {
     if (health.ok) {
       storageHealth = 'ok';

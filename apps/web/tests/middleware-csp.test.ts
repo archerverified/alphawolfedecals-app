@@ -4,7 +4,7 @@ import { middleware } from '../middleware';
 
 // Goal 20 D4 (finding F1): the PostHog browser SDK loads remote config from
 // https://us-assets.i.posthog.com (config.js, a SCRIPT) and feature flags from
-// https://us.posthog.com — neither was in the CSP allowlist, so config + flags
+// https://us.posthog.com. Neither was in the CSP allowlist, so config + flags
 // silently failed on every page. This pins the fix AND guards the locked
 // security headers (ADR-0014 §9: the headers must never be dropped and the CSP
 // must not be weakened).

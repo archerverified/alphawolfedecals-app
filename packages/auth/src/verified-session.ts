@@ -3,7 +3,7 @@
 // After a successful signup OTP verification, verifyOtpAction mints a
 // verification ticket and calls signIn('otp-verified', { email, ticket }). This
 // function is the gate: it turns that ticket into the session user, reusing the
-// exact same JWT session machinery as a password sign-in — no password, no
+// exact same JWT session machinery as a password sign-in, with no password and no
 // duplicated cookie logic.
 //
 // It signs in ONLY when ALL hold:
@@ -12,7 +12,7 @@
 //   * the bound user still exists, is `active`, and its current email still
 //     matches the ticket (so a stale ticket after an email change is refused).
 //
-// SERVER ONLY — pulls @alphawolf/db (Prisma). Mirrors login.ts.
+// SERVER ONLY. Pulls @alphawolf/db (Prisma), mirroring login.ts.
 
 import { users as userRepo } from '@alphawolf/db';
 import { verifyVerificationTicket } from './verification-ticket.js';

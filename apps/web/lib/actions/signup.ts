@@ -265,10 +265,10 @@ export async function verifyOtpAction(_prev: ActionState, form: FormData): Promi
       }
     }
     const dest = result.accountType === 'shop_user' ? '/welcome/shop' : '/welcome';
-    // Goal 20 D1 — establish the session as part of a successful verification so
+    // Goal 20 D1: establish the session as part of a successful verification so
     // the new customer/shop is signed in immediately and does NOT bounce to
     // /signin on the first auth-gated action (finding F3, and a driver of the
-    // NODE-G "unexpected response" /signin error). A single-use, server-minted
+    // NODE-G "unexpected response" /signin error). A short-lived, server-minted
     // ticket (never sent to the browser) drives the otp-verified provider,
     // reusing the exact JWT session path. signIn with redirectTo both sets the
     // session cookie and performs the redirect (throws NEXT_REDIRECT), mirroring
@@ -281,7 +281,7 @@ export async function verifyOtpAction(_prev: ActionState, form: FormData): Promi
       });
     } catch (err) {
       // The success path throws NEXT_REDIRECT; unstable_rethrow propagates Next's
-      // control-flow errors (redirect/notFound) first — the correct next-auth v5
+      // control-flow errors (redirect/notFound) first, the correct next-auth v5
       // idiom (matches signInAction).
       unstable_rethrow(err);
       // Anything else (an AuthError from a refused ticket, or e.g. a missing
@@ -293,7 +293,7 @@ export async function verifyOtpAction(_prev: ActionState, form: FormData): Promi
       redirect(dest);
     }
     // signIn(..., { redirectTo }) throws on success (NEXT_REDIRECT) and on
-    // failure (handled above), so this is unreachable in practice — it keeps the
+    // failure (handled above), so this is unreachable in practice, but it keeps the
     // success branch terminal for control-flow narrowing and is a safety net if a
     // future next-auth returns instead of redirecting.
     redirect(dest);

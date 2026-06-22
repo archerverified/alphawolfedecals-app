@@ -34,8 +34,8 @@ export default function ShopWelcomePage() {
             verified shop had no path to it (finding F5: orders looked email-only).
             This CTA makes the in-app order view reachable. */}
         <p className="mt-8 text-sm text-zinc-600">
-          Customer orders routed to your shop show up in your dashboard — you don’t have to wait on
-          email.
+          Customer orders routed to your shop show up in your dashboard, so you don’t have to wait
+          on email.
         </p>
         <div className="mt-3">
           <Link
