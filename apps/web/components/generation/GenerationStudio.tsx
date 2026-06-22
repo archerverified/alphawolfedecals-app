@@ -485,7 +485,11 @@ export function GenerationStudio({
       {runBusy && snapshot?.kind === 'initial' && snapshot.directions?.length ? (
         <section className="mb-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
           {snapshot.directions.map((d) => {
-            const imgs = (snapshot.images ?? []).filter((i) => i.conceptKey === d.key);
+            // Template renders only: the on-photo preview has its own captioned
+            // figure on the concept card, never an uncaptioned live thumbnail.
+            const imgs = (snapshot.images ?? []).filter(
+              (i) => i.conceptKey === d.key && i.renderTarget !== 'photo' && i.view !== 'photo',
+            );
             const first = imgs[0];
             return (
               <div key={d.key} className="rounded-xl border border-zinc-200 bg-white p-3">
@@ -494,7 +498,7 @@ export function GenerationStudio({
                 {first ? (
                   <img
                     src={stableLiveUrl(snapshot.runId, d.key, first.view, first.previewUrl)}
-                    alt={`${d.title} — first preview`}
+                    alt={`${d.title}, first preview`}
                     className="w-full rounded-md"
                   />
                 ) : (
