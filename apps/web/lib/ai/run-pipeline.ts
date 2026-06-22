@@ -29,6 +29,7 @@ import {
   AI_MODELS,
   briefs,
   generation,
+  PHOTO_VIEW,
   projects,
   storage,
   vehicles,
@@ -39,12 +40,14 @@ import {
   type GenerationRunKind,
   type GenerationRunRow,
   type GenerationRunStatus,
+  type RenderTarget,
 } from '@alphawolf/db';
 
 import { parseBriefData, type BriefData } from '../brief/schema';
 import { captureServerEvent } from '../notifications/posthog-server';
 import { buildGradientGuide, normalizeHex, type GuidePanel } from './gradient-guide';
 import { compileBrief, compileIteration, type GradientDescriptor } from './orchestrator';
+import { buildPhotoRenderPrompt } from './orchestrator/prompts';
 import { getImageProvider } from './provider';
 import { watermarkPreview } from './watermark';
 
@@ -263,6 +266,28 @@ function logoZoneNames(panels: PanelLike[], briefData: BriefData | null): string
 }
 
 // ---------------------------------------------------------------------------
+// On-photo render (Goal 21 D2). The customer's FIRST uploaded vehicle photo is
+// the i2i base for the photo concept jobs. Returns its storage KEY (not a URL)
+// or null when there is no photo. Ownership is double-guarded: getAsset is
+// RLS-scoped (withUser), and we additionally assert the asset belongs to THIS
+// project so a brief that references a foreign assetId can never leak a photo
+// across projects.
+// ---------------------------------------------------------------------------
+async function resolveCustomerPhotoKey(
+  userId: string,
+  projectId: string,
+  briefData: BriefData,
+): Promise<string | null> {
+  const assetId = briefData.photos?.[0]?.assetId;
+  if (!assetId) return null;
+  const asset = await projects.getAsset(userId, assetId);
+  if (!asset || asset.projectId !== projectId) return null;
+  // source_url / parsed_url are bucket KEYS (not URLs); the parse output wins
+  // when present, else the original upload key.
+  return asset.parsedUrl ?? asset.sourceUrl ?? null;
+}
+
+// ---------------------------------------------------------------------------
 // Provider-CDN byte fetch — same SSRF allowlist as the bake-off harness:
 // data: URIs (the mock) and fal's own CDN hosts ONLY, never an arbitrary URL.
 // ---------------------------------------------------------------------------
@@ -353,7 +378,12 @@ async function failRunLoudly(userId: string, run: GenerationRunRow, error: strin
 
 async function orchestrateSlice(userId: string, run: GenerationRunRow): Promise<void> {
   let directionsJson: RunDirectionsJson;
-  let jobs: Array<{ conceptKey: string; view: string; prompt: string }>;
+  let jobs: Array<{
+    conceptKey: string;
+    view: string;
+    prompt: string;
+    renderTarget: RenderTarget;
+  }>;
 
   if (run.kind === 'initial') {
     const project = await projects.getProject(userId, run.projectId);
@@ -389,8 +419,29 @@ async function orchestrateSlice(userId: string, run: GenerationRunRow): Promise<
       directions: result.directions,
     };
     jobs = result.directions.flatMap((d) =>
-      views.map((view) => ({ conceptKey: d.key, view, prompt: d.viewPrompts[view] ?? '' })),
+      views.map((view) => ({
+        conceptKey: d.key,
+        view,
+        prompt: d.viewPrompts[view] ?? '',
+        renderTarget: 'template' as const,
+      })),
     );
+
+    // Goal 21 D2: when the customer uploaded a vehicle photo, ALSO render each
+    // direction ON that photo (i2i). One additive photo job per direction,
+    // view=PHOTO_VIEW + renderTarget='photo' so it stays partitioned out of the
+    // Goal-17/18 coherence machinery and every print/editor read.
+    const photoKey = await resolveCustomerPhotoKey(userId, run.projectId, briefData);
+    if (photoKey) {
+      for (const d of result.directions) {
+        jobs.push({
+          conceptKey: d.key,
+          view: PHOTO_VIEW,
+          prompt: buildPhotoRenderPrompt({ summary: d.summary }),
+          renderTarget: 'photo' as const,
+        });
+      }
+    }
   } else {
     // iteration | final — both derive from the parent run's chosen concept.
     if (!run.parentRunId || !run.conceptKey) throw new Error('run is missing its lineage');
@@ -432,11 +483,13 @@ async function orchestrateSlice(userId: string, run: GenerationRunRow): Promise<
         ],
       };
       // Iteration renders the AFFECTED views only (design: Kontext edit per
-      // affected view, 1 credit).
+      // affected view, 1 credit). No photo job: the on-photo hero refreshes at
+      // final, not on every iteration (Goal 21, plan D-F).
       jobs = result.affectedViews.map((view) => ({
         conceptKey: concept.key,
         view,
         prompt: result.editPrompt,
+        renderTarget: 'template' as const,
       }));
     } else {
       // final: no orchestrator call — re-render the chosen concept's prompts
@@ -450,7 +503,29 @@ async function orchestrateSlice(userId: string, run: GenerationRunRow): Promise<
         conceptKey: concept.key,
         view,
         prompt: concept.viewPrompts[view] ?? '',
+        renderTarget: 'template' as const,
       }));
+
+      // Goal 21 D2: refresh the on-photo hero at final (un-watermarked, paid).
+      // Decide on a photo job from the SAME brief source the initial branch uses
+      // (briefData.photos), so the estimate (Task 4) and the fan-out agree.
+      // ONE photo job for the chosen concept.
+      const brief = await briefs.getBrief(userId, run.projectId);
+      const snapshot = brief
+        ? await briefs.getBriefSnapshot(userId, brief.id, run.briefVersion)
+        : null;
+      const parsedBrief = snapshot ? parseBriefData(snapshot.data) : null;
+      if (parsedBrief?.ok) {
+        const photoKey = await resolveCustomerPhotoKey(userId, run.projectId, parsedBrief.data);
+        if (photoKey) {
+          jobs.push({
+            conceptKey: concept.key,
+            view: PHOTO_VIEW,
+            prompt: buildPhotoRenderPrompt({ summary: concept.summary }),
+            renderTarget: 'photo' as const,
+          });
+        }
+      }
     }
   }
 
@@ -498,7 +573,11 @@ async function harvestJob(
       await storage.uploadAssetObject(previewPath, preview, 'image/png');
     }
 
-    const modelConfig = (AI_MODELS as Record<string, { id: string } | undefined>)[run.model];
+    // Per-job model (Goal 21 T3): a photo job was submitted with the photo
+    // model (AI_CONFIG.defaults.photo), not run.model, so its image row + fal
+    // provenance must record THAT model. Template jobs keep run.model.
+    const modelKey = job.renderTarget === 'photo' ? AI_CONFIG.defaults.photo : run.model;
+    const modelConfig = (AI_MODELS as Record<string, { id: string } | undefined>)[modelKey];
     try {
       await generation.insertImage(userId, {
         runId: run.id,
@@ -510,12 +589,13 @@ async function harvestJob(
         width: image.width || dims.width,
         height: image.height || dims.height,
         provider: run.provider,
-        model: run.model,
+        model: modelKey,
         providerRequestId: job.providerRequestId ?? undefined,
         costUsd: state.costUsd,
+        renderTarget: job.renderTarget,
         provenance: {
           provider: run.provider,
-          model: modelConfig?.id ?? run.model,
+          model: modelConfig?.id ?? modelKey,
           requestId: job.providerRequestId,
           promptVersion: parseRunDirections(run.directions)?.promptVersion ?? '',
           falRequestId: job.providerRequestId,
@@ -571,6 +651,13 @@ async function renderSlice(userId: string, run: GenerationRunRow): Promise<void>
   }
 
   const open = jobs.filter((j) => !isTerminalJob(j));
+  // Goal 21 T3: the on-photo render jobs (renderTarget='photo', view='photo')
+  // are processed by a SEPARATE, self-contained loop below. They must never
+  // enter the Goal-17/18 coherence machinery (anchor/donor/gradient), which is
+  // template-only. Partition first so every coherence computation that follows
+  // sees TEMPLATE jobs exclusively.
+  const templateOpen = open.filter((j) => j.renderTarget === 'template');
+  const photoOpen = open.filter((j) => j.renderTarget === 'photo');
   if (open.length > 0) {
     if (!(run.model in AI_MODELS)) {
       await failRunLoudly(userId, run, `unknown model "${run.model}"`);
@@ -595,7 +682,11 @@ async function renderSlice(userId: string, run: GenerationRunRow): Promise<void>
     // OWN structure render at imageUrls[0] (per-view geometry → the editor handoff
     // + logo compositing are unaffected). NOTE: the deterministic mock ignores
     // imageUrls, so this is proven on REAL fal, not the mock.
-    const runViews = [...new Set(jobs.map((j) => j.view))];
+    // TEMPLATE views only: the photo sentinel view must NEVER influence anchor
+    // selection. (Derived from the full template job set, not just the open
+    // ones, so the anchor is stable across slices.)
+    const templateJobs = jobs.filter((j) => j.renderTarget === 'template');
+    const runViews = [...new Set(templateJobs.map((j) => j.view))];
     const anchorView = anchorViewFor(runViews);
     // The anchor render per concept = the colour/style donor for derived draft views.
     const anchorImageByConcept = new Map<string, { storagePath: string }>();
@@ -603,11 +694,13 @@ async function renderSlice(userId: string, run: GenerationRunRow): Promise<void>
     const failedAnchorConcepts = new Set<string>();
     if (run.kind === 'initial') {
       for (const img of existingImages) {
-        if (img.view === anchorView) {
+        // render_target guards against a photo render ever donating to the
+        // anchor slot (its view='photo' already excludes it, belt-and-braces).
+        if (img.renderTarget === 'template' && img.view === anchorView) {
           anchorImageByConcept.set(img.conceptKey, { storagePath: img.storagePath });
         }
       }
-      for (const j of jobs) {
+      for (const j of templateJobs) {
         if (j.view === anchorView && j.status === 'failed') failedAnchorConcepts.add(j.conceptKey);
       }
     }
@@ -647,7 +740,9 @@ async function renderSlice(userId: string, run: GenerationRunRow): Promise<void>
     const seedForConcept = (conceptKey: string) => seedFor(`${run.id}:${conceptKey}`);
 
     let processed = 0;
-    for (const job of open) {
+    // TEMPLATE loop: the existing Goal-7/17/18 submit/harvest path, UNCHANGED.
+    // Iterates TEMPLATE jobs only; photo jobs are handled by the loop below.
+    for (const job of templateOpen) {
       if (processed >= JOBS_PER_SLICE) break;
 
       // Dependency GATE for derived draft views — a skip must NOT consume the
@@ -806,6 +901,115 @@ async function renderSlice(userId: string, run: GenerationRunRow): Promise<void>
           tags: { feature: 'ai-generation' },
           extra: { runId: run.id, jobId: job.id, jobStatus: job.status },
         });
+      }
+    }
+
+    // --- On-photo render loop (Goal 21 T3) -----------------------------------
+    // Fully isolated from the coherence machinery above: a photo job conditions
+    // ONLY on the customer's signed photo URL (no anchor, no donor, no guide),
+    // submits with the photo model, and shares the JOBS_PER_SLICE budget via the
+    // SAME `processed` counter. The customer photo KEY is resolved ONCE per
+    // slice (not per job), only when there is photo work AND budget left.
+    if (photoOpen.length > 0 && processed < JOBS_PER_SLICE) {
+      // Resolve the photo key from the run's brief snapshot, the same source
+      // orchestrate used to decide to create the photo jobs in the first place.
+      // resolveThrew distinguishes a TRANSIENT read failure (skip the loop, the
+      // jobs stay pending for the next slice) from a clean null (the photo was
+      // genuinely deleted mid-run, so the job is failed). Misclassifying a flake
+      // as a deletion would wrongly fail + refund a healthy run.
+      let photoKey: string | null = null;
+      let resolveThrew = false;
+      try {
+        const brief = await briefs.getBrief(userId, run.projectId);
+        const snapshot = brief
+          ? await briefs.getBriefSnapshot(userId, brief.id, run.briefVersion)
+          : null;
+        const parsed = snapshot ? parseBriefData(snapshot.data) : null;
+        if (parsed?.ok) {
+          photoKey = await resolveCustomerPhotoKey(userId, run.projectId, parsed.data);
+        }
+      } catch (error) {
+        // Transient brief/asset read: leave the photo jobs open for the next
+        // slice rather than failing the whole run on a flake.
+        resolveThrew = true;
+        Sentry.captureException(error, {
+          tags: { feature: 'ai-generation' },
+          extra: { runId: run.id, jobStatus: 'photo-key-resolve' },
+        });
+      }
+
+      for (const job of photoOpen) {
+        if (processed >= JOBS_PER_SLICE) break;
+        // A transient resolve failure must NOT consume the slice budget or fail
+        // the job: bail the whole photo loop, retry every photo job next slice.
+        if (resolveThrew) break;
+        processed += 1;
+        try {
+          if (job.status === 'pending' && !job.providerRequestId) {
+            // Defensive guard: orchestrate only creates a photo job when a photo
+            // exists, but the photo could be deleted mid-run. A CLEAN null here
+            // (resolution succeeded, no photo) fails just this job with a clear
+            // message; the settle block refunds if the run can no longer
+            // complete. Resolved BEFORE the claim so a miss never strands the
+            // job in 'submitting'.
+            if (!photoKey) {
+              await generation.failJob(userId, job.id, 'customer photo no longer available');
+              continue;
+            }
+            const photoUrl = await storage.signedAssetReadUrl(photoKey, COHERENCE_URL_TTL_S);
+
+            const claimed = await generation.claimJob(userId, job.id);
+            if (!claimed) continue; // another slice holds (or held) the claim
+            let submission;
+            try {
+              submission = await provider.submit({
+                modelKey: AI_CONFIG.defaults.photo,
+                prompt: job.prompt,
+                imageUrls: [photoUrl],
+                width: dims.width,
+                height: dims.height,
+                seed: seedForConcept(job.conceptKey),
+              });
+            } catch (submitError) {
+              // SAME ambiguous-vs-definite handling as the template loop.
+              Sentry.captureException(submitError, {
+                tags: { feature: 'ai-generation' },
+                extra: { runId: run.id, jobId: job.id, jobStatus: 'submitting' },
+              });
+              if (isAmbiguousSubmitError(submitError)) {
+                await generation.failJob(
+                  userId,
+                  job.id,
+                  `submit ambiguous: ${errorMessage(submitError).slice(0, 400)}`,
+                );
+              } else {
+                await generation.releaseJobClaim(userId, job.id);
+              }
+              continue;
+            }
+            await generation.markJobSubmitted(
+              userId,
+              job.id,
+              submission.requestId,
+              submission.estimatedCostUsd,
+            );
+          } else if (job.providerRequestId) {
+            const state = await provider.check(AI_CONFIG.defaults.photo, job.providerRequestId);
+            if (state.status === 'complete') {
+              await harvestJob(userId, run, job, state, imagedJobIds.has(job.id));
+            } else if (state.status === 'failed') {
+              await generation.failJob(userId, job.id, state.error.slice(0, 500));
+            }
+            // pending → nothing; next poll re-checks by the stored request id.
+          }
+        } catch (error) {
+          // Transient: leave non-terminal for the next slice (same policy as
+          // the template loop). NEVER resubmit: the request id persists on submit.
+          Sentry.captureException(error, {
+            tags: { feature: 'ai-generation' },
+            extra: { runId: run.id, jobId: job.id, jobStatus: job.status },
+          });
+        }
       }
     }
   }

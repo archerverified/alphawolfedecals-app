@@ -42,7 +42,12 @@ const h = vi.hoisted(() => {
       async (
         _u: string,
         runId: string,
-        jobs: Array<{ conceptKey: string; view: string; prompt?: string }>,
+        jobs: Array<{
+          conceptKey: string;
+          view: string;
+          prompt?: string;
+          renderTarget?: 'template' | 'photo';
+        }>,
       ) => {
         let created = 0;
         for (const j of jobs) {
@@ -61,6 +66,8 @@ const h = vi.hoisted(() => {
             prompt: j.prompt ?? '',
             costUsd: 0,
             error: null,
+            // T1 default mirrors the real repo (recordJobs defaults to 'template').
+            renderTarget: j.renderTarget ?? 'template',
             createdAt: new Date(),
             updatedAt: new Date(),
           });
@@ -134,7 +141,7 @@ const h = vi.hoisted(() => {
     }),
   };
 
-  const fakeProjects = { getProject: vi.fn() };
+  const fakeProjects = { getProject: vi.fn(), getAsset: vi.fn() };
   const fakeVehicles = { getPublishedDetail: vi.fn() };
   const fakeBriefs = { getBrief: vi.fn(), getBriefSnapshot: vi.fn() };
   const fakeStorage = {
@@ -257,6 +264,9 @@ beforeEach(() => {
   delete process.env.AI_PROVIDER;
 
   h.fakeProjects.getProject.mockResolvedValue({ id: 'proj-1', vehicleId: 'veh-1' });
+  // Default: no uploaded vehicle photo (resolveCustomerPhotoKey returns null).
+  // Photo-path tests override getBriefSnapshot (photos) + getAsset per case.
+  h.fakeProjects.getAsset.mockResolvedValue(null);
   h.fakeVehicles.getPublishedDetail.mockResolvedValue({
     id: 'veh-1',
     year: 2024,
@@ -900,6 +910,373 @@ describe('cross-view coherence (Goal 17) — anchor-then-derive + approved-draft
     expect(byView.front!.imageUrls).toHaveLength(2);
     // The degraded export view is observable.
     expect(events()).toContain('final_donor_missing');
+  });
+});
+
+describe('on-photo concept renders (Goal 21 T3): isolated from the coherence path', () => {
+  const PHOTO_KEY = 'project-assets/proj-1/photo-1.jpg';
+
+  // A brief snapshot whose data carries one uploaded vehicle photo, and the
+  // owned asset row that resolveCustomerPhotoKey maps it to.
+  function withPhotoBrief() {
+    h.fakeBriefs.getBriefSnapshot.mockResolvedValue({
+      briefId: 'brief-1',
+      version: 1,
+      data: { photos: [{ assetId: '11111111-1111-1111-1111-111111111111' }] },
+      label: 'generation_run',
+      createdAt: new Date(),
+    });
+    h.fakeProjects.getAsset.mockResolvedValue({
+      assetId: '11111111-1111-1111-1111-111111111111',
+      projectId: 'proj-1',
+      mimeType: 'image/jpeg',
+      sourceUrl: PHOTO_KEY,
+      parsedUrl: null,
+    });
+  }
+
+  // Photo submits are NOT matched by submitsByView (their imageUrls[0] is the
+  // signed photo URL, not a template view), so match them by the photo model.
+  function photoSubmits(spy: { mock: { calls: unknown[][] } }) {
+    return spy.mock.calls
+      .map((c) => c[0] as { modelKey: string; imageUrls?: string[]; prompt: string })
+      .filter((req) => req.modelKey === 'nano_banana_edit');
+  }
+
+  it('initial WITH a photo: template jobs PLUS 3 photo jobs (view=photo, renderTarget=photo)', async () => {
+    withPhotoBrief();
+    const runId = seedRun();
+    const s1 = await advanceRun(USER, runId);
+    expect(s1?.status).toBe('rendering');
+
+    // 3 template jobs (3 directions × 1 view) + 3 photo jobs (one per direction).
+    const tmpl = h.state.jobs.filter((j) => j.renderTarget === 'template');
+    const photo = h.state.jobs.filter((j) => j.renderTarget === 'photo');
+    expect(tmpl).toHaveLength(3);
+    expect(photo).toHaveLength(3);
+    for (const j of photo) {
+      expect(j.view).toBe('photo');
+      expect(j.conceptKey).toMatch(/^(literal|bolder|minimal)$/);
+    }
+    // Distinct concepts, one photo job each.
+    expect(new Set(photo.map((j) => j.conceptKey)).size).toBe(3);
+  });
+
+  it('initial WITHOUT a photo: only template jobs (no photo fan-out)', async () => {
+    // Default getAsset → null, default snapshot has no photos.
+    const runId = seedRun();
+    await advanceRun(USER, runId);
+    expect(h.state.jobs.every((j) => j.renderTarget === 'template')).toBe(true);
+    expect(h.state.jobs.filter((j) => j.view === 'photo')).toHaveLength(0);
+    expect(h.state.jobs).toHaveLength(3);
+  });
+
+  it('final WITH a photo: adds exactly ONE photo job for the chosen concept', async () => {
+    withPhotoBrief();
+    const parentId = seedRun({
+      id: 'parent-1',
+      status: 'complete',
+      directions: {
+        promptVersion: 'v1',
+        orchestratorCostUsd: 0.005,
+        directions: ['literal', 'bolder', 'minimal'].map((k) => directionFixture(k, ['driver'])),
+      },
+      completedAt: new Date(),
+    });
+    const runId = seedRun({
+      id: 'final-1',
+      kind: 'final',
+      parentRunId: parentId,
+      conceptKey: 'minimal',
+      model: 'flux2_pro_edit',
+    });
+    await advanceRun(USER, runId);
+
+    const photo = h.state.jobs.filter((j) => j.runId === runId && j.renderTarget === 'photo');
+    expect(photo).toHaveLength(1);
+    expect(photo[0]!.view).toBe('photo');
+    expect(photo[0]!.conceptKey).toBe('minimal');
+  });
+
+  it('final WITHOUT a photo: no photo job', async () => {
+    const parentId = seedRun({
+      id: 'parent-1',
+      status: 'complete',
+      directions: {
+        promptVersion: 'v1',
+        orchestratorCostUsd: 0.005,
+        directions: ['literal', 'bolder', 'minimal'].map((k) => directionFixture(k, ['driver'])),
+      },
+      completedAt: new Date(),
+    });
+    const runId = seedRun({
+      id: 'final-1',
+      kind: 'final',
+      parentRunId: parentId,
+      conceptKey: 'minimal',
+      model: 'flux2_pro_edit',
+    });
+    await advanceRun(USER, runId);
+    expect(h.state.jobs.filter((j) => j.runId === runId && j.view === 'photo')).toHaveLength(0);
+  });
+
+  it('iteration: NEVER fans out a photo job (out of scope)', async () => {
+    withPhotoBrief();
+    const parentId = seedRun({
+      id: 'parent-1',
+      status: 'complete',
+      directions: {
+        promptVersion: 'v1',
+        orchestratorCostUsd: 0.005,
+        directions: ['literal', 'bolder', 'minimal'].map((k) =>
+          directionFixture(k, ['front', 'driver']),
+        ),
+      },
+      completedAt: new Date(),
+    });
+    h.compileIterationMock.mockResolvedValue({
+      affectedViews: ['front'],
+      editPrompt: 'change the hood to matte black, keep everything else the same',
+      title: 'Matte hood',
+      promptVersion: 'v1',
+      usage: { inputTokens: 500, outputTokens: 200, estimatedUsd: 0.002 },
+    });
+    const runId = seedRun({
+      id: 'iter-1',
+      kind: 'iteration',
+      parentRunId: parentId,
+      conceptKey: 'bolder',
+      instruction: 'matte black hood',
+      model: 'kontext_dev',
+    });
+    await advanceRun(USER, runId);
+    expect(h.state.jobs.filter((j) => j.runId === runId && j.view === 'photo')).toHaveLength(0);
+  });
+
+  it('partition: a view=photo job never becomes the anchor and never gates a template job; template jobs still condition imageUrls[0] on the template view', async () => {
+    const MV = ['front', 'driver', 'back']; // anchor resolves to 'driver'
+    withPhotoBrief();
+    h.fakeVehicles.getPublishedDetail.mockResolvedValue({
+      id: 'veh-1',
+      year: 2024,
+      make: 'BMW',
+      model: 'X3',
+      bodyType: 'suv',
+      panels: MV.map((v, i) => ({ id: `p${i}`, view: v, name: `${v} panel` })),
+    });
+    h.compileBriefMock.mockResolvedValue({
+      directions: [directionFixture('literal', MV)],
+      promptVersion: 'v4',
+      usage: { inputTokens: 1000, outputTokens: 800, estimatedUsd: 0.005 },
+    });
+    const submitSpy = vi.spyOn(mockProvider, 'submit');
+    const runId = seedRun({ model: 'nano_banana_edit' });
+
+    const snapshot = await advanceUntilTerminal(runId, 24);
+    expect(snapshot.status).toBe('complete');
+
+    // The anchor (driver) only ever conditions on its own template structure
+    // render, so a photo render never leaks into the anchor donor slot.
+    const tmplSubmits = submitSpy.mock.calls
+      .map((c) => c[0] as { imageUrls?: string[] })
+      .map((r) => r.imageUrls?.[0] ?? '');
+    const driverCall = tmplSubmits.find((u) => u.includes('views/veh-1/driver.png'));
+    expect(driverCall).toBe('https://templates.test/views/veh-1/driver.png');
+
+    // No template submit ever conditions on a photo render (filename has -photo).
+    for (const call of submitSpy.mock.calls) {
+      const req = call[0] as { imageUrls?: string[] };
+      const isPhotoConditioned = (req.imageUrls ?? []).some((u) => u.includes('-photo'));
+      // Photo jobs DO use the photo as imageUrls[0]; template anchor/derived
+      // never reference a photo render as a coherence donor.
+      if (isPhotoConditioned) {
+        expect((req as { imageUrls?: string[] }).imageUrls![0]).toContain(PHOTO_KEY);
+      }
+    }
+
+    // Derived template views (front/back) condition on the DRIVER anchor render,
+    // never on a photo render: coherence machinery saw template jobs only.
+    const derived = submitSpy.mock.calls
+      .map((c) => c[0] as { imageUrls?: string[] })
+      .filter((r) => (r.imageUrls?.length ?? 0) === 2)
+      .filter((r) => /views\/veh-1\/(front|back)\.png/.test(r.imageUrls![0]!));
+    expect(derived.length).toBe(2);
+    for (const r of derived) {
+      expect(r.imageUrls![1]).toBe(
+        'https://signed.test/generations/proj-1/run-1/literal-driver.png',
+      );
+    }
+
+    // All 4 image rows present: 3 template views + 1 photo. The photo image
+    // carries view='photo' and render_target='photo'.
+    const imgs = h.state.images.filter((i) => i.runId === runId);
+    const photoImgs = imgs.filter((i) => i.renderTarget === 'photo');
+    expect(photoImgs).toHaveLength(1);
+    expect(photoImgs[0]!.view).toBe('photo');
+    expect(imgs.filter((i) => i.renderTarget === 'template')).toHaveLength(3);
+  });
+
+  it('a photo job submits with imageUrls=[signed photo url] + the photo model, harvests render_target=photo, watermarked on a non-final run', async () => {
+    withPhotoBrief();
+    const submitSpy = vi.spyOn(mockProvider, 'submit');
+    const runId = seedRun(); // initial, model flux_depth_dev; photo jobs use the photo model
+
+    const snapshot = await advanceUntilTerminal(runId, 24);
+    expect(snapshot.status).toBe('complete');
+
+    const photoCalls = photoSubmits(submitSpy);
+    expect(photoCalls).toHaveLength(3);
+    for (const req of photoCalls) {
+      // Conditioned on the customer's signed photo URL, nothing else.
+      expect(req.imageUrls).toEqual([`https://signed.test/${PHOTO_KEY}`]);
+      // The on-photo prompt, not a template view prompt.
+      expect(req.prompt).toContain('supplied photo');
+    }
+
+    // Harvested photo images: render_target='photo', the photo model + its fal id.
+    const photoImgs = h.state.images.filter((i) => i.runId === runId && i.renderTarget === 'photo');
+    expect(photoImgs).toHaveLength(3);
+    for (const img of photoImgs) {
+      expect(img.view).toBe('photo');
+      expect(img.model).toBe('nano_banana_edit');
+      expect((img.provenance as { model?: string }).model).toBe('fal-ai/nano-banana/edit');
+      // Watermarked preview on a non-final (initial) run.
+      expect(String(img.previewPath)).toContain('-preview.png');
+      expect(img.previewPath).not.toBe(img.storagePath);
+    }
+    // Photo originals + watermark previews stored under <concept>-photo.
+    const keys = h.state.uploads.map((u) => u.key);
+    expect(keys).toContain('generations/proj-1/run-1/literal-photo.png');
+    expect(keys).toContain('generations/proj-1/run-1/literal-photo-preview.png');
+
+    // Template images keep render_target='template' + the RUN model.
+    const tmplImgs = h.state.images.filter(
+      (i) => i.runId === runId && i.renderTarget === 'template',
+    );
+    expect(tmplImgs).toHaveLength(3);
+    for (const img of tmplImgs) expect(img.model).toBe('flux_depth_dev');
+  });
+
+  it('final photo render is NOT watermarked (paid artwork, preview IS the image)', async () => {
+    withPhotoBrief();
+    const parentId = seedRun({
+      id: 'parent-1',
+      status: 'complete',
+      directions: {
+        promptVersion: 'v1',
+        orchestratorCostUsd: 0.005,
+        directions: [directionFixture('minimal', ['driver'])],
+      },
+      completedAt: new Date(),
+    });
+    const runId = seedRun({
+      id: 'final-1',
+      kind: 'final',
+      parentRunId: parentId,
+      conceptKey: 'minimal',
+      model: 'flux2_pro_edit',
+    });
+
+    const snapshot = await advanceUntilTerminal(runId, 24);
+    expect(snapshot.status).toBe('complete');
+
+    const photoImg = h.state.images.find((i) => i.runId === runId && i.renderTarget === 'photo')!;
+    expect(photoImg.view).toBe('photo');
+    expect(photoImg.previewPath).toBe(photoImg.storagePath);
+    expect(String(photoImg.storagePath)).not.toContain('-preview');
+    expect(h.state.uploads.filter((u) => u.key.includes('photo-preview'))).toHaveLength(0);
+  });
+
+  it('a transient photo-key resolve failure never fails the photo job: a later slice retries to completion', async () => {
+    withPhotoBrief();
+    // Let orchestrate's resolution succeed (call 1, the fan-out), then throw
+    // ONCE on a render-slice resolution, then recover. The photo job must stay
+    // open (not failed) and the run must still complete.
+    const presentAsset = {
+      assetId: '11111111-1111-1111-1111-111111111111',
+      projectId: 'proj-1',
+      mimeType: 'image/jpeg',
+      sourceUrl: PHOTO_KEY,
+      parsedUrl: null,
+    };
+    let calls = 0;
+    let injected = false;
+    h.fakeProjects.getAsset.mockImplementation(async () => {
+      calls += 1;
+      if (calls === 2) {
+        injected = true;
+        throw new Error('transient asset read error');
+      }
+      return presentAsset;
+    });
+    const runId = seedRun();
+    const snapshot = await advanceUntilTerminal(runId, 24);
+    expect(injected).toBe(true); // the transient path was exercised
+    expect(snapshot.status).toBe('complete');
+    expect(h.state.jobs.every((j) => j.status === 'complete')).toBe(true);
+    // A real photo image was harvested (the job was never wrongly failed).
+    expect(h.state.images.some((i) => i.runId === runId && i.renderTarget === 'photo')).toBe(true);
+  });
+
+  it('a photo deleted mid-run (clean null at render time) fails only the photo job and refunds the run', async () => {
+    withPhotoBrief();
+    // The photo exists at ORCHESTRATE (so a photo job is created) but is gone by
+    // the time the render slice resolves the key (clean null). The defensive
+    // guard fails just the photo job; settle then refunds the run.
+    const presentAsset = {
+      assetId: '11111111-1111-1111-1111-111111111111',
+      projectId: 'proj-1',
+      mimeType: 'image/jpeg',
+      sourceUrl: PHOTO_KEY,
+      parsedUrl: null,
+    };
+    let calls = 0;
+    h.fakeProjects.getAsset.mockImplementation(async () => {
+      calls += 1;
+      return calls === 1 ? presentAsset : null; // present at orchestrate, gone at render
+    });
+    const runId = seedRun();
+    const snapshot = await advanceUntilTerminal(runId, 24);
+    // The photo job was created (1) then failed (clean null at render time) → the
+    // run cannot fully complete, so settle fails + refunds it.
+    expect(snapshot.status).toBe('failed');
+    const photoJob = h.state.jobs.find((j) => j.view === 'photo')!;
+    expect(photoJob.status).toBe('failed');
+    expect(String(photoJob.error)).toContain('no longer available');
+    expect(h.state.refunds).toContain(runId);
+  });
+
+  it('settle: the run completes only AFTER both template and photo jobs are complete', async () => {
+    withPhotoBrief();
+    // Hold the photo job pending at the provider until the driver loop releases
+    // it: while it is open, the run must NOT settle complete.
+    let releasePhoto: (() => void) | null = null;
+    const realCheckBound = mockProvider.check.bind(mockProvider);
+    vi.spyOn(mockProvider, 'check').mockImplementation(async (modelKey, requestId) => {
+      const job = h.state.jobs.find((j) => j.providerRequestId === requestId);
+      if (job?.view === 'photo' && releasePhoto !== null) {
+        return { status: 'pending' as const };
+      }
+      return realCheckBound(modelKey, requestId);
+    });
+    releasePhoto = () => {};
+
+    const runId = seedRun();
+    // Drive a few slices: template jobs complete, photo stays pending → run open.
+    for (let i = 0; i < 6; i++) {
+      const snap = await advanceRun(USER, runId);
+      if (snap?.status !== 'rendering') break;
+    }
+    const mid = h.state.runs.get(runId)!;
+    expect(mid.status).toBe('rendering'); // photo not done → run not settled
+    const photoJob = h.state.jobs.find((j) => j.view === 'photo')!;
+    expect(photoJob.status).not.toBe('complete');
+
+    // Release the photo: now harvest completes it and the run settles.
+    releasePhoto = null;
+    const snapshot = await advanceUntilTerminal(runId, 24);
+    expect(snapshot.status).toBe('complete');
+    expect(h.state.jobs.every((j) => j.status === 'complete')).toBe(true);
   });
 });
 
