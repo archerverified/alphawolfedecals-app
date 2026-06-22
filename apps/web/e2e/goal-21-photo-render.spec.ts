@@ -1,4 +1,4 @@
-// Goal 21 T8 — E2E spec for the photo-render path (mock provider, CI-safe).
+// Goal 21 T8 - E2E spec for the photo-render path (mock provider, CI-safe).
 //
 // Journey: sign up → create project from the seeded X3 → open brief → upload a
 // vehicle photo → fill minimum brief fields → Generate → 3 concepts → assert
@@ -19,7 +19,7 @@
 // downloads successfully with the photo path active.
 //
 // Cleanup contract (same as generation.spec.ts): the created user email is
-// appended to /tmp/goal21-e2e/test-user-emails.txt — purge with
+// appended to /tmp/goal21-e2e/test-user-emails.txt - purge with
 // `pnpm --filter @alphawolf/db db:cleanup-e2e <email>`.
 
 import * as fs from 'fs';
@@ -59,7 +59,7 @@ async function createProject(page: Page): Promise<string> {
 test.describe('Goal 21 photo-render path (mock provider)', () => {
   test.skip(
     isRemoteTarget(),
-    'Mock-provider photo-render loop — local dev only; production uses the real provider.',
+    'Mock-provider photo-render loop - local dev only; production uses the real provider.',
   );
 
   test('photo upload in brief → 3 concepts with on-photo previews → showcase modal → PDF export', async ({
@@ -95,7 +95,7 @@ test.describe('Goal 21 photo-render path (mock provider)', () => {
     await shot(page, '01-photo-uploaded');
 
     // Style step: provide a prompt so the orchestrator has something to work
-    // with — same field used in generation.spec.ts.
+    // with - same field used in generation.spec.ts.
     await page.getByTestId('brief-step-tab-style').click();
     await page
       .getByTestId('style-prompt')

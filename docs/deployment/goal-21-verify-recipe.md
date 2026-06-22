@@ -1,4 +1,4 @@
-# Goal 21 — Real-fal Verification Recipe (photo-render path)
+# Goal 21 - Real-fal Verification Recipe (photo-render path)
 
 This is the manual D5 verification recipe for the photo path. It does not run in CI.
 The durable E2E spec (`apps/web/e2e/goal-21-photo-render.spec.ts`) runs against the
@@ -86,24 +86,38 @@ psql "postgresql://app_user@localhost/alphawolf_e2e_g21" -c "SELECT current_user
 
 ---
 
-## Step 4: Copy the X3 catalogue read-only from prod
+## Step 4: Copy the catalogue read-only from prod
 
 The vehicle catalogue (`vehicles` + `vehicle_panels`) is seeded from production. Never
 write to it here; only read it.
+
+Copy BOTH vehicles so either verification path works:
+
+- `a0000000-0000-4000-8000-000000000001` is the **Ford Transit 250** (`SEEDED_VEHICLE_ID`,
+  used by the automated mock spec `apps/web/e2e/goal-21-photo-render.spec.ts`). Boxes-only
+  art, fine for the mock path.
+- `aa000001-0000-4000-8000-000000000001` is the **2024 BMW X3** (recognizable AW-owned
+  `wrapped.svg` art). Use this one for the MANUAL real-fal walkthrough so the on-photo
+  render and the multi-view showcase have rich, recognizable vehicle art.
 
 Connect to the live DB using `DIRECT_URL` (the Supabase direct connection string from
 your `apps/web/.env.local` or the memory note `supabase-env-topology.md`):
 
 ```bash
-# Export from live (replace <DIRECT_URL> with the real value).
+# Export from live (replace <DIRECT_URL> with the real value). Both vehicles.
 psql "<DIRECT_URL>" <<'SQL'
   SET session_replication_role = replica;  -- bypass triggers for the export
   COPY (
-    SELECT * FROM vehicles WHERE id = 'aa000001-0000-4000-8000-000000000001'
+    SELECT * FROM vehicles WHERE id IN (
+      'a0000000-0000-4000-8000-000000000001',
+      'aa000001-0000-4000-8000-000000000001'
+    )
   ) TO '/tmp/g21_vehicles.csv' WITH CSV HEADER;
   COPY (
-    SELECT * FROM vehicle_panels
-    WHERE vehicle_id = 'aa000001-0000-4000-8000-000000000001'
+    SELECT * FROM vehicle_panels WHERE vehicle_id IN (
+      'a0000000-0000-4000-8000-000000000001',
+      'aa000001-0000-4000-8000-000000000001'
+    )
   ) TO '/tmp/g21_vehicle_panels.csv' WITH CSV HEADER;
 SQL
 
@@ -119,14 +133,15 @@ Note: `session_replication_role = replica` disables foreign-key and trigger chec
 during the copy, which is needed because the local DB does not have the Supabase `auth`
 schema rows that some FK constraints reference. This matches the Goal 13/16 recipe.
 
-The seeded vehicle ID used by the E2E spec is `a0000000-0000-4000-8000-000000000001`
-(the X3, as defined in `SEEDED_VEHICLE_ID` across all E2E specs). Verify the copy
-landed the correct row:
+Verify both rows landed (Ford Transit + BMW X3):
 
 ```bash
 psql alphawolf_e2e_g21 -c \
-  "SELECT id, make, model FROM vehicles WHERE id = 'a0000000-0000-4000-8000-000000000001';"
+  "SELECT id, make, model FROM vehicles WHERE id IN ('a0000000-0000-4000-8000-000000000001','aa000001-0000-4000-8000-000000000001');"
 ```
+
+For the manual real-fal walkthrough, navigate to `/vehicles/aa000001-0000-4000-8000-000000000001`
+(the X3). For the automated mock spec, no manual navigation is needed (it targets the Transit).
 
 ---
 
@@ -145,7 +160,7 @@ AI_PROVIDER=fal
 FAL_KEY=<your FAL_KEY from the live .env.local or Vercel env>
 
 # Keep the Anthropic key so the orchestrator (Haiku) works.
-# ANTHROPIC_API_KEY is already in your live .env.local — leave it unchanged.
+# ANTHROPIC_API_KEY is already in your live .env.local - leave it unchanged.
 
 # Blank telemetry so no prod events fire during the local run.
 NEXT_PUBLIC_POSTHOG_KEY=
@@ -161,7 +176,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=<your live value>
 ```
 
 The FAL_KEY is write-only in Vercel (pulling returns blank); get it from your local
-`apps/web/.env.local` (it was set during Goal 16 — see memory note
+`apps/web/.env.local` (it was set during Goal 16 - see memory note
 `goal-16-launch-readiness-state.md`).
 
 ---
@@ -242,7 +257,7 @@ Do NOT delete any object whose project ID is not in your throwaway DB. The
 Verify the baseline is restored:
 
 ```bash
-# Count remaining project-assets objects — should match the pre-run baseline (4,
+# Count remaining project-assets objects - should match the pre-run baseline (4,
 # from the Goal 16 / 20 purge). Any delta beyond your run's project IDs indicates
 # concurrent activity; leave those untouched.
 ```

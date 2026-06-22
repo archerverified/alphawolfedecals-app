@@ -1,4 +1,4 @@
-// Goal 21 T8 — Owner-path unit tests for buildShowcaseAction.
+// Goal 21 T8 - Owner-path unit tests for buildShowcaseAction.
 //
 // Closes the Task 6 reviewer's deferred owner-path coverage.
 // All offline: deps are mocked (guard, @alphawolf/db repos, sharp compositor).
@@ -170,7 +170,7 @@ beforeEach(() => {
 // 1. Non-owner / missing project (getProject resolves null)
 // ---------------------------------------------------------------------------
 
-describe('buildShowcaseAction — not_found paths', () => {
+describe('buildShowcaseAction - not_found paths', () => {
   it('returns not_found when the project does not exist or does not belong to the user', async () => {
     h.getProjectMock.mockResolvedValue(null);
 
@@ -203,7 +203,7 @@ describe('buildShowcaseAction — not_found paths', () => {
 // 2. not_ready: project exists but no complete template renders for the concept
 // ---------------------------------------------------------------------------
 
-describe('buildShowcaseAction — not_ready paths', () => {
+describe('buildShowcaseAction - not_ready paths', () => {
   it('returns not_ready when the final run has no template images at all', async () => {
     h.listRunsForProjectMock.mockResolvedValue([makeRun({ images: [] })]);
 
@@ -243,7 +243,7 @@ describe('buildShowcaseAction — not_ready paths', () => {
 // 3. Happy path: template renders present (with and without a photo hero)
 // ---------------------------------------------------------------------------
 
-describe('buildShowcaseAction — happy path', () => {
+describe('buildShowcaseAction - happy path', () => {
   it('uploads to showcase/<projectId>/... and returns { ok: true, url }', async () => {
     const res = await buildShowcaseAction(PROJECT_ID, RUN_ID, CONCEPT_KEY);
 
@@ -263,7 +263,7 @@ describe('buildShowcaseAction — happy path', () => {
   });
 
   it('includes the on-photo hero in the showcase composite when present', async () => {
-    // Default run fixture includes a photo image — verify composeShowcase is
+    // Default run fixture includes a photo image - verify composeShowcase is
     // called with a non-null heroPng.
     await buildShowcaseAction(PROJECT_ID, RUN_ID, CONCEPT_KEY);
 
