@@ -1,4 +1,4 @@
--- Goal 21 / T1 — render_target discriminator on generation_jobs + generation_images.
+-- Goal 21 / T1 - render_target discriminator on generation_jobs + generation_images.
 --
 -- Adds a render_target column to both tables so photo AI renders can be
 -- distinguished from template renders at every read. Default 'template'

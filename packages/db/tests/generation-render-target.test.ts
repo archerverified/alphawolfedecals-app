@@ -1,5 +1,5 @@
 // Unit tests for the render_target discriminator added in Goal 21 / T1.
-// No DB — these run in the default `unit` vitest project alongside the other
+// No DB - these run in the default `unit` vitest project alongside the other
 // generation-helpers tests.
 //
 // Because recordJobs and insertImage require a live Prisma client (withUser),
@@ -35,7 +35,7 @@ describe('RenderTarget union type', () => {
   });
 
   test('GenerationJobRow has renderTarget typed as RenderTarget', () => {
-    // Build a minimal GenerationJobRow literal — TS will error at compile time
+    // Build a minimal GenerationJobRow literal - TS will error at compile time
     // if renderTarget is missing from the type.
     const row: GenerationJobRow = {
       id: 'job-1',
@@ -92,7 +92,7 @@ describe('RecordJobInput renderTarget default semantics', () => {
       view: 'driver',
       renderTarget: 'photo',
     };
-    // The field is absent (undefined) when not provided — callers in recordJobs
+    // The field is absent (undefined) when not provided - callers in recordJobs
     // coalesce it to 'template' via `j.renderTarget ?? 'template'`.
     expect(withoutTarget.renderTarget).toBeUndefined();
     expect(withTemplate.renderTarget).toBe('template');
@@ -123,7 +123,7 @@ describe('InsertImageInput renderTarget default semantics', () => {
       model: 'flux/dev',
       costUsd: 0.07,
     } satisfies InsertImageInput;
-    // renderTarget absent on base — coalesces to 'template' in insertImage.
+    // renderTarget absent on base - coalesces to 'template' in insertImage.
     expect(base.renderTarget).toBeUndefined();
     const resolved = base.renderTarget ?? 'template';
     expect(resolved).toBe('template');

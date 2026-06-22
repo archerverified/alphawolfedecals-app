@@ -1,4 +1,4 @@
-// Goal 21 T2 — photo-render prompt builder unit tests. ALL offline: no fal
+// Goal 21 T2 - photo-render prompt builder unit tests. ALL offline: no fal
 // calls, no spend. Tests assert the deterministic contract of buildPhotoRenderPrompt
 // and PHOTO_PROMPT_VERSION independently from the orchestrator versioning surface.
 
@@ -60,7 +60,7 @@ describe('buildPhotoRenderPrompt', () => {
   it('contains no em-dash or en-dash characters', () => {
     const prompt = buildPhotoRenderPrompt({ summary });
     // U+2014 = em dash, U+2013 = en dash used as a dash.
-    expect(prompt).not.toMatch(/[—–]/);
+    expect(prompt).not.toMatch(/[\u2014\u2013]/);
   });
 
   it('is deterministic: same input always produces the same output', () => {
