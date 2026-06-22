@@ -82,6 +82,7 @@ export type {
   GenerationRunKind,
   GenerationRunStatus,
   GenerationJobStatus,
+  RenderTarget,
   GenerationRunRow,
   GenerationJobRow,
   GenerationImageRow,
