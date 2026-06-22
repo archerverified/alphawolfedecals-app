@@ -31,7 +31,8 @@ CodeRabbit is RETIRED. Greptile is obsolete. Never invoke either. Every PR, befo
 2. CI must be green.
 3. PRs touching RLS, auth, the DB split, or deploy config additionally get an `advisor()` second opinion (in CC sessions with the advisor tool). Do NOT rubber-stamp reviews on RLS.
 4. Record the review output in the PR description.
-   `.coderabbit.yaml` is RETIRED (removed in Goal 4). Its guardrails are ported: the semantic per-path review bar lives in `docs/review/review-checklist.md` (apply it during `/code-review`), and secret scanning moved to CI (`.github/workflows/gitleaks.yml`). The MVP's locked invariants are recorded in ADR-0014.
+
+The per-path review bar lives in `docs/review/review-checklist.md` (apply it during `/code-review`). Secret scanning is in CI (`.github/workflows/gitleaks.yml`). MVP locked invariants are in ADR-0014. (`.coderabbit.yaml` retired in Goal 4.)
 
 ## 4. OPERATING RULES
 
@@ -53,11 +54,7 @@ CodeRabbit is RETIRED. Greptile is obsolete. Never invoke either. Every PR, befo
 
 ## 6. DEBUGGING GOTCHAS (learned the hard way, don't re-derive)
 
-- Vercel deploy <2s with EMPTY build logs = preflight reject (region/config), NOT billing. `errorMessage` populated = billing. 30–120s with logs = real build failure. Always pull deployment via MCP/API, never trust CLI summary.
-- Vercel "missing env var" while the var "already exists" = empty/stale value. Edit-in-place, then push a fresh commit.
-- Supabase free tier auto-pauses after 7 days idle. Resume via `restore_project`, standing permission granted, no need to ask.
-- After `apply_migration` via Supabase MCP, insert the row into `_prisma_migrations` with the SHA-256 checksum so `prisma migrate deploy` skips cleanly.
-- Stacked PRs after squash-merge: retarget base to main, rebase head branch (auto-detects applied commits), force-push the feature branch.
+When a deploy, env var, DB, or migration misbehaves, read `docs/debugging-gotchas.md` BEFORE re-deriving. It covers Vercel preflight-vs-billing-vs-build signals, stale env vars, Supabase auto-pause + `_prisma_migrations` checksum inserts, and stacked-PR rebases.
 
 ## 7. VERIFY BEFORE DELIVERING
 
@@ -65,14 +62,9 @@ A task is done only when: the claimed files/deploys/PRs actually exist and were 
 
 ## 8. KNOWLEDGE GRAPH, graphify (project memory at code + doc scale)
 
-A graphify knowledge graph of the codebase + docs lives at `graphify-out/graph.json` (gitignored). Use it instead of blind grepping.
+A graphify knowledge graph of the codebase + docs lives at `graphify-out/graph.json` (gitignored). Use it instead of blind grepping: query a subsystem before touching it (audit-first, §1), and run `graphify update .` after merging (closeout, §5).
 
-- **Audit-first (§1):** before touching a subsystem, query it, `graphify query "how does X work?"` or the MCP tools (`query_graph`, `get_neighbors`, `shortest_path`, `god_nodes`, PR-impact). It surfaces dependencies a grep would miss.
-- **Risk targeting:** highly-connected "god nodes" are blast-radius-heavy, `withUser`/`withSystem` (the §2 DB-split boundary) and `captureServerEvent` (the analytics seam touching ~11 subsystems). Changes there get the §3 second review. Run the **PR-impact tools before merge** to catch cross-subsystem ripples, the class of miss that caused the sharp-0.35 prod outage.
-- **Closeout (§5):** after merging code, run `graphify update .` or the graph goes stale and answers wrong.
-- **Availability in worktrees:** goal work runs in a worktree (§4), and the graph file is gitignored so it is absent there. The graphify MCP must be registered at **user scope** (it serves the graph's absolute path) to be available in goal sessions:
-  `claude mcp add --scope user graphify -- /Users/ashton/.local/bin/graphify-mcp /Users/ashton/Documents/AlphaWolfDecals-App/graphify-out/graph.json`
-  If the tools aren't present, fall back to the `graphify` CLI or normal file reads, never block on it.
+Operational detail in `docs/graphify-usage.md`: god-node risk targeting, PR-impact-before-merge, the MCP tool list, and the user-scope MCP registration needed for worktree sessions.
 
 ---
 
