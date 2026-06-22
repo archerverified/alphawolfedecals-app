@@ -1,0 +1,74 @@
+{
+  "captured": "2026-06-18",
+  "by": "Claude Code + Playwright MCP (authenticated, live prod)",
+  "prodUrl": "https://alphawolfedecals-app-web.vercel.app",
+  "vehicle": "2024 BMW X3",
+  "project": "Alpha Wolf X3 Concept",
+  "falSpendUsd": 0.7417,
+  "notes": "Continues the public-surface set (01-17). Account bigtester420@gmail.com did not exist (Cowork signup never completed), so it was created here via the OTP flow (Resend), then driven. Both disposable accounts purged at closeout.",
+  "deliverables": {
+    "D1_signin_vehicle": [
+      { "file": "18-verify-otp.png", "desc": "Email verification / OTP entry screen" },
+      { "file": "19-welcome.png", "desc": "Post-verify welcome (You're verified, choose your vehicle)" },
+      { "file": "20-vehicle-selector.png", "desc": "Vehicle selector (year/make/model/trim cascade + typo-tolerant search)" },
+      { "file": "21-vehicle-x3-selected.png", "desc": "2024 BMW X3 template card after filtering" },
+      { "file": "22-vehicle-x3-detail.png", "desc": "X3 detail: 4-view wrap outline + 15 body panels + Start design" }
+    ],
+    "D2_brief_builder": [
+      { "file": "23-new-project-dialog.png", "desc": "Start a new project dialog (name the design)" },
+      { "file": "24-editor-empty.png", "desc": "Empty editor canvas (entry to Design brief / Design with AI)" },
+      { "file": "25-brief-zones.png", "desc": "Brief step 1: wrap zones (full wrap default)" },
+      { "file": "26-brief-photos.png", "desc": "Brief step 2: optional vehicle photos" },
+      { "file": "27-brief-logo.png", "desc": "Brief step 3: Alpha Wolf logo uploaded + placed on Front Door + DPI quality warning" },
+      { "file": "28-brief-colors.png", "desc": "Brief step 4: cyan #00AEEF (primary) + Gloss Black 3M 2080-G12 (secondary)" },
+      { "file": "29-brief-style.png", "desc": "Brief step 5: Aggressive preset + cyan/black brand prompt" },
+      { "file": "30-brief-zone-notes.png", "desc": "Brief step 6: per-panel notes" },
+      { "file": "31-brief-materials.png", "desc": "Brief step 7: Premium cast vinyl" },
+      { "file": "32-brief-tint.png", "desc": "Brief step 8: TX-legal 35% front tint" },
+      { "file": "33-brief-extras.png", "desc": "Brief step 9: Chrome delete + Pinstripe/accents" },
+      { "file": "34-brief-notes.png", "desc": "Brief step 10: catch-all notes (read verbatim by the assistant)" }
+    ],
+    "D3_review_generate_seam": [
+      { "file": "35-brief-review-generate-seam.png", "desc": "Brief Review summary + Generate seam (Generate 3 concepts, uses 1 credit)" }
+    ],
+    "D4_generation_studio": [
+      { "file": "36-generation-in-progress.png", "desc": "Generation warming up (credit deducted 5 to 4)" },
+      { "file": "37-three-concepts-front.png", "desc": "Three AI concepts on the X3 (front), watermarked, before/after sliders + view switcher" },
+      { "file": "38-concepts-driver-view.png", "desc": "View switcher: same concepts, driver-side view" }
+    ],
+    "D5_iteration": [
+      { "file": "39-iteration-chips.png", "desc": "Iteration chips (Brighter colors selected, auto-filled instruction)" },
+      { "file": "40-iteration-refined.png", "desc": "Refined render (Vivid Electric Cyan & Deep Black), credit 4 to 3" }
+    ],
+    "D6_final": [
+      { "file": "41-final-confirm-dialog.png", "desc": "Lock-in dialog (full quality, logo placed exactly, never AI-redrawn, free)" },
+      { "file": "42-final-selected.png", "desc": "Final badge + full-quality no-watermark render + Open in editor / Download spec pack" }
+    ],
+    "D7_editor": [
+      { "file": "43-editor-all-views.png", "desc": "Editor: AI layers composited across all 4 views + logo" },
+      { "file": "44-editor-driver-side.png", "desc": "Editor driver side: AI wrap + real Alpha Wolf logo on the front door" },
+      { "file": "45-editor-layer-selected.png", "desc": "Selection panel showing a locked AI image layer (Rear Quarter)" }
+    ],
+    "D8_export_pack": [
+      { "file": "export-pack-alpha-wolf-x3.pdf", "desc": "Downloaded spec-pack PDF (4 pages, full provenance metadata)" },
+      { "file": "46-export-pack-page-1.png", "desc": "PDF page 1: hero render + 2024 BMW X3 + QR to project" },
+      { "file": "46-export-pack-page-2.png", "desc": "PDF page 2: vehicle dimensions + all four views" },
+      { "file": "46-export-pack-page-3.png", "desc": "PDF page 3: colors, zone table (logo on Front Door), style" },
+      { "file": "46-export-pack-page-4.png", "desc": "PDF page 4: material, tint, extras, shop quote block" }
+    ],
+    "D9_account_surfaces": [
+      { "file": "47-projects-list.png", "desc": "Projects list with the new project (per-user scoped)" },
+      { "file": "48-project-actions-menu.png", "desc": "Project actions menu (Rename / Delete)" }
+    ],
+    "D10_empty_error_states": [
+      { "file": "49-find-a-shop-empty.png", "desc": "Find a shop: empty partner-network state" },
+      { "file": "51-404-signed-in.png", "desc": "Signed-in 404 (Page not found)" }
+    ],
+    "D11_shop_side": [
+      { "file": "50-shop-welcome.png", "desc": "Shop side signed-in: Your shop is live, printer/media setup coming next" }
+    ]
+  },
+  "notCaptured": {
+    "zeroCreditWaitlistSheet": "Not captured. Reaching it needs a 0 credit balance; draining 3 more credits would exceed the single-pipeline fal budget, and forcing it via a DB write would violate the capture-what-the-app-shows rule. Both source prompts list it as conditional. Already shipped + captured in the Goal 7 closeout set."
+  }
+}

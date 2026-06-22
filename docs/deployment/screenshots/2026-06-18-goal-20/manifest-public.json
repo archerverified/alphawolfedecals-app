@@ -1,0 +1,98 @@
+[
+  {
+    "path": "/",
+    "url": "https://alphawolfedecals-app-web.vercel.app/",
+    "status": 200,
+    "finalUrl": "https://alphawolfedecals-app-web.vercel.app/",
+    "title": "Alpha Wolf Wrap Studio",
+    "file": "02-home-full.png"
+  },
+  {
+    "path": "/how-it-works",
+    "url": "https://alphawolfedecals-app-web.vercel.app/how-it-works",
+    "status": 404,
+    "finalUrl": "https://alphawolfedecals-app-web.vercel.app/how-it-works",
+    "title": "Alpha Wolf Wrap Studio",
+    "file": "03-how-it-works-full.png"
+  },
+  {
+    "path": "/for-shops",
+    "url": "https://alphawolfedecals-app-web.vercel.app/for-shops",
+    "status": 404,
+    "finalUrl": "https://alphawolfedecals-app-web.vercel.app/for-shops",
+    "title": "Alpha Wolf Wrap Studio",
+    "file": "04-for-shops-full.png"
+  },
+  {
+    "path": "/shops",
+    "url": "https://alphawolfedecals-app-web.vercel.app/shops",
+    "status": 404,
+    "finalUrl": "https://alphawolfedecals-app-web.vercel.app/shops",
+    "title": "Alpha Wolf Wrap Studio",
+    "file": "05-shops-full.png"
+  },
+  {
+    "path": "/find-a-shop",
+    "url": "https://alphawolfedecals-app-web.vercel.app/find-a-shop",
+    "status": 429,
+    "finalUrl": "https://alphawolfedecals-app-web.vercel.app/signin?next=%2Ffind-a-shop",
+    "title": "",
+    "file": "06-find-a-shop-full.png"
+  },
+  {
+    "path": "/vehicles",
+    "url": "https://alphawolfedecals-app-web.vercel.app/vehicles",
+    "status": 200,
+    "finalUrl": "https://alphawolfedecals-app-web.vercel.app/vehicles",
+    "title": "Vehicle templates — Alpha Wolf Wrap Studio",
+    "file": "07-vehicles-full.png"
+  },
+  {
+    "path": "/signin",
+    "url": "https://alphawolfedecals-app-web.vercel.app/signin",
+    "status": 429,
+    "finalUrl": "https://alphawolfedecals-app-web.vercel.app/signin",
+    "title": "",
+    "file": "08-signin-full.png"
+  },
+  {
+    "path": "/signup",
+    "url": "https://alphawolfedecals-app-web.vercel.app/signup",
+    "status": 429,
+    "finalUrl": "https://alphawolfedecals-app-web.vercel.app/signup",
+    "title": "",
+    "file": "09-signup-full.png"
+  },
+  {
+    "path": "/terms",
+    "url": "https://alphawolfedecals-app-web.vercel.app/terms",
+    "status": 200,
+    "finalUrl": "https://alphawolfedecals-app-web.vercel.app/terms",
+    "title": "Terms of Service — Alpha Wolf Wrap Studio",
+    "file": "10-terms-full.png"
+  },
+  {
+    "path": "/privacy",
+    "url": "https://alphawolfedecals-app-web.vercel.app/privacy",
+    "status": 200,
+    "finalUrl": "https://alphawolfedecals-app-web.vercel.app/privacy",
+    "title": "Privacy Policy — Alpha Wolf Wrap Studio",
+    "file": "11-privacy-full.png"
+  },
+  {
+    "path": "/support",
+    "url": "https://alphawolfedecals-app-web.vercel.app/support",
+    "status": 404,
+    "finalUrl": "https://alphawolfedecals-app-web.vercel.app/support",
+    "title": "Alpha Wolf Wrap Studio",
+    "file": "12-support-full.png"
+  },
+  {
+    "path": "/__nope_404__",
+    "url": "https://alphawolfedecals-app-web.vercel.app/__nope_404__",
+    "status": 404,
+    "finalUrl": "https://alphawolfedecals-app-web.vercel.app/__nope_404__",
+    "title": "Alpha Wolf Wrap Studio",
+    "file": "13-nope-404-full.png"
+  }
+]
