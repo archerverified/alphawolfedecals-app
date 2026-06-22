@@ -6,15 +6,53 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-22 - Goal 20 fix-it BUILD COMPLETE (reviewed x2, full suite green) - launch blockers repaired - merge + 3 owner actions GATED to Archer
+
+**Status:** Built, double-reviewed (section 3 + advisor), and fully verified locally on branch `goal/20-fixit` (worktree `../alphawolf-goal-20`, base `origin/main` 758eca8). Executed in Claude Code per `prompts/26-goal-20-fixit-launch-blockers.md`: audit-first (10-stream parallel sweep + live connectors), TDD build, scoped subagents for the audit + a reviewer-per-fix + the advisor. Diagram: [`docs/vault/diagrams/goal-20-fixit.md`](docs/vault/diagrams/goal-20-fixit.md). NOT merged, NOT deployed (Archer's go pending). Net-zero so far (no prod writes; the live-verify test data is purged at deploy time).
+
+**Audit reframed two findings (this is why we verify live, not from the doc):**
+
+1. **D3 (e2e smoke) is NOT test-drift / cold-start.** Systematic-debugging found ~60% of PROD parses FAIL with `[db/storage] downloadAssetObject ... Bucket not found`, intermittently, even though the bucket + the uploaded source objects provably exist in the project uploads land in (dxwnzxlmggpdjyoxdybh). A 04:41 smoke run PASSED between failures, so it is not a hard break. Root cause: the failing reader (the Render `alphawolf-parse` worker) is pointed at a DIFFERENT/wrong Supabase project (its `SUPABASE_URL` / `SUPABASE_SERVICE_ROLE_KEY` are dashboard `sync:false`). Same class as the Goal-4 stale-service-key incident. This is a real intermittent prod outage of customer artwork upload, and the cause of the red smoke. The fix is an OWNER infra action (correct + redeploy the Render parse env); the code change this branch ships is defense-in-depth so it can never silently regress again.
+2. **D2 (in-app shop order view) already exists.** The order list lives at `/dashboard` (`listShopOrders`, RLS-scoped) with a detail page. The real gap was that a freshly verified shop landed on `/welcome/shop` (a dead-end placeholder) with no path to it, and the customer status email was never sent. So D2 = surface the existing view + wire the email, not build a duplicate.
+
+**What shipped (7 commits, all reviewed + TDD where it fits):**
+
+- **D1 session-on-verify + NODE-G (HIGH)** c1b3eb4 + e052041 + cf2951c. After OTP verify the new customer/shop is now signed in (no bounce to /signin), via a short-lived, HMAC-signed verification ticket (2-min TTL, never sent to the browser) consumed by a second `otp-verified` Credentials provider, reusing the exact JWT session path (no plaintext password exists at verify time). `lastLoginAt` is stamped at verify (new `users.stampLastLoginAt`), fixing the shop `last_login_at`=null finding. `signInAction` + `verifyOtpAction` use `unstable_rethrow` so a server error returns a friendly state instead of the raw 500 the React action client renders as NODE-G "unexpected response". 14 new unit tests.
+- **D2 shop order delivery (HIGH)** 52e99db. `transitionOrderAction` now calls `dispatchOrderStatusEmail` (a Goal-3b seam built but never wired) on accept/complete; `/welcome/shop` gets a "View your orders" CTA to the existing dashboard.
+- **D3 storage hardening (HIGH, hold-with-plan)** 86fc773. `storageMisconfigHint` + `checkAssetsBucketReachable` + an actionable download error; the parse worker self-checks the project-assets bucket at boot, logs LOUD + Sentry + reports `storage` on /health if its project is wrong. Restoring the smoke green still needs the OWNER env fix above.
+- **D4 PostHog CSP (MEDIUM, deploy surface)** 82dbd9c. Added `us-assets.i.posthog.com` (script-src + connect-src) and `us.posthog.com` (connect-src). Advisor confirmed: no locked ADR-0013/0014/0015 invariant weakened, no amendment ADR needed. Regression test pins the hosts + the locked headers.
+- **D5 support address (MEDIUM)** 4b70915. Repointed Support from `support@alphawolfdecals.com` (unverified domain) to `support@1stimpression.co` (the verified sending domain), env-overridable.
+
+**DECISIONS (chosen per the prompt's never-ask policy):**
+
+1. Session mechanism = HMAC verification ticket + a second Credentials provider (vs cookie-minting). Reuses the one JWT path, no password needed. Advisor signed off.
+2. D2 = surface the existing `/dashboard` order view + wire the status email (minimal, no duplicate); fuller shop dashboard stays deferred to Goal 22.
+3. D5 = `support@1stimpression.co` (domain consistency with the sender). Archer must confirm the inbox is monitored.
+4. LOW cosmetics (F2 Vercel Analytics 404, F4 logo DPI, F6 export ghosting, F8 password-meter color) DEFERRED with rationale (need brand assets / design calls / unclear root cause; red-for-weak is standard). F9 (auth 429) is expected protective behavior, no fix.
+5. D3 H-1 (no rate-limit on the otp-verified callback) deferred as defense-in-depth: a forged ticket is rejected at the HMAC check BEFORE any DB lookup (no amplification) and AUTH_SECRET is 256-bit. Advisor AGREED it is acceptable for merge.
+
+**Reviews (section 3):** fresh-context whole-branch review = no Critical/High (one Medium "single-use" wording + an em-dash nit, both applied). Independent advisor on auth/session + CSP/deploy + email + storage = FULL SIGN-OFF on all four surfaces, zero must-fix. No RLS / DB-split / deploy invariant weakened.
+
+**Tests / build:** full `turbo run build` 8/8 (incl the real `next build`; the 'use server' actions compile clean); full `turbo run test` 15/15 (web 294 pass / 8 skip, auth 87, db 147, parse 23). All typechecks + lint-staged clean. Zero em-dashes in any added line.
+
+**GATED to Archer (hold-with-plan; irreversible / outward-facing / owner-surface):**
+
+1. **MERGE** the PR after a fresh CI green + your go.
+2. **OWNER infra (D3 blocker):** correct the Render `alphawolf-parse` service `SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` to project dxwnzxlmggpdjyoxdybh, redeploy. Then the parse self-check logs ok and the e2e smoke goes green. Until then the smoke stays red because the engine, not this branch, is misconfigured.
+3. **OWNER ops (D2):** clear the Resend suppression on wraps@1stimpression.co and confirm a real shop + customer order email delivers end to end; confirm support@1stimpression.co is monitored.
+4. **Post-deploy verify:** signed-in journey on the preview/prod (sign up, verify, create project, order, no /signin bounce), PostHog config + flags load with no CSP console errors, Sentry NODE-G 0-new after deploy, e2e smoke green. Net-zero purge of any test data after.
+5. Closeout still owed at merge: `graphify update .` refresh.
+
 ## 2026-06-22 - Cowork session - Goal 21 verified, scoped-subagents+gate codified (#204), prod test-data purged net-zero, B2B pivot recorded, next-build prep
 
 **Context:** New Cowork orchestrator session off the 2026-06-18 handoff. Verified the Claude Code Goal 21 report against ground truth (verify, do not trust), codified the build model, cleaned prod, and recorded the B2B pivot. All GitHub writes via the REST API (the sandbox cannot do local git).
 
 **B2B PIVOT (recorded, decided 2026-06-18):** The product pivoted fully to B2B: sell a print-ready wrap engine to wrap shops and freelance designers on subscription (owner floated $200 to $400/month). The consumer-facing design flow becomes the design-intake front end, not the business. Full rationale: docs/product/2026-06-18-pivot-decision-b2b.md (committed 1aa54609). This entry is the activities record the pivot was waiting on. PRD amended: new prd-b2b-print-engine.md is the active product definition; prd.md and prd-b2c-guided-design-flow.md marked superseded.
 
-**Goal 21 (photo-render + showcase) VERIFICATION (PR #203, merged to main 37259da):** Independently verified, not trusted. Confirmed: #203 merged, Vercel prod READY on 37259da, migration 20260621120000_generation_render_target applied (additive render_target column + CHECK, checksum row present), no new RLS gaps (Supabase security advisors unchanged: pre-existing INFO on _prisma_migrations / concept_votes / rate_limits plus the pg_trgm WARN). Section 3 gate run fresh: a fresh-context code review (APPROVE with nits) plus an independent advisor (SIGN-OFF). The claimed fix is real: the private-photo share-link leak is closed (the share read filters renderTarget='template' AND skips photo in previewByConceptFrom, the share is owner-gated via the lazily-minted transferToken, only the watermarked previewPath is exposed, 4 regression tests). Print and export still derive from template geometry; the showcase is a sharp composite of already-paid views (about $0.16/project), capped.
+**Goal 21 (photo-render + showcase) VERIFICATION (PR #203, merged to main 37259da):** Independently verified, not trusted. Confirmed: #203 merged, Vercel prod READY on 37259da, migration 20260621120000_generation_render_target applied (additive render_target column + CHECK, checksum row present), no new RLS gaps (Supabase security advisors unchanged: pre-existing INFO on \_prisma_migrations / concept_votes / rate_limits plus the pg_trgm WARN). Section 3 gate run fresh: a fresh-context code review (APPROVE with nits) plus an independent advisor (SIGN-OFF). The claimed fix is real: the private-photo share-link leak is closed (the share read filters renderTarget='template' AND skips photo in previewByConceptFrom, the share is owner-gated via the lazily-minted transferToken, only the watermarked previewPath is exposed, 4 regression tests). Print and export still derive from template geometry; the showcase is a sharp composite of already-paid views (about $0.16/project), capped.
 
 **Report discrepancies found (this is why we verify):**
+
 1. "CI green including CodeRabbit" is a rule break: CodeRabbit is RETIRED (section 3) but is still installed and reviewed #203 (bot review plus a CodeRabbit commit status). Recommend uninstalling the CodeRabbit GitHub App. The .coderabbit.yaml file is already absent from main.
 2. "Sentry 0-new" is not currently true: a fresh issue NODE-G "unexpected response from server" on /signin (1 event, 0 users). Not from Goal 21 (no auth or signin files in the diff); folds into the Goal 20 fix-it.
 3. Net-zero was not done by the goal: see the purge below.
