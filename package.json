@@ -31,7 +31,7 @@
   "devDependencies": {
     "@alphawolf/auth": "workspace:*",
     "@alphawolf/db": "workspace:*",
-    "@commitlint/cli": "^19.5.0",
+    "@commitlint/cli": "^21.0.2",
     "@commitlint/config-conventional": "^21.0.2",
     "@eslint/js": "^10.0.0",
     "@types/node": "^25.9.3",
