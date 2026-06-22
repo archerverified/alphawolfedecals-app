@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { SUPPORT_EMAIL } from '@/lib/contact';
 
 // Shared site footer (Goal 10 D4). Closes the production-readiness gap where the
 // /terms + /privacy routes existed but nothing linked to them. Mounted on the
@@ -18,7 +19,7 @@ export function SiteFooter() {
             Privacy
           </Link>
           <a
-            href="mailto:support@alphawolfdecals.com"
+            href={`mailto:${SUPPORT_EMAIL}`}
             className="underline-offset-2 hover:text-zinc-900 hover:underline"
           >
             Support
