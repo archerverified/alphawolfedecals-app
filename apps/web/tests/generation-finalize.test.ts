@@ -204,12 +204,13 @@ describe('finalizeFinalRunAction - photo render excluded from canvas (Goal 21 T5
       | Record<string, unknown>
       | undefined;
 
-    if (savedState) {
-      // The serialized canvas must not reference the photo storage path or view.
-      const json = JSON.stringify(savedState);
-      expect(json).not.toContain('bolder-photo');
-      expect(json).not.toContain('"view":"photo"');
-    }
+    // Unconditional: a regression that writes a null/unexpected canvas must fail
+    // here, not silently skip the photo-exclusion assertion.
+    expect(savedState).toBeDefined();
+    // The serialized canvas must not reference the photo storage path or view.
+    const json = JSON.stringify(savedState);
+    expect(json).not.toContain('bolder-photo');
+    expect(json).not.toContain('"view":"photo"');
   });
 
   it('succeeds when ONLY template renders are present (baseline behavior unchanged)', async () => {
