@@ -828,6 +828,11 @@ model GenerationJob {
   prompt            String              @default("")
   costUsd           Decimal             @default(0) @map("cost_usd") @db.Decimal(8, 4)
   error             String?
+  // Discriminator: 'template' (SVG overlay on vehicle outline) vs 'photo'
+  // (photo-realistic render placed on a customer-supplied photo). Defaults to
+  // 'template' so all existing rows remain valid. A raw-SQL CHECK in the
+  // migration enforces the domain. (Goal 21 / T1)
+  renderTarget      String              @default("template") @map("render_target")
   createdAt         DateTime            @default(now()) @map("created_at") @db.Timestamptz
   updatedAt         DateTime            @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
 
@@ -858,6 +863,10 @@ model GenerationImage {
   providerRequestId String?       @map("provider_request_id")
   costUsd           Decimal       @default(0) @map("cost_usd") @db.Decimal(8, 4)
   provenance        Json?
+  // Discriminator: 'template' (SVG overlay) vs 'photo' (photo-realistic on a
+  // customer photo). Mirrors GenerationJob.renderTarget; immutable once written
+  // (RLS revokes UPDATE/DELETE from app_user). (Goal 21 / T1)
+  renderTarget      String        @default("template") @map("render_target")
   createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz
 
   run GenerationRun @relation(fields: [runId], references: [id], onDelete: Cascade)

@@ -46,6 +46,15 @@ export default async function GeneratePage({
   const context = await getGenerationContextAction(projectId);
   if (!context.ok) notFound();
 
+  // Goal 21 T7: the first uploaded vehicle photo (if any) seeds the studio's
+  // in-place uploader so the on-photo render path is reachable without a brief
+  // round-trip. A signed read URL is minted server-side; null when no photo.
+  const initialPhoto = await resolveInitialPhoto(
+    user.id,
+    projectId,
+    parsed.ok ? (parsed.data.photos ?? []) : [],
+  );
+
   const label = [vehicle.year, vehicle.make, vehicle.model, vehicle.trim].filter(Boolean).join(' ');
 
   return (
@@ -56,7 +65,28 @@ export default async function GeneratePage({
         initialRunId={typeof run === 'string' && run.length > 0 ? run : null}
         stockViews={stockViews}
         initialContext={context}
+        initialPhoto={initialPhoto}
       />
     </main>
   );
+}
+
+async function resolveInitialPhoto(
+  userId: string,
+  projectId: string,
+  photos: Array<{ assetId: string }>,
+): Promise<{ assetId: string; url: string } | null> {
+  const first = photos[0];
+  if (!first) return null;
+  try {
+    const asset = await projects.getAsset(userId, first.assetId);
+    if (!asset || asset.projectId !== projectId) return null;
+    const key = asset.parsedUrl ?? asset.sourceUrl;
+    if (!key) return null;
+    const url = await storage.signedAssetReadUrl(key);
+    if (!url) return null;
+    return { assetId: first.assetId, url };
+  } catch {
+    return null;
+  }
 }
