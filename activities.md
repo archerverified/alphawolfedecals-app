@@ -43,6 +43,63 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 4. **Post-deploy verify:** signed-in journey on the preview/prod (sign up, verify, create project, order, no /signin bounce), PostHog config + flags load with no CSP console errors, Sentry NODE-G 0-new after deploy, e2e smoke green. Net-zero purge of any test data after.
 5. Closeout still owed at merge: `graphify update .` refresh.
 
+## 2026-06-22 - Curvature-correction SPIKE complete (prompts/25) - research-only, net-zero, GO (conditional)
+
+**Context:** Ran the curvature-correction spike (`prompts/25-spike-curvature-correction.md`) in Claude Code
+per CLAUDE.md sections 0 to 8. De-risks Goal 22's hardest piece: turning flat 2D templates into TRUE
+curvature-aware print dimensions so panels never print short. Research only: no code changes, no prod
+migrations, net-zero. Report: `docs/product/2026-06-22-spike-curvature-correction.md`.
+
+**Method:** `/superpowers` + audit-first + a 15-agent research workflow (6 source evaluations, each
+adversarially verified by a second skeptic, plus 3 calibration cases) + a local geometry/multiplier
+prototype (ran in /tmp, nothing written to the app). Fresh-context review of the report = PASS (DoD
+coverage complete, numbers compute, no overclaiming, verdicts faithful, no em-dashes).
+
+**Audit-first findings:** the flat undercount lives in `apps/web/lib/brief/quality.ts` ->
+`panelPrintSizesIn()` (pure 2D bounding-box projection onto flat length/width via `viewSpanMm`, zero
+curvature awareness). Surfaces in `spec-pack.ts` (already disclaimed as "template-derived estimates"; the
+1.15 `WASTE_FACTOR` is material waste, NOT curvature). Data-model home = `vehicle_panels` +
+`source_authority` enum in `docs/vehicle-database-spec.md`. PVO do-not-ingest rule confirmed still binding.
+
+**Headline result:** NO off-the-shelf source publishes curvature-aware true-surface panel dimensions. OEM
+specs/body-builder guides = datum/bounding only (verified firsthand in the Ford F-150 BBLB + Sprinter BEG);
+collision datasets (Mitchell/CCC/Audatex) = frame points + labor time, not area; paid template providers =
+flat 2D outlines + a blunt fixed 6-inch bleed (PVO's own sq-ft list says "Measurements include 6\" bleed",
+and the PVO EULA blocks ingest). Body panels are physically non-developable (spherical-cap area gain
+10.7-24.9% brackets the owner's +15.4% F-150 door), so flat MUST undercount; it is geometry, not a tracing
+bug. Prototype proved a single door crown explains only ~1-3%, so the +15.4% is compound and CANNOT be
+computed from the flat template; it must be calibrated from measurement.
+
+**Source verdicts:** OEM specs REJECT, collision data REJECT, template providers REJECT (PVO blocker), 3D
+model libraries PROTOTYPE-only (curvature-capable but unverified scale + IP/contract risk), photogrammetry
+LONG-TERM (only physical-measurement path but customer phone scans have silent uncapped scale error on
+glossy paint, ~3cm RMSE ideal to >10% drift), empirical correction model ADOPT as a conservative fallback.
+
+**Recommendation = two-layer empirical model:** Layer 1 = per-(body, panel-class) curvature multiplier k
+biased upward; Layer 2 = confidence/tolerance field (`measured_in_shop` -> `calibrated_sibling` ->
+`class_prior` -> `unknown`) driving a one-sided NEVER-SHORT safety margin + a warning when estimated.
+Backfilled by the owner's live shop measurements (monotonic accuracy gain). Proposed additive data model
+(no migration run): `curvature_factor`/`curvature_source`/`curvature_margin` columns on `vehicle_panels` +
+a versioned `curvature_class_priors` table. This is exactly Goal 22 D4's "clearly-labeled estimate and warn".
+
+**Prototype (calibration-informed):** F-150 rear door 52 x 1.154 = 60.0 (reproduces the owner anchor, the
+ONLY measurement-validated datum). X3 + Sprinter are UNVALIDATED predictions (no owner numbers; no OEM
+panel dims published): Sprinter slab side k=1.03 (most confident, constant 79/92in width = flat planes),
+X3 door k=1.10 least confident (crossover curvature is edge-driven, not a single crown). All on the
+validation list.
+
+**DECISION: GO (conditional).** Build the correction layer + confidence field + never-short margin + warning
+into Goal 22 (cheap, licensing-clean, slots into existing code, strictly better than today's silent
+undercount). Conditions: ship as a conservative labeled ESTIMATE with a warning, do NOT promise curvature
+accuracy to paying shops until live shop measurement validates the priors, stand up the measurement
+calibration loop in Goal 22, put photogrammetry/3D-scan on the roadmap as the phase-2 accuracy upgrade.
+NO-GO on: PVO ingest, licensing collision data, a commercial product off purchased branded 3D models, or
+customer phone photogrammetry for print-critical dims today.
+
+**Net-zero confirmed:** committed only the report + this entry on branch `spike/25-curvature-correction`
+(off main, not merged). No app code, schema, or prod state touched. Follow-up flagged: a pre-existing
+em-dash in shipped code at `apps/web/lib/export/spec-pack.ts:522` (separate cleanup, out of spike scope).
+
 ## 2026-06-22 - Cowork session - Goal 21 verified, scoped-subagents+gate codified (#204), prod test-data purged net-zero, B2B pivot recorded, next-build prep
 
 **Context:** New Cowork orchestrator session off the 2026-06-18 handoff. Verified the Claude Code Goal 21 report against ground truth (verify, do not trust), codified the build model, cleaned prod, and recorded the B2B pivot. All GitHub writes via the REST API (the sandbox cannot do local git).
