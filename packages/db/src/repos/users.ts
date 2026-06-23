@@ -162,6 +162,20 @@ export async function resetFailedLogin(userId: string): Promise<void> {
   });
 }
 
+// Stamp lastLoginAt ONLY. Marks a freshly OTP-verified account as signed in
+// (Goal 20 D1) without touching the lockout counters (failedLoginCount /
+// lockedUntil) that resetFailedLogin also clears. Keeps the verify path from
+// silently resetting a lockout if login.ts ever records failures for a
+// pending_verification account.
+export async function stampLastLoginAt(userId: string): Promise<void> {
+  await withSystem(async (db) => {
+    await db.user.update({
+      where: { id: userId },
+      data: { lastLoginAt: new Date() },
+    });
+  });
+}
+
 export async function lockUserUntil(userId: string, until: Date): Promise<void> {
   await withSystem(async (db) => {
     await db.user.update({

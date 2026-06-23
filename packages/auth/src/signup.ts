@@ -393,6 +393,14 @@ export async function verifySignupOtp(args: {
 
   await otpRepo.consumeOtp(active.id);
   await userRepo.markUserActive(user.id);
+  // Goal 20 D1: a successful OTP verification signs the user in (verifyOtpAction
+  // establishes the session right after this returns). Treat that as a login so
+  // lastLoginAt is populated. Previously it was only set by login() on a
+  // password sign-in, which left every just-verified account (notably shops
+  // landing on /welcome/shop) with last_login_at = null (finding F3). Stamp ONLY
+  // lastLoginAt (not the lockout counters) so the verify path can never reset a
+  // lockout.
+  await userRepo.stampLastLoginAt(user.id);
   await authEvents.logAuthEvent({
     userId: user.id,
     eventType: 'otp_verified',

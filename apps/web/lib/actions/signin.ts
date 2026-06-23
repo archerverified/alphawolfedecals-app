@@ -5,6 +5,8 @@
 // gating, request ownership), so this is the minimal bridge. Auth.js owns CSRF
 // for the credentials POST, so this action has no bespoke CSRF.
 
+import { unstable_rethrow } from 'next/navigation';
+import * as Sentry from '@sentry/nextjs';
 import { AuthError, signIn, signOut } from '@alphawolf/auth/server';
 
 export async function signOutAction(): Promise<void> {
@@ -28,12 +30,24 @@ export async function signInAction(_prev: SignInState, form: FormData): Promise<
   try {
     await signIn('credentials', { email, password, redirectTo: next });
   } catch (err) {
-    // A failed credentials check throws AuthError; the success path throws
-    // NEXT_REDIRECT, which must propagate.
+    // A failed credentials check throws AuthError.
     if (err instanceof AuthError) {
       return { ok: false, message: 'Incorrect email or password.', values: { email } };
     }
-    throw err;
+    // The success path throws NEXT_REDIRECT; unstable_rethrow re-throws Next's
+    // control-flow errors (redirect/notFound) so they propagate, and returns for
+    // anything else.
+    unstable_rethrow(err);
+    // Any OTHER server-side error (DB hiccup, next-auth internal) would otherwise
+    // bubble as a 500 that the React Server Action client renders as "An
+    // unexpected response was received from the server" (Sentry NODE-G). Convert
+    // it to a friendly action state instead of an unhandled crash. Goal 20 D1.
+    Sentry.captureException(err, { tags: { feature: 'signin' } });
+    return {
+      ok: false,
+      message: 'Something went wrong. Please try again in a moment.',
+      values: { email },
+    };
   }
   return { ok: true };
 }
