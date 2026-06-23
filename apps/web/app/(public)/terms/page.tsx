@@ -1,4 +1,5 @@
 import type { Metadata } from 'next';
+import { SUPPORT_EMAIL } from '@/lib/contact';
 
 export const metadata: Metadata = {
   title: 'Terms of Service',
@@ -43,9 +44,7 @@ export default function TermsPage() {
         </div>
         <div>
           <h2 className="text-lg font-medium text-neutral-900">4. Contact</h2>
-          <p className="mt-2">
-            Questions about these terms: support@alphawolfdecals.com. [Placeholder.]
-          </p>
+          <p className="mt-2">Questions about these terms: {SUPPORT_EMAIL}. [Placeholder.]</p>
         </div>
       </section>
     </main>

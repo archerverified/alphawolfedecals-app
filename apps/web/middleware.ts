@@ -36,7 +36,9 @@ const SECURITY_HEADERS: [string, string][] = [
       "default-src 'self'",
       // 'unsafe-inline': Next.js bootstrap + Tailwind v4 runtime styles.
       // 'unsafe-eval': Konva canvas path; revisit in Phase 2.
-      "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      // us-assets.i.posthog.com: the PostHog SDK loads its remote config from
+      // .../array/<key>/config.js (a SCRIPT) on this separate CDN host (F1).
+      "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us-assets.i.posthog.com",
       "style-src 'self' 'unsafe-inline'",
       // blob: for canvas.toBlob(), data: for inline SVG data URIs.
       `img-src 'self' data: blob: https://${SUPABASE_HOSTNAME}`,
@@ -54,9 +56,15 @@ const SECURITY_HEADERS: [string, string][] = [
         'https://*.ingest.sentry.io',
         'https://*.ingest.us.sentry.io',
         'https://*.ingest.de.sentry.io',
-        // PostHog analytics (services/ai events, Phase 2 web events)
+        // PostHog analytics. us.i.posthog.com = event ingestion. The browser SDK
+        // also fetches remote config from us-assets.i.posthog.com (XHR + the
+        // config.js script) and feature flags from the bare us.posthog.com host;
+        // without these two, remote config + flags silently fail on every page
+        // (finding F1). eu.* kept for the EU-region variant.
         'https://us.i.posthog.com',
         'https://eu.i.posthog.com',
+        'https://us-assets.i.posthog.com',
+        'https://us.posthog.com',
         // Vercel Speed Insights and Analytics
         'https://vitals.vercel-insights.com',
         'https://va.vercel-scripts.com',

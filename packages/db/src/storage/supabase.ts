@@ -59,6 +59,58 @@ export function isStorageConfigured(): boolean {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
+// Goal 20 D3: when a storage error is "Bucket not found", the caller's
+// SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are almost certainly pointed at the
+// WRONG Supabase project (the parse worker hit this: uploads landed in the right
+// project but the worker's download 404'd the bucket, silently failing parses).
+// Returns an actionable hint for that case, or null for any other error (e.g. a
+// missing object, or a transient network failure, both of which mean the
+// project/bucket config is fine).
+export function storageMisconfigHint(message: string): string | null {
+  return /bucket not found/i.test(message)
+    ? `the "${PROJECT_ASSETS_BUCKET}" bucket was not found in the configured Supabase project: ` +
+        'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY likely point at the wrong project (Goal 20 D3)'
+    : null;
+}
+
+export type AssetsBucketHealth =
+  | { ok: true }
+  | { ok: false; reason: 'unconfigured' | 'not_found' | 'error'; message: string };
+
+// Probe whether the configured Supabase project actually exposes the private
+// project-assets bucket. The parse worker runs this at boot so a misconfigured
+// deploy (wrong project) is loud and immediate instead of silently marking every
+// parse 'failed'. Never throws.
+export async function checkAssetsBucketReachable(): Promise<AssetsBucketHealth> {
+  if (!isStorageConfigured()) {
+    return {
+      ok: false,
+      reason: 'unconfigured',
+      message: 'SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY are not set',
+    };
+  }
+  try {
+    const { data, error } = await getServiceClient().storage.getBucket(PROJECT_ASSETS_BUCKET);
+    if (error) {
+      const message = error.message ?? String(error);
+      return { ok: false, reason: storageMisconfigHint(message) ? 'not_found' : 'error', message };
+    }
+    return data
+      ? { ok: true }
+      : {
+          ok: false,
+          reason: 'not_found',
+          message: `bucket "${PROJECT_ASSETS_BUCKET}" not found in the configured project`,
+        };
+  } catch (err) {
+    return {
+      ok: false,
+      reason: 'error',
+      message: err instanceof Error ? err.message : String(err),
+    };
+  }
+}
+
 // Stable, collision-free object key for an uploaded project asset. Project-scoped
 // so the key itself encodes the authorisation boundary the server checks.
 export function assetKey(projectId: string, assetId: string, filename: string): string {
@@ -136,8 +188,10 @@ export async function downloadAssetObject(key: string): Promise<Buffer> {
     .storage.from(PROJECT_ASSETS_BUCKET)
     .download(key);
   if (error || !data) {
+    const message = error?.message ?? 'no data';
+    const hint = error ? storageMisconfigHint(message) : null;
     throw new Error(
-      `[db/storage] downloadAssetObject failed for ${key}: ${error?.message ?? 'no data'}`,
+      `[db/storage] downloadAssetObject failed for ${key}: ${message}${hint ? ` (${hint})` : ''}`,
     );
   }
   return Buffer.from(await data.arrayBuffer());
