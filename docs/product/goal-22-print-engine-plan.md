@@ -59,7 +59,7 @@ Build model: CLAUDE.md §4 (scoped subagents + §3 gate). Not merged without Arc
   part, so panel-to-panel seams already fall on body breaks; we never tile across a body break. Interior
   seams (panels wider than the media) are even splits; overlap is shop-configurable (default 0.5", larger
   allowed on tight curves). Drag-to-place seams = future.
-- **D-7 Effective width derivation.** Roland VG3 nominal 54", effective = nominal − 1.5" roller margin
+- **D-7 Effective width derivation.** Roland VG3 nominal 54", effective = nominal - 1.5" roller margin
   = 52.5" by default; shop may override effective directly. Engine ALWAYS tiles to effective, never nominal.
 - **D-8 Tiling orientation** picks the orientation (which physical axis runs across the media) that
   minimises tile count, tie-break minimum media area. The non-tiled axis runs along the unlimited roll feed.
