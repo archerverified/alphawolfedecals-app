@@ -6,6 +6,24 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-23 - Cowork session - Goal 20 fix-it (#207) merged + verified live; spike (#206) merged; parse-worker storage key root-caused and fixed (legacy keys dead)
+
+**Context:** Continuation of the 2026-06-22 orchestration. Verified the Claude Code spike and fix-it reports against ground truth, ran the section 3 gate, merged both, and drove the post-deploy verification. All GitHub writes via the REST API.
+
+**Spike (PR #206, squash 0dac12b) MERGED.** Curvature-correction spike, docs-only, net-zero (only the report + activities, no code/schema/migration). Fresh-context review PASS. Decision: GO (conditional) on building curvature correction into Goal 22 as a conservative labeled estimate with a never-short margin; do not promise accuracy until live shop validation. Proposed additive data model in docs/product/2026-06-22-spike-curvature-correction.md (curvature_factor/source/margin columns on vehicle_panels + a curvature_class_priors table).
+
+**Goal 20 fix-it (PR #207, squash 477d1c76) MERGED + DEPLOYED + VERIFIED LIVE.** Section 3 gate run fresh: code review APPROVE WITH NITS + independent advisor SIGN-OFF; confirmed the session-on-verify auth is forge/replay/impersonation-safe (HMAC over AUTH_SECRET, email-bound, live active-user recheck), CSP additive-only, no key leak, no RLS or DB-split weakening, no migration, 0 em-dashes added. The activities.md merge conflict (spike entry vs fix-it entry) was resolved via a 2-parent merge commit through the Git Data API. Vercel prod READY in sfo1 on 477d1c76. Post-deploy: NODE-G (/signin 500) quiet since the deploy, so the unstable_rethrow fix is holding.
+
+**Parse-worker storage outage ROOT-CAUSED + FIXED (the real D3 cure).** The #207 boot self-check fired NODE-H "[parse] STORAGE SELF-CHECK FAILED: signature verification failed" on every redeploy. Proven by curling the key directly against dxwnz storage: the Render alphawolf-parse worker carried the legacy service_role JWT, which Supabase now REJECTS with 403 even when copied fresh, because the project migrated to the new API-key system and the legacy anon/service_role JWTs on the "Legacy" tab are no longer trusted. This was NOT an env-plumbing or wrong-project issue (only one project exists; URL + bucket confirmed correct). FIX: set SUPABASE_SERVICE_ROLE_KEY to the NEW sb_secret key (from the "Publishable and secret API keys" tab) directly on alphawolf-parse via the Render connector. The new key was verified to return 200 against project-assets before deploying; after the redeploy /health reports storage ok and NODE-H stopped (resolved). GOTCHA for future agents: the legacy Supabase anon/service_role JWTs are dead on this project, use the sb_secret keys. The web app was unaffected (its uploads land, so it already holds a valid key).
+
+**Owner actions this session:** created the wraps@1stimpression.co alias (forwards to archer@); corrected the Render parse env. STILL OPEN: clear the Resend suppression on wraps@1stimpression.co (dashboard-only, no suppression API in the Resend MCP or Composio) so shop "New order" emails deliver, then confirm an order end-to-end and that the e2e smoke is green now that storage is healthy.
+
+**Sentry:** NODE-H resolved; NODE-G quiet post-deploy.
+
+**SECURITY follow-up:** a GitHub PAT, the dead legacy service_role JWT, and the live sb_secret key passed through chat this session. Rotate the sb_secret key and the PAT. CodeRabbit still posts a status on PRs despite the intended uninstall, confirm it is removed.
+
+**Next build:** spike done, so the print engine (Goal 22, prompts/24) is next, consuming the spike data model. Kickoff prepped.
+
 ## 2026-06-22 - Goal 20 fix-it BUILD COMPLETE (reviewed x2, full suite green) - launch blockers repaired - merge + 3 owner actions GATED to Archer
 
 **Status:** Built, double-reviewed (section 3 + advisor), and fully verified locally on branch `goal/20-fixit` (worktree `../alphawolf-goal-20`, base `origin/main` 758eca8). Executed in Claude Code per `prompts/26-goal-20-fixit-launch-blockers.md`: audit-first (10-stream parallel sweep + live connectors), TDD build, scoped subagents for the audit + a reviewer-per-fix + the advisor. Diagram: [`docs/vault/diagrams/goal-20-fixit.md`](docs/vault/diagrams/goal-20-fixit.md). NOT merged, NOT deployed (Archer's go pending). Net-zero so far (no prod writes; the live-verify test data is purged at deploy time).
