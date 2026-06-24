@@ -54,7 +54,7 @@
     "@supabase/supabase-js": "^2.108.2",
     "prisma": "^5.22.0",
     "sharp": "0.34.5",
-    "svgo": "^3.3.3",
+    "svgo": "^4.0.1",
     "svgson": "^5.3.1"
   },
   "devDependencies": {
