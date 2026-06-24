@@ -45,7 +45,7 @@ export interface PrintPackMeta {
 // encode, so a stray emoji or smart quote never blows up rendering.
 function asc(text: string): string {
   return text
-    .replace(/[—–]/g, '-')
+    .replace(/[\u2014\u2013]/g, '-')
     .replace(/[‘’]/g, "'")
     .replace(/[“”]/g, '"')
     .replace(/[^\x20-\x7e]/g, '');
