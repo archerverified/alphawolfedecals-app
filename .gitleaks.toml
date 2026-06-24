@@ -15,4 +15,13 @@ regexes = [
   '''gh012-visitor''',
   # The visitor-N voter-token fixtures used across the share-rls integration tests.
   '''voterToken: 'visitor-[0-9a-z]+'''',
+  # Printer registry keys (Goal 22): static printer specs use key: 'roland_vg3'
+  # style identifiers; the generic-api-key rule mis-flags them. Not secrets.
+  '''key: 'roland_[a-z0-9_]+'''',
+]
+
+paths = [
+  # Goal 22: static printer-spec module (model keys + media widths, no secrets);
+  # gitleaks' generic-api-key rule mis-flags the printer registry keys here.
+  '''apps/web/lib/print/printers\.ts''',
 ]

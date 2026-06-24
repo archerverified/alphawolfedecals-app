@@ -519,7 +519,18 @@ export async function buildSpecPack(data: SpecPackData): Promise<Uint8Array> {
     );
     y -= 14;
     page.drawText(
-      'Sizes are template-derived estimates — the shop measures the vehicle before ordering film.',
+      'Sizes are flat template estimates. The shop measures the vehicle before ordering film.',
+      {
+        x: MARGIN,
+        y,
+        size: 8.5,
+        font,
+        color: MUTED,
+      },
+    );
+    y -= 11;
+    page.drawText(
+      'The Print Pack provides curvature-corrected, never-short panel sizes tiled to your printer.',
       {
         x: MARGIN,
         y,

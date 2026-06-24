@@ -1077,3 +1077,63 @@ drop policy if exists referral_attributions_referrer_read on referral_attributio
 create policy referral_attributions_referrer_read on referral_attributions
   for select
   using (referrer_user_id = nullif(current_setting('app.current_user_id', true), '')::uuid);
+
+-- curvature_class_priors --------------------------------------------------------
+-- Global, non-PII curvature reference data (Goal 22 / D4): the conservative
+-- per-(body, panel-class, axis) multipliers the print engine uses to size panels.
+-- Trust model is the same shape as the vehicle catalogue but the read is scoped to
+-- an authenticated APP session (not anon): any signed-in app user may READ (the
+-- print engine, running under withUser, needs it), only admins may write. RLS
+-- enabled + forced; the read predicate requires app.current_user_id to be set so a
+-- bare anon / PostgREST request reads nothing.
+alter table curvature_class_priors enable row level security;
+alter table curvature_class_priors force row level security;
+
+drop policy if exists curvature_class_priors_read on curvature_class_priors;
+create policy curvature_class_priors_read on curvature_class_priors
+  for select
+  using (nullif(current_setting('app.current_user_id', true), '') is not null);
+
+drop policy if exists curvature_class_priors_admin_insert on curvature_class_priors;
+create policy curvature_class_priors_admin_insert on curvature_class_priors
+  for insert
+  with check (app_is_admin());
+
+drop policy if exists curvature_class_priors_admin_update on curvature_class_priors;
+create policy curvature_class_priors_admin_update on curvature_class_priors
+  for update
+  using (app_is_admin())
+  with check (app_is_admin());
+
+drop policy if exists curvature_class_priors_admin_delete on curvature_class_priors;
+create policy curvature_class_priors_admin_delete on curvature_class_priors
+  for delete
+  using (app_is_admin());
+
+-- shop_print_profiles -----------------------------------------------------------
+-- Per-shop print config (Goal 22 / D1). Any MEMBER of the shop may READ + WRITE
+-- its single profile (mirrors shops_member_select + the orders shop-update shape).
+-- INSERT is member-gated because the settings page upserts. No DELETE policy and
+-- the grant is revoked: a profile is config, removed only by the shop cascade, not
+-- by app_user. app_is_shop_member() is the SECURITY DEFINER membership check; the
+-- WITH CHECK on INSERT/UPDATE stops a member writing a profile onto a foreign shop.
+alter table shop_print_profiles enable row level security;
+alter table shop_print_profiles force row level security;
+
+revoke delete on shop_print_profiles from app_user;
+
+drop policy if exists shop_print_profiles_member_select on shop_print_profiles;
+create policy shop_print_profiles_member_select on shop_print_profiles
+  for select
+  using (app_is_shop_member(shop_print_profiles.shop_id));
+
+drop policy if exists shop_print_profiles_member_insert on shop_print_profiles;
+create policy shop_print_profiles_member_insert on shop_print_profiles
+  for insert
+  with check (app_is_shop_member(shop_print_profiles.shop_id));
+
+drop policy if exists shop_print_profiles_member_update on shop_print_profiles;
+create policy shop_print_profiles_member_update on shop_print_profiles
+  for update
+  using (app_is_shop_member(shop_print_profiles.shop_id))
+  with check (app_is_shop_member(shop_print_profiles.shop_id));
