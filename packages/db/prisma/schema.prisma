@@ -148,9 +148,37 @@ model Shop {
   createdAt            DateTime @default(now()) @map("created_at")
   updatedAt            DateTime @updatedAt @map("updated_at")
 
-  memberships Membership[]
+  memberships  Membership[]
+  printProfile ShopPrintProfile?
 
   @@map("shops")
+}
+
+// Per-shop print profile (Goal 22 / D1). One row per shop (shop_id UNIQUE),
+// read + written by any shop member (RLS app_is_shop_member, prisma/sql/auth_rls.sql).
+// Holds the printer + media config the paneling engine tiles to. effective_width_in
+// is the USABLE image width after the grit rollers (1-2 in off a nominal 54 in
+// Roland); the engine ALWAYS tiles to effective_width_in, never nominal_width_in.
+// default_overlap_in is the lapped seam between adjacent tiles; bleed_in extends the
+// art past the trim edge. CHECK constraints (effective <= nominal, overlap < effective,
+// all positive) live in the migration.
+model ShopPrintProfile {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  shopId           String   @unique @map("shop_id") @db.Uuid
+  // Registry key (e.g. 'roland_vg3') or null for a manually entered machine.
+  printerKey       String?  @map("printer_key")
+  printerLabel     String?  @map("printer_label")
+  nominalWidthIn   Decimal  @map("nominal_width_in") @db.Decimal(6, 2)
+  effectiveWidthIn Decimal  @map("effective_width_in") @db.Decimal(6, 2)
+  defaultOverlapIn Decimal  @default(0.50) @map("default_overlap_in") @db.Decimal(5, 2)
+  bleedIn          Decimal  @default(0.25) @map("bleed_in") @db.Decimal(5, 2)
+  mediaType        String?  @map("media_type")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt        DateTime @default(now()) @updatedAt @map("updated_at") @db.Timestamptz
+
+  shop Shop @relation(fields: [shopId], references: [id], onDelete: Cascade)
+
+  @@map("shop_print_profiles")
 }
 
 model Membership {
@@ -277,6 +305,23 @@ enum FinishHint {
   @@map("finish_hint")
 }
 
+// Confidence / provenance of a panel's CURVATURE factor (Goal 22 / D4, spike
+// 2026-06-22). Distinct from source_authority (which rates the whole template's
+// dimensional authority): this rates the specific flat->true curvature multiplier
+// k, and drives the one-sided never-short margin + the "estimated" warning the
+// print engine shows. measured_in_shop = a real laid-out-vinyl measurement (tight
+// margin); calibrated_sibling = inferred from a measured sibling panel; class_prior
+// = a conservative table prior (wide margin, warn); unknown = no data (worst-case
+// fallback + hard warning).
+enum CurvatureSource {
+  measured_in_shop
+  calibrated_sibling
+  class_prior
+  unknown
+
+  @@map("curvature_source")
+}
+
 // What kind of owned source material a Studio ingest row points at (Goal 6).
 // The legal wall (ADR-0014 invariant 12) is enforced by PROVENANCE: every
 // authored template traces back to rows here, and every row is one of the
@@ -361,12 +406,12 @@ model Vehicle {
 }
 
 model VehiclePanel {
-  id               String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  vehicleId        String     @map("vehicle_id") @db.Uuid
-  name             String
-  svgPath          String     @map("svg_path")
-  view             String
-  wrapSafeZone     Json       @map("wrap_safe_zone")
+  id                  String          @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  vehicleId           String          @map("vehicle_id") @db.Uuid
+  name                String
+  svgPath             String          @map("svg_path")
+  view                String
+  wrapSafeZone        Json            @map("wrap_safe_zone")
   // ⚠️ CROSS-PR COUPLING (GH-005 -> GH-010). 0 is a SENTINEL meaning "surface
   // area not yet computed", NOT a real zero area. This PR (GH-003/004) writes 0
   // because the geometry precompute is the paneling pipeline (out of scope).
@@ -375,11 +420,24 @@ model VehiclePanel {
   // into area math, or a template paneled with area 0 prints to nothing. When
   // GH-005 lands, add `CHECK (printable_area_mm2 > 0)` here to make the
   // guarantee enforceable.
-  printableAreaMm2 Int        @map("printable_area_mm2")
-  finishHint       FinishHint @default(none) @map("finish_hint")
-  installOrder     Int        @map("install_order")
-  notes            String?
-  createdAt        DateTime   @default(now()) @map("created_at") @db.Timestamptz
+  printableAreaMm2    Int             @map("printable_area_mm2")
+  finishHint          FinishHint      @default(none) @map("finish_hint")
+  installOrder        Int             @map("install_order")
+  notes               String?
+  // Curvature correction (Goal 22 / D4, spike 2026-06-22). Additive + nullable so
+  // every existing panel row stays valid. curvature_factor (k) is the per-panel
+  // flat->true-surface multiplier; NULL means "fall back to the class prior".
+  // curvature_source is the confidence/provenance (drives the never-short margin +
+  // warning); curvature_margin is the one-sided never-short safety margin. Set by
+  // the studio operator as real panels are measured (a measurement promotes the
+  // panel to measured_in_shop and shrinks its margin). CHECK (factor > 0, margin in
+  // [0,1)) lives in the migration.
+  curvatureFactor     Decimal?        @map("curvature_factor") @db.Decimal(5, 3)
+  curvatureSource     CurvatureSource @default(class_prior) @map("curvature_source")
+  curvatureMargin     Decimal         @default(0.080) @map("curvature_margin") @db.Decimal(4, 3)
+  curvatureMeasuredAt DateTime?       @map("curvature_measured_at") @db.Timestamptz
+  curvatureNotes      String?         @map("curvature_notes")
+  createdAt           DateTime        @default(now()) @map("created_at") @db.Timestamptz
 
   vehicle Vehicle @relation(fields: [vehicleId], references: [id], onDelete: Cascade)
 
@@ -389,6 +447,27 @@ model VehiclePanel {
   @@unique([vehicleId, view, name], map: "vehicle_panels_identity_uk")
   @@index([vehicleId], map: "vehicle_panels_vehicle_idx")
   @@map("vehicle_panels")
+}
+
+// Versioned per-(body_type, panel_class, view_axis) CURVATURE multiplier priors
+// (Goal 22 / D4, spike §5). Global, non-PII reference data like the vehicle
+// catalogue: public read (any authenticated app user), admin-only writes (RLS in
+// prisma/sql/auth_rls.sql). Seeded conservatively (biased UP) by the migration so a
+// panel with no measured factor is never short; backfilled as the studio measures
+// real panels. k is the multiplier; margin is the one-sided never-short margin.
+model CurvatureClassPrior {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  bodyType   BodyType @map("body_type")
+  panelClass String   @map("panel_class")
+  viewAxis   String   @map("view_axis") // 'length' | 'width'
+  k          Decimal  @db.Decimal(5, 3)
+  margin     Decimal  @default(0.080) @db.Decimal(4, 3)
+  version    Int      @default(1)
+  notes      String?
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  @@unique([bodyType, panelClass, viewAxis, version], map: "curvature_class_priors_key")
+  @@map("curvature_class_priors")
 }
 
 model VehicleTemplateRequest {
@@ -409,8 +488,8 @@ model VehicleTemplateRequest {
   createdAt          DateTime  @default(now()) @map("created_at") @db.Timestamptz
   resolvedAt         DateTime? @map("resolved_at") @db.Timestamptz
 
-  requester      User?    @relation(fields: [requesterId], references: [id])
-  shippedVehicle Vehicle? @relation("RequestShippedVehicle", fields: [shippedVehicleId], references: [id])
+  requester       User?            @relation(fields: [requesterId], references: [id])
+  shippedVehicle  Vehicle?         @relation("RequestShippedVehicle", fields: [shippedVehicleId], references: [id])
   templateSources TemplateSource[]
 
   @@index([status, createdAt])
@@ -613,30 +692,30 @@ model Order {
 // index credit_ledger_signup_grant_once (raw SQL in the migration — Prisma can't
 // express partial indexes) makes the signup grant idempotent.
 model CreditLedger {
-  id        String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  userId    String       @map("user_id") @db.Uuid
+  id            String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  userId        String       @map("user_id") @db.Uuid
   // Positive = credit (grant/purchase/referral/admin/refund), negative = spend.
   // Enforced by chk_credit_ledger_spend_sign (raw SQL, 20260612200100):
   // (source='spend' AND delta<0) OR (source<>'spend' AND delta>0).
-  delta     Int
-  source    CreditSource
+  delta         Int
+  source        CreditSource
   // Structured discriminator within a source, e.g. grant/'signup',
   // spend/'generation_run', refund/'generation_run_refund'.
-  reason    String?
+  reason        String?
   // The generation run a spend/refund row paid for (Goal 7 / D7). SET NULL so
   // the audit row outlives the run. Two partial uniques in the migration —
   // credit_ledger_spend_once_per_run + credit_ledger_refund_once_per_run —
   // make double-spend impossible and refunds idempotent (ON CONFLICT target
   // of app_refund_credits). Not expressible in Prisma — raw SQL by design.
-  runId     String?      @map("run_id") @db.Uuid
+  runId         String?      @map("run_id") @db.Uuid
   // The referee a referrer-side referral grant was earned for (Goal 9). Plain
   // Uuid (no relation, audit-row pattern like projects.owner_user_id) — the
   // TYPED idempotency key for the referrer grant: the partial unique
   // credit_ledger_referral_referrer_once is (user_id, referee_user_id) WHERE
   // source='referral' AND reason='referral_referrer'. NULL on every non-referrer
   // row. Architecture review C2: key on a column, not a concatenated reason.
-  refereeUserId String?  @map("referee_user_id") @db.Uuid
-  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz
+  refereeUserId String?      @map("referee_user_id") @db.Uuid
+  createdAt     DateTime     @default(now()) @map("created_at") @db.Timestamptz
 
   user User           @relation(fields: [userId], references: [id], onDelete: Cascade)
   run  GenerationRun? @relation(fields: [runId], references: [id], onDelete: SetNull)
@@ -803,10 +882,10 @@ model GenerationRun {
   // concept_key, iterations require parent_run_id — NULL lineage (which a
   // unique index treats as distinct) can never bypass the final-once guard.
 
-  project       Project         @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  user          User            @relation(fields: [userId], references: [id], onDelete: Cascade)
-  parentRun     GenerationRun?  @relation("GenerationRunLineage", fields: [parentRunId], references: [id], onDelete: SetNull)
-  childRuns     GenerationRun[] @relation("GenerationRunLineage")
+  project       Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user          User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  parentRun     GenerationRun?    @relation("GenerationRunLineage", fields: [parentRunId], references: [id], onDelete: SetNull)
+  childRuns     GenerationRun[]   @relation("GenerationRunLineage")
   jobs          GenerationJob[]
   images        GenerationImage[]
   creditEntries CreditLedger[]
@@ -844,30 +923,30 @@ model GenerationJob {
 }
 
 model GenerationImage {
-  id                String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
-  runId             String        @map("run_id") @db.Uuid
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  runId             String   @map("run_id") @db.Uuid
   // UNIQUE (review fix F3): at most one image row per job — a racing double
   // harvest converges on P2002 ("already imaged") instead of duplicating.
-  jobId             String        @unique(map: "generation_images_job_once") @map("job_id") @db.Uuid
-  conceptKey        String        @map("concept_key")
+  jobId             String   @unique(map: "generation_images_job_once") @map("job_id") @db.Uuid
+  conceptKey        String   @map("concept_key")
   view              String
   // Unwatermarked original in the PRIVATE bucket — owner-scoped signed URLs
   // only; the gallery client never receives this path pre-selection.
-  storagePath       String        @map("storage_path")
+  storagePath       String   @map("storage_path")
   // Watermarked preview the gallery renders.
-  previewPath       String?       @map("preview_path")
+  previewPath       String?  @map("preview_path")
   width             Int
   height            Int
-  provider          String        @default("")
-  model             String        @default("")
-  providerRequestId String?       @map("provider_request_id")
-  costUsd           Decimal       @default(0) @map("cost_usd") @db.Decimal(8, 4)
+  provider          String   @default("")
+  model             String   @default("")
+  providerRequestId String?  @map("provider_request_id")
+  costUsd           Decimal  @default(0) @map("cost_usd") @db.Decimal(8, 4)
   provenance        Json?
   // Discriminator: 'template' (SVG overlay) vs 'photo' (photo-realistic on a
   // customer photo). Mirrors GenerationJob.renderTarget; immutable once written
   // (RLS revokes UPDATE/DELETE from app_user). (Goal 21 / T1)
-  renderTarget      String        @default("template") @map("render_target")
-  createdAt         DateTime      @default(now()) @map("created_at") @db.Timestamptz
+  renderTarget      String   @default("template") @map("render_target")
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamptz
 
   run GenerationRun @relation(fields: [runId], references: [id], onDelete: Cascade)
   job GenerationJob @relation(fields: [jobId], references: [id], onDelete: Cascade)

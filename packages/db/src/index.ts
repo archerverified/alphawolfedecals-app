@@ -20,6 +20,8 @@ export * as briefs from './repos/briefs.js';
 export * as generation from './repos/generation.js';
 export * as share from './repos/share.js';
 export * as referrals from './repos/referrals.js';
+export * as printProfiles from './repos/print-profiles.js';
+export * as curvature from './repos/curvature.js';
 export * as maintenance from './repos/maintenance.js';
 export * as storage from './storage/supabase.js';
 export * as svg from './svg/index.js';
@@ -97,6 +99,13 @@ export type {
 } from './repos/generation.js';
 export type { ShareConcept, PublicShare, VoteResult } from './repos/share.js';
 export type { ReferralStats, ReferralGrantResult } from './repos/referrals.js';
+export type { ShopPrintProfileRow, UpsertShopPrintProfileInput } from './repos/print-profiles.js';
+export type {
+  VehicleCurvature,
+  CurvaturePriorRow,
+  PanelCurvatureRow,
+  CurvatureSourceValue,
+} from './repos/curvature.js';
 export { CREDIT_CONFIG, PLAN_LIMITS } from './credit-config.js';
 export type { PlanName } from './credit-config.js';
 export {
