@@ -6,6 +6,65 @@ Companion to the Obsidian vault at `/docs/vault/`. The in-app per-project activi
 
 ---
 
+## 2026-06-23 - Goal 22 BUILD COMPLETE (reviewed + advisor) - print-ready paneling engine + shop print profile + curvature - DEPLOY GATED to Archer
+
+**Status:** Feature built, TDD, fresh-context reviewed, advisor-signed-off on branch `goal/22-print-engine`
+(worktree `../alphawolf-goal-22`, base `origin/main` 4930944, NOT merged). 6 commits (f843ab8 core,
+dfc6424 db, f7643cc planner+pdf, 6e205d3 surfaces+integration, d7c2a92 review fixes, plus this entry).
+Prompt: `prompts/24-goal-22-print-ready-paneling-engine.md`. Consumes the landed curvature spike
+(`docs/product/2026-06-22-spike-curvature-correction.md`, GO conditional). Plan + DECISIONS:
+`docs/product/goal-22-print-engine-plan.md`. Diagram: `docs/vault/diagrams/goal-22-print-engine.md`.
+
+**What shipped (additive only; the existing B2C flow + print path are untouched except a 1-line pointer):**
+
+- **D4 curvature (never-short core).** Pure `apps/web/lib/print/curvature.ts`: `true = flat*k`,
+  `safe = true*(1+margin)`, one-sided margin keyed on confidence (measured 0.02 -> calibrated 0.05 ->
+  class_prior 0.08 -> unknown 0.10). Resolution order measured panel -> measured sibling -> class prior
+  -> conservative unknown fallback (k=1.27 + loud "measure" warning). k clamped >= 1 (never shrinks).
+  Additive data model: `curvature_factor/source/margin/measured_at/notes` columns on `vehicle_panels`,
+  new `curvature_class_priors` table (312 conservative seeded priors, biased up), `curvature_source` enum.
+- **D2 paneling engine.** Pure `paneling.ts`: tiles each panel to the EFFECTIVE media width (never
+  nominal), overlap + bleed, orientation chosen to minimise seams; union net of overlaps covers >= the
+  safe extent and no tile exceeds the media. `printers.ts`: Roland VG3 54in nominal -> 52.5in effective.
+- **D1 shop print profile.** New per-shop `shop_print_profiles` table (RLS `app_is_shop_member` read+write,
+  no delete; DB CHECKs enforce effective<=nominal, overlap<effective, all positive). Settings page
+  `/dashboard/print-profile` + form; `saveShopPrintProfileAction` (requireShopUser + RLS upsert).
+- **D3 print-ready export.** `print-pack-pdf.ts` (pdf-lib, no new dep): layout sheet page + per-panel tile
+  schematics with exact physical dims, overlap marked, optional art preview. `GET /projects/[id]/print-pack`
+  streams the Print Pack PDF on the fly (no storage object written, net-zero). Project page
+  `/projects/[id]/print` shows the plan table + never-short banner + download.
+- **Integration.** Spec-pack page-3 disclaimer gained a one-line pointer to the curvature-corrected Print
+  Pack and a pre-existing em-dash (flagged by the spike) was fixed. No B2C number changes (DECISION D9).
+
+**DECISIONS logged (full list in the plan doc):** D-1 profile per-shop; D-2 curvature is admin-curated
+global catalogue data, not per-tenant; D-3 unknown-confidence uses a conservative fallback so it is never
+short AND loudly warns; D-5 output is a single Print Pack PDF + structured plan (no zip dep), per-tile RIP
+raster crops are the logged next increment; D-7 effective = nominal minus roller margin, never nominal.
+
+**Verification (verify, do not trust):** 61 new unit tests (TDD, never-short proven by a property test).
+DB migration proven end-to-end against an ephemeral local Postgres (`prisma migrate deploy` + `db:apply-sql`),
+net-zero (cluster torn down): 312 priors seed; CHECK rejects effective>nominal and overlap>=effective while
+a valid VG3 profile inserts; RLS isolates tenants (a member of shop X cannot read OR write shop Y's profile,
+confirmed as the app_user role). D5 end-to-end: paneled a real design to the Roland VG3, asserted never-short
+
+- no tile over media, rendered a valid 5-page Print Pack PDF (opens in pdfinfo). Full apps/web suite
+  350 passed / 8 skipped; packages/db 147 passed; full typecheck clean; `next build` exit 0 (all 3 print
+  routes built; the 'use server' async-export gotcha avoided).
+
+**Section 3 gate:** ran a multi-agent review (4 fresh-context dimension reviewers - RLS/security,
+never-short, export/spend, general - then adversarial verification of each finding, then an independent
+ADVISOR on the export/RLS/spend surface). Advisor verdict: SIGN_OFF_WITH_NITS. SPEND surface CLEAN (zero
+paid-API/$ spend in the print path; pure pdf-lib + RLS-scoped reads). RLS SOLID (no block). Confirmed
+findings all fixed: em-dashes removed from all Goal 22 comments + migration + plan; NS-1 (an effective
+override could equal nominal, removing the roller margin) hardened with a 0.5in floor + form caution/max;
+NS-2 (form re-save froze the one-time derivation) fixed to re-derive. One nit left intentionally
+(print_pack_created event awaited before streaming, matching the established order-email serverless pattern).
+
+**GATED on Archer's go (not done by this build):** merge to main; prod migration via Supabase MCP +
+`_prisma_migrations` checksum insert (CLAUDE.md section 6); prod-smoke + Sentry 0-new; PostHog screenshots
+(print_pack_created event is new but does not fire until deployed); worktree cleanup + graphify refresh.
+Net-zero confirmed: only the branch commits + this entry; no app prod state, schema, or storage touched.
+
 ## 2026-06-23 - Cowork session - Goal 20 fix-it (#207) merged + verified live; spike (#206) merged; parse-worker storage key root-caused and fixed (legacy keys dead)
 
 **Context:** Continuation of the 2026-06-22 orchestration. Verified the Claude Code spike and fix-it reports against ground truth, ran the section 3 gate, merged both, and drove the post-deploy verification. All GitHub writes via the REST API.
