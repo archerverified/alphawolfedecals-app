@@ -1,4 +1,4 @@
-// Print-pack planner (Goal 22) — the bridge from a project's flat template panels
+// Print-pack planner (Goal 22) - the bridge from a project's flat template panels
 // to a never-short, curvature-corrected paneling plan a shop can print.
 //
 // Pipeline per panel: flat template size (panelPrintSizesIn) -> curvature-corrected
@@ -163,7 +163,7 @@ export function buildPrintPlan(input: {
   for (const panel of scoped) {
     const size = flat.get(panel.id);
     if (!size) {
-      // No derivable flat size (no/implausible outline) — never print nonsense.
+      // No derivable flat size (no/implausible outline) - never print nonsense.
       preSkipped.push({ id: panel.id, name: panel.name, reason: 'no_flat_size' });
       continue;
     }

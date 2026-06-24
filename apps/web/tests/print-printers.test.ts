@@ -58,6 +58,23 @@ describe('deriveEffectiveWidthIn', () => {
     expect(r?.source).toBe('derived');
   });
 
+  it('rejects an override that leaves no grit-roller margin (>= nominal - floor)', () => {
+    // Effective == nominal (or within the roller floor of it) has no margin and
+    // would tile panels under the rollers, i.e. short. Fall back to derived.
+    const atNominal = deriveEffectiveWidthIn({ printerKey: 'roland_vg3', effectiveOverrideIn: 54 });
+    expect(atNominal?.effectiveWidthIn).toBeCloseTo(52.5, 5);
+    expect(atNominal?.source).toBe('derived');
+    const tooClose = deriveEffectiveWidthIn({
+      printerKey: 'roland_vg3',
+      effectiveOverrideIn: 53.9,
+    });
+    expect(tooClose?.effectiveWidthIn).toBeCloseTo(52.5, 5);
+    // A genuine override that keeps a margin is still honoured.
+    const ok = deriveEffectiveWidthIn({ printerKey: 'roland_vg3', effectiveOverrideIn: 53 });
+    expect(ok?.effectiveWidthIn).toBe(53);
+    expect(ok?.source).toBe('override');
+  });
+
   it('never yields a non-positive effective width', () => {
     const r = deriveEffectiveWidthIn({ printerKey: null, nominalWidthIn: 1 });
     // 1 - 1.5 would be negative; the deriver must refuse rather than print short.

@@ -1,18 +1,18 @@
--- Goal 22 — print-ready paneling engine + shop print profile (B2B core).
+-- Goal 22 - print-ready paneling engine + shop print profile (B2B core).
 --
 -- Three additive changes, all backward-compatible (every existing row stays
 -- valid). RLS for the two new tables lives in prisma/sql/auth_rls.sql and is
 -- applied by `db:apply-sql` AFTER this migration:
---   * curvature_class_priors  — global reference data: public read, admin writes
+--   * curvature_class_priors  - global reference data: public read, admin writes
 --     (mirrors the vehicle catalogue).
---   * shop_print_profiles     — per-shop config: shop-member read + write
+--   * shop_print_profiles     - per-shop config: shop-member read + write
 --     (mirrors the shops/orders shop-scoped policies).
 -- The new vehicle_panels.curvature_* columns inherit the existing vehicle_panels
--- RLS (public read of published-vehicle panels, admin writes) — no policy change.
+-- RLS (public read of published-vehicle panels, admin writes) - no policy change.
 --
 -- Per CLAUDE.md §6: when this is applied to prod via the Supabase MCP, insert the
 -- corresponding _prisma_migrations row (SHA-256 checksum) so `prisma migrate
--- deploy` skips it cleanly. This migration is NOT applied to prod by the build —
+-- deploy` skips it cleanly. This migration is NOT applied to prod by the build -
 -- deploy is gated on Archer's go.
 
 -- CreateEnum: confidence/provenance of a panel's curvature factor (D4).

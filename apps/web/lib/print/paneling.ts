@@ -1,4 +1,4 @@
-// Paneling / tiling engine (Goal 22 / D2) — the safety-critical core.
+// Paneling / tiling engine (Goal 22 / D2) - the safety-critical core.
 //
 // Given a shop's EFFECTIVE printable width and per-wrap-panel curvature-corrected
 // dimensions, split each panel into print tiles that the roll-fed printer can
@@ -18,7 +18,7 @@
 // tiles (the other axis runs down the unlimited roll feed), tie-broken by least
 // media area. Fewer tiles = fewer seams = fewer failure points.
 //
-// Pure module — unit-tested in tests/print-paneling.test.ts. No I/O, no DB.
+// Pure module - unit-tested in tests/print-paneling.test.ts. No I/O, no DB.
 
 import type { CurvatureSource } from './curvature';
 

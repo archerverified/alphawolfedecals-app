@@ -11,12 +11,31 @@
 import { useState, useTransition } from 'react';
 import { Button } from '@alphawolf/ui/components/ui/button';
 import { Loader2 } from 'lucide-react';
-import { listPrinters } from '@/lib/print/printers';
+import {
+  listPrinters,
+  deriveEffectiveWidthIn,
+  MIN_EFFECTIVE_MARGIN_IN,
+} from '@/lib/print/printers';
 import {
   saveShopPrintProfileAction,
   type SaveProfileResult,
 } from '@/lib/actions/shop-print-profile';
 import type { ShopPrintProfileRow } from '@alphawolf/db';
+
+// Only treat a stored effective width as a manual override if it genuinely
+// differs from what the printer/nominal auto-derives. A profile saved via the
+// auto-derive path loads with a blank override field so a later re-save keeps
+// re-deriving (never freezes the one-time derivation; never goes short).
+function initialOverride(initial: ShopPrintProfileRow | null): string {
+  if (!initial) return '';
+  const auto = deriveEffectiveWidthIn({
+    printerKey: initial.printerKey,
+    nominalWidthIn: initial.nominalWidthIn,
+    effectiveOverrideIn: null,
+  });
+  if (auto && Math.abs(auto.effectiveWidthIn - initial.effectiveWidthIn) < 1e-6) return '';
+  return String(initial.effectiveWidthIn);
+}
 
 const MANUAL_KEY = 'manual';
 
@@ -70,9 +89,7 @@ export function PrintProfileForm({
   const [nominalWidth, setNominalWidth] = useState<string>(
     initial ? String(initial.nominalWidthIn) : '',
   );
-  const [effectiveOverride, setEffectiveOverride] = useState<string>(
-    initial ? String(initial.effectiveWidthIn) : '',
-  );
+  const [effectiveOverride, setEffectiveOverride] = useState<string>(initialOverride(initial));
   const [overlap, setOverlap] = useState<string>(
     initial ? String(initial.defaultOverlapIn) : '0.5',
   );
@@ -81,6 +98,11 @@ export function PrintProfileForm({
 
   const isManual = selection === MANUAL_KEY;
   const selectedPrinter = PRINTERS.find((p) => p.key === selection) ?? null;
+  const nominalNum = Number(nominalWidth);
+  const overrideMax =
+    Number.isFinite(nominalNum) && nominalNum > 0
+      ? Number((nominalNum - MIN_EFFECTIVE_MARGIN_IN).toFixed(2))
+      : 0;
 
   function onSelectPrinter(value: string) {
     setSelection(value);
@@ -184,13 +206,16 @@ export function PrintProfileForm({
             inputMode="decimal"
             step="0.1"
             min="0"
+            max={overrideMax > 0 ? overrideMax : undefined}
             value={effectiveOverride}
             onChange={(e) => setEffectiveOverride(e.target.value)}
             placeholder="Leave blank to auto-derive"
             className="h-9 rounded-md border border-zinc-300 bg-white px-3 text-sm text-zinc-900 shadow-xs focus:border-[#00AEEF] focus:outline-none focus:ring-2 focus:ring-[#00AEEF]/30"
           />
           <p className="text-xs text-zinc-500">
-            Optional. Blank means we subtract the roller margin from the nominal width for you.
+            Optional. Blank means we subtract the roller margin from the nominal width for you. An
+            override must stay at least {MIN_EFFECTIVE_MARGIN_IN} in below the nominal width so the
+            grit rollers have room, or we ignore it and auto-derive.
           </p>
         </div>
 

@@ -1,9 +1,9 @@
 // Print Pack PDF builder (Goal 22 / D3). Renders a PrintPlan into a print-ready
 // PDF a shop can drop in:
-//   * Page 1 — the panel-layout sheet: printer + media, a per-panel tile table,
+//   * Page 1: the panel-layout sheet: printer + media, a per-panel tile table,
 //     job totals (linear feet, media area), and a prominent never-short +
 //     confidence banner when any dimension is an estimate.
-//   * Pages 2..N — one schematic per panel: the tiles drawn to scale with their
+//   * Pages 2..N: one schematic per panel, tiles drawn to scale with their
 //     exact physical width x length, the lapped overlap marked, and the flat ->
 //     true -> safe dims + curvature confidence. Optional per-view art is placed as
 //     a labelled reference preview.

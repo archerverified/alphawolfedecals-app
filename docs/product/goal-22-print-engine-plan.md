@@ -1,4 +1,4 @@
-# Goal 22 — Print-ready paneling engine + shop print profile (build plan + DECISIONS)
+# Goal 22 - Print-ready paneling engine + shop print profile (build plan + DECISIONS)
 
 Branch: `goal/22-print-engine` (worktree `../alphawolf-goal-22`, base `origin/main` 4930944).
 Prompt: `prompts/24-goal-22-print-ready-paneling-engine.md`. Spike consumed:
@@ -16,23 +16,23 @@ Build model: CLAUDE.md §4 (scoped subagents + §3 gate). Not merged without Arc
   applied via `db:apply-sql`; migrations in `prisma/migrations/`. Helpers `app_is_shop_member()`,
   `app_is_admin()` exist. `vehicle_panels` RLS = public-read of published-vehicle panels + admin writes.
 - Tenancy: `User` / `Shop` / `Membership(shop_admin|shop_designer)`. B2B = shop is the tenant.
-- Deps available: pdf-lib, sharp, zod, qrcode-generator. NO zip lib (avoid adding one — ADR-0013).
+- Deps available: pdf-lib, sharp, zod, qrcode-generator. NO zip lib (avoid adding one - ADR-0013).
 
 ## Architecture (layers, innermost first)
 
-- **A. Curvature (D4)** — additive data model + pure correction. `vehicle_panels` gains
+- **A. Curvature (D4)** - additive data model + pure correction. `vehicle_panels` gains
   `curvature_factor/source/margin/measured_at/notes`; new reference table `curvature_class_priors`;
   new enum `curvature_source`. Pure `apps/web/lib/print/curvature.ts` resolves k+margin and computes
   `true = flat·k`, `safe = true·(1+margin)`. Never short; one-sided margin; confidence + warning.
-- **B. Paneling/tiling (D2)** — pure `apps/web/lib/print/paneling.ts`. Tiles each wrap panel to the
+- **B. Paneling/tiling (D2)** - pure `apps/web/lib/print/paneling.ts`. Tiles each wrap panel to the
   effective media width with overlap + bleed; never short; per-tile dims, linear feet, layout model.
-- **C. Shop print profile (D1)** — per-shop table `shop_print_profiles` (RLS `app_is_shop_member`),
+- **C. Shop print profile (D1)** - per-shop table `shop_print_profiles` (RLS `app_is_shop_member`),
   printer registry (`apps/web/lib/print/printers.ts`, Roland VG3), repo, server action, settings UI.
-- **D. Print-ready export (D3)** — `apps/web/lib/print/layout-sheet.ts` + `print-pack.ts` build a
+- **D. Print-ready export (D3)** - `apps/web/lib/print/layout-sheet.ts` + `print-pack.ts` build a
   Print Pack PDF (pdf-lib): layout sheet page + one page per print tile at true physical size with
   overlap/bleed/cut marks and art placed when bytes exist. Route + project print page.
-- **E. Integration** — spec-pack size table shows corrected "true" dims + confidence (spike §5).
-- **F. Verify (D5)** — panel a real approved design to Roland VG3 (52.5" eff, 0.5" overlap), prove
+- **E. Integration** - spec-pack size table shows corrected "true" dims + confidence (spike §5).
+- **F. Verify (D5)** - panel a real approved design to Roland VG3 (52.5" eff, 0.5" overlap), prove
   the math + that the export opens at print resolution; §3 + advisor; net-zero except purged tests.
 
 ## DECISIONS (prompt DECISION POLICY: choose recommended, log, never ask)
@@ -48,7 +48,7 @@ Build model: CLAUDE.md §4 (scoped subagents + §3 gate). Not merged without Arc
   warn." Hard constraint says "never emit short." Reconcile: when no measured factor and no matching
   class prior, apply a CONSERVATIVE fallback (k = max known prior ≈ 1.27, margin = 0.10) so output is
   never short, AND tag `source='unknown'`, `estimated=true`, `needsMeasurement=true` with a prominent
-  warning. The UI labels it "estimate — measure before printing"; it never claims accuracy.
+  warning. The UI labels it "estimate - measure before printing"; it never claims accuracy.
 - **D-4 Margins (one-sided, never short):** measured 0.02, calibrated_sibling 0.05, class_prior 0.08,
   unknown 0.10. Stored per-panel (`curvature_margin`) and per-prior; engine uses the resolved value.
 - **D-5 Output = single Print Pack PDF + structured manifest** (no zip dep). Layout sheet is always

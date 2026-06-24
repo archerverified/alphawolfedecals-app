@@ -40,7 +40,7 @@ const curvature = (over: Partial<CurvatureData> = {}): CurvatureData => ({
   ...over,
 });
 
-describe('buildPrintPlan — curvature correction is applied and never short', () => {
+describe('buildPrintPlan - curvature correction is applied and never short', () => {
   it('produces safe dims >= true >= flat for each panel', () => {
     const plan = buildPrintPlan({
       panels: PANELS,
@@ -112,7 +112,7 @@ describe('buildPrintPlan — curvature correction is applied and never short', (
   });
 });
 
-describe('buildPrintPlan — no curvature data falls back to conservative + warns', () => {
+describe('buildPrintPlan - no curvature data falls back to conservative + warns', () => {
   it('with curvature=null every panel is unknown/needsMeasurement but never short', () => {
     const plan = buildPrintPlan({ panels: PANELS, dims: DIMS, curvature: null, profile: PROFILE });
     expect(plan.estimated).toBe(true);
@@ -125,7 +125,7 @@ describe('buildPrintPlan — no curvature data falls back to conservative + warn
   });
 });
 
-describe('buildPrintPlan — totals + restriction', () => {
+describe('buildPrintPlan - totals + restriction', () => {
   it('totals match the sum of paneled panels', () => {
     const plan = buildPrintPlan({
       panels: PANELS,

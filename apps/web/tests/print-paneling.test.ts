@@ -1,4 +1,4 @@
-// Paneling / tiling engine (Goal 22 / D2) — the safety-critical core.
+// Paneling / tiling engine (Goal 22 / D2) - the safety-critical core.
 // Splits each curvature-corrected wrap panel into print tiles that fit the
 // EFFECTIVE media width, with a configurable overlap between tiles and a bleed
 // margin on the outer edges. The cardinal invariant: NEVER SHORT. The union of
@@ -27,7 +27,7 @@ function netAcross(tiles: { widthIn: number; overlapPrevIn: number }[]): number 
   return tiles.reduce((s, t, i) => s + t.widthIn - (i > 0 ? t.overlapPrevIn : 0), 0);
 }
 
-describe('panelize — single tile when the panel fits the media', () => {
+describe('panelize - single tile when the panel fits the media', () => {
   it('a small panel produces one seam-free tile within the media width', () => {
     const r = panelize({
       profile: PROFILE,
@@ -42,7 +42,7 @@ describe('panelize — single tile when the panel fits the media', () => {
   });
 });
 
-describe('panelize — orientation minimises seams', () => {
+describe('panelize - orientation minimises seams', () => {
   it('a 60x40 door rotates so the 40 in axis crosses the media: ONE tile, no seam', () => {
     // 60 wide would need 2 strips at 52.5 media, but 40 fits in one. Pick the
     // orientation with fewer tiles.
@@ -58,7 +58,7 @@ describe('panelize — orientation minimises seams', () => {
   });
 });
 
-describe('panelize — multi-tile, never short, no tile over media', () => {
+describe('panelize - multi-tile, never short, no tile over media', () => {
   it('a panel larger than media on both axes tiles correctly', () => {
     const r = panelize({
       profile: PROFILE,
@@ -103,7 +103,7 @@ describe('panelize — multi-tile, never short, no tile over media', () => {
   });
 });
 
-describe('panelize — NEVER SHORT property across many shapes', () => {
+describe('panelize - NEVER SHORT property across many shapes', () => {
   it('for every panel, net tiled coverage >= the smaller true extent and no tile exceeds media', () => {
     const panels: WrapPanelInput[] = [];
     let i = 0;
@@ -126,7 +126,7 @@ describe('panelize — NEVER SHORT property across many shapes', () => {
   });
 });
 
-describe('panelize — totals + confidence roll-up', () => {
+describe('panelize - totals + confidence roll-up', () => {
   it('sums linear feet and media area, and rolls up estimated/needsMeasurement', () => {
     const r = panelize({
       profile: PROFILE,
@@ -151,7 +151,7 @@ describe('panelize — totals + confidence roll-up', () => {
   });
 });
 
-describe('panelize — guards', () => {
+describe('panelize - guards', () => {
   it('skips a panel with missing/zero dimensions (printable_area sentinel)', () => {
     const r = panelize({
       profile: PROFILE,

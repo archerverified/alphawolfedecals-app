@@ -1,4 +1,4 @@
-// Curvature correction (Goal 22 / D4) — the print-engine's "never print short"
+// Curvature correction (Goal 22 / D4) - the print-engine's "never print short"
 // dimension layer. Consumes the landed spike decision
 // (docs/product/2026-06-22-spike-curvature-correction.md, GO conditional).
 //
@@ -14,7 +14,7 @@
 // Real shop measurements promote a panel from `class_prior` to `measured_in_shop`
 // and shrink its margin.
 //
-// Pure module — unit-tested in tests/print-curvature.test.ts. No I/O, no DB.
+// Pure module - unit-tested in tests/print-curvature.test.ts. No I/O, no DB.
 
 export type CurvatureSource = 'measured_in_shop' | 'calibrated_sibling' | 'class_prior' | 'unknown';
 
@@ -56,7 +56,7 @@ export interface ResolvedCurvature {
   source: CurvatureSource;
   /** false only when a real shop measurement set the factor. */
   estimated: boolean;
-  /** true only for `unknown` — no factor, no sibling, no prior. */
+  /** true only for `unknown` - no factor, no sibling, no prior. */
   needsMeasurement: boolean;
   /** Human-readable caution, null when measured. */
   warning: string | null;
@@ -145,9 +145,9 @@ export function resolveCurvature(input: {
 
 export interface CorrectedSize {
   flatIn: number;
-  /** flat · k — the estimated true developed-surface extent. */
+  /** flat · k - the estimated true developed-surface extent. */
   trueIn: number;
-  /** true · (1 + margin) — the never-short dimension the engine cuts to. */
+  /** true · (1 + margin) - the never-short dimension the engine cuts to. */
   safeIn: number;
   source: CurvatureSource;
   estimated: boolean;
