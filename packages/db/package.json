@@ -51,15 +51,15 @@
   "dependencies": {
     "@alphawolf/canvas": "workspace:^",
     "@prisma/client": "^5.22.0",
-    "@supabase/supabase-js": "^2.108.2",
+    "@supabase/supabase-js": "^2.116.0",
     "prisma": "^5.22.0",
-    "sharp": "0.34.5",
+    "sharp": "0.35.4",
     "svgo": "^3.3.3",
     "svgson": "^5.3.1"
   },
   "devDependencies": {
     "@types/node": "^25.9.3",
-    "tsx": "^4.22.4",
+    "tsx": "^4.23.13",
     "typescript": "^5.6.3",
     "vite": "^7.0.0",
     "vitest": "^4.1.9"
